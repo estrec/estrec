@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Table sparklines are drawn in LaTeX too, as a TikZ picture per cell with the SVG's marks
+  (1 px = 0.75 pt; rows 12 pt high so a column joins; the output's first line says it needs
+  `\usepackage{tikz}`), by the Python `render`, the viewer's script (byte for byte) and
+  `to_great_table` (the SVG in `as_raw_html`, TikZ in `as_latex`, sparkline rows unpadded
+  and the body without hairlines). estrec's `render_table` draws them in modelsummary's
+  tinytable outputs (SVG in HTML, TikZ in LaTeX, the same strings as Python's); other
+  formats still show `[low, high]`.
 - **Renamed to estrec** ("estimation record"; Ted 2026-11-06), a clean break with no aliases
   while 0.1 is a draft: type strings `estrec/0.1`, `estrec-collection/0.1`,
   `estrec-table/0.1` (schema files `schema/estrec-0.1.json` etc.); file suffixes

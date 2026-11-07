@@ -125,9 +125,10 @@ row per line:
   default `#2b5f8e`), the estimate as a darker dot (each channel × 0.65), and 0 as a dark
   grey rule. `scale` sets which sparklines share an axis: `"column"` (the default; down a
   column, so an event study's leads and lags read as a coefficient plot), `"row"` (along a
-  row) or `"table"`. An axis spans the intervals it holds and always 0. Formats that can't
-  draw (text, Markdown, CSV, LaTeX, a renderer without graphics) show `[conf_low,
-  conf_high]` instead;
+  row) or `"table"`. An axis spans the intervals it holds and always 0. HTML draws an SVG
+  and LaTeX a TikZ picture with the same marks (the document needs `\usepackage{tikz}`);
+  formats that can't draw (text, Markdown, CSV, a renderer without graphics) show
+  `[conf_low, conf_high]` instead;
 - a **list** of names, templates and sparklines, one row each, in order: `["std_error", "[{p_value}]"]`;
 - `null`: no lines.
 

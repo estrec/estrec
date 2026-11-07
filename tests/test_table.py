@@ -336,7 +336,8 @@ def test_sparkline_rows_carry_intervals_and_text():
     m = sp[0]["sparkline"]["marks"][0]
     assert m["low"] < m["estimate"] < m["high"]
     assert sp[0]["cells"][0] == f"[{m['low']:.3f}, {m['high']:.3f}]"  # text formats show the interval
-    assert "[" in et.render(t, "text") and "<svg" not in et.render(t, "latex")
+    assert sp[0]["cells"][0] in et.render(t, "text") and "<svg" not in et.render(t, "latex")
+    assert sp[0]["cells"][0] not in et.render(t, "latex")  # LaTeX draws it (TikZ)
     assert any("drawn as a line" in n for n in t["notes"])
 
 
@@ -361,6 +362,59 @@ def test_sparkline_html_and_word():
     assert h.count('<td class="spark"><svg') == 5 and 'stroke="#555555"' in h and 'fill="#7c251b"' in h
     w = et.render(t, "word")
     assert w.count('src="data:image/svg+xml;base64,') == 5 and "<svg" not in w
+
+
+# The event study's first sparkline, pinned: r/tests/test-table.R checks R draws the same
+EVENT_T3_TIKZ = (
+    r"\tikz[x=.75pt,y=.75pt,baseline=0pt]{\useasboundingbox (0,-4.8) rectangle (80,11.2);"
+    r"\draw[line width=.75pt,color={rgb,255:red,85;green,85;blue,85}] (59.9,-4.8) -- (59.9,11.2);"
+    r"\fill[color={rgb,255:red,43;green,95;blue,142},fill opacity=.22] (60.2,3.2) .. controls (65.47,7.2)"
+    r" and (70.73,7.2) .. (76.0,3.2) .. controls (70.73,-0.8) and (65.47,-0.8) .. (60.2,3.2) -- cycle;"
+    r"\draw[line width=.975pt,line cap=round,color={rgb,255:red,43;green,95;blue,142}] (60.2,3.2) -- (76.0,3.2);"
+    r"\filldraw[fill={rgb,255:red,43;green,95;blue,142},draw=white,line width=.675pt] (60.2,3.2) circle[radius=1.425pt];"
+    r"\filldraw[fill={rgb,255:red,43;green,95;blue,142},draw=white,line width=.675pt] (76.0,3.2) circle[radius=1.425pt];"
+    r"\filldraw[fill={rgb,255:red,27;green,61;blue,92},draw=white,line width=.825pt] (68.1,3.2) circle[radius=2.175pt];}"
+)
+EVENT_T3_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="16" viewBox="0 0 80 16" role="img"'
+    ' aria-label="[0.001, 0.060]"><line x1="59.9" y1="0" x2="59.9" y2="16" stroke="#555555" stroke-width="1"/>'
+    '<path d="M60.2 8.0Q68.1 2.0 76.0 8.0Q68.1 14.0 60.2 8.0Z" fill="#2b5f8e" fill-opacity="0.22"/>'
+)
+
+
+def test_sparkline_latex_is_tikz_with_the_svg_marks():
+    t = sparkline_table("column")
+    tex = et.render(t, "latex")
+    assert tex.startswith("% Sparklines are TikZ pictures (\\usepackage{tikz})")
+    assert tex.count("\\tikz[") == 5 and tex.count("circle[radius=2.175pt]") == 5
+    for r in t["rows"]:
+        for m in (r.get("sparkline") or {}).get("marks", []):
+            if m:  # the same x positions as the SVG
+                x0, xl, xe, xh = map(et._tenths, et._spark_xs(m))
+                assert f'x1="{x0}"' in et._spark_svg(m, "#c0392b") and f"({xe},3.2) circle" in et._spark_tikz(m, "#c0392b")
+    assert "tikz" not in et.render(et.build_table(spec(), base_dir=EXAMPLES), "latex")
+    assert et._third(602, 681) == "65.47" and et._third(10, 10) == "1.00" and et._third(1, 0) == "0.03"
+    ev = et.build_table(et.read_table(EXAMPLES / "event-study.estrec-table.json"), base_dir=EXAMPLES)
+    r = ev["rows"][0]
+    assert et._spark_tikz(r["sparkline"]["marks"][0], r["sparkline"]["color"]) == EVENT_T3_TIKZ
+    assert EVENT_T3_TIKZ in et.render(ev, "latex") and EVENT_T3_SVG in et.render(ev, "html")
+
+
+def test_great_tables_sparklines():
+    pytest.importorskip("great_tables")
+    t = sparkline_table("table")
+    g = et.to_great_table(t)
+    h = g.as_raw_html()
+    svgs = [et._spark_svg(m, r["sparkline"]["color"], c) for r in t["rows"] if "sparkline" in r
+            for m, c in zip(r["sparkline"]["marks"], r["cells"]) if m]
+    assert len(svgs) == 5 and all(s in h for s in svgs) and "padding-top:0" in h
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # great_tables: styles aren't supported in LaTeX
+        tex = g.as_latex()
+    assert tex.count("\\tikz[") == 5 and "<svg" not in tex
+    assert "<svg" not in et.to_great_table(et.build_table(spec(), base_dir=EXAMPLES)).as_raw_html()
 
 
 def test_sparkline_validation():

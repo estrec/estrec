@@ -998,7 +998,7 @@ window.estrecPublishData = function () {
   const ids = [...new Set(lastTable.column_records)];
   const recs = ids.map((id) => columnItem(lastTable.column_records.indexOf(id)))
     .filter(Boolean).map((it) => E.redactRecord(it.record, window.EST_IDENTIFYING || []).record);
-  return { spec: JSON.parse(JSON.stringify(state.spec)), records: recs };
+  return { spec: E.publishSpec(state.spec, index()), records: recs };
 };
 
 async function renderExport() {

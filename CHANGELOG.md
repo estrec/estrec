@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Published tables keep the viewer's column labels: estrec.org rebuilds a table from the spec
+  and the bare records, so a column labelled by its collection member fell back to the
+  record's `meta.title` (for R records, the estimation call). Publish now writes each such
+  label into the column's `header` (`publishSpec` in the viewer's script).
 - Table sparklines can sit beside the estimates (Ted 2026-11-07): `"place": "beside"` on a
   sparkline line gives each column of estimates a column next to it, with one drawing per
   term spanning the term's rows (its 0 rule their full height, so down a column the rules

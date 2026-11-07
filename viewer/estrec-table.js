@@ -1013,6 +1013,21 @@
 
   // ------------------------------------------------------------ the web page
 
+  // The spec to publish: estrec.org rebuilds the table from the spec and the bare records,
+  // without the collections they came from, so a column labelled by its collection member
+  // (member.label) gets that label written into its `header`, and the published table's
+  // headings match the viewer's.
+  function publishSpec(spec, idx) {
+    const out = JSON.parse(JSON.stringify(spec));
+    for (const c of out.columns || []) {
+      if (!c || c.header !== undefined) continue;
+      const f = lookup(idx, c);
+      const label = f && (f.member || {}).label;
+      if (label) c.header = String(label);
+    }
+    return out;
+  }
+
   // A self-contained HTML page: the table, and the records behind its columns. Hovering a
   // column heading summarizes its record; clicking it opens the full record.
   function renderWebPage(t, records, opts) {
@@ -1206,7 +1221,7 @@ ${table}</div>
   return {
     TABLE_SCHEMA, DEFAULT_STARS, DEFAULT_HEAD, HEAD_KINDS, TABLE_METRICS, STAT_LABELS,
     twoSidedP, criticalValue, erfc, qnorm,
-    NAMED_LINES, PLACEHOLDERS, SPARK_COLOR, SPARK_SCALES, SPARK_PLACES, sparkSVG, sparkTikz, uncertaintyLines, pValue,
+    NAMED_LINES, PLACEHOLDERS, publishSpec, SPARK_COLOR, SPARK_SCALES, SPARK_PLACES, sparkSVG, sparkTikz, uncertaintyLines, pValue,
     num, vcovs, vcovLabel, pickVcov, tidy, glance, findTest,
     canonicalJSON, sha256Hex, recordSha256,
     indexRecords, validateTable, checkPins, columnResponse, buildTable, render, renderers: RENDERERS,

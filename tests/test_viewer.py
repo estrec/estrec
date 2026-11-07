@@ -88,6 +88,35 @@ def test_redaction_matches_python():
     assert js["record"]["provenance"]["environment"] == {"os": "Linux"}
 
 
+def test_published_spec_keeps_member_labels():
+    """estrec.org rebuilds a table from the spec and the bare records; member labels (from
+    the collection) must travel in the spec, or the headings fall back to meta.title."""
+    if NODE is None:
+        pytest.skip("node not installed")
+    script = r"""
+const E = require(process.argv[1]); const fs = require("fs");
+const coll = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const items = E.recordsIn(coll, new Map()).items;
+const spec = { schema: "estrec-table/0.1", meta: { id: "8c0e5d1a-6b3f-4e2a-9d17-3f5a2c4b6e09", created: "2026-11-07T00:00:00Z" },
+  head: ["number", "label"], columns: items.map((it) => ({ record: it.record.meta.id })) };
+spec.columns[1].header = "kept";
+const local = E.buildTable(spec, E.indexRecords(items));
+const pub = E.publishSpec(spec, E.indexRecords(items));
+const server = E.buildTable(pub, E.indexRecords(items.map((it) => ({ record: it.record }))));
+const bare = E.buildTable(spec, E.indexRecords(items.map((it) => ({ record: it.record }))));
+process.stdout.write(JSON.stringify({ local: local.head, server: server.head, bare: bare.head, headers: pub.columns.map((c) => c.header), orig: spec.columns.map((c) => c.header) }));
+"""
+    run = subprocess.run(
+        [NODE, "-e", script, str(ROOT / "viewer" / "estrec-table.js"), str(EXAMPLES / "paper.estrec-collection.json")],
+        capture_output=True, text=True, check=False,
+    )
+    assert run.returncode == 0, run.stderr
+    out = json.loads(run.stdout)
+    assert out["local"] == out["server"] and out["local"][1]["cells"] == ["baseline", "kept", "full"]
+    assert out["bare"] != out["local"]  # what publishing did before: no member labels
+    assert out["headers"] == ["baseline", "kept", "full"] and out["orig"] == [None, "kept", None]
+
+
 def test_web_page():
     if NODE is None:
         pytest.skip("node not installed")

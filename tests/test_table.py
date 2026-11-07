@@ -417,6 +417,40 @@ def test_great_tables_sparklines():
     assert "<svg" not in et.to_great_table(et.build_table(spec(), base_dir=EXAMPLES)).as_raw_html()
 
 
+def test_sparkline_beside_the_estimates():
+    s = spec()
+    s["uncertainty"] = ["std_error", {"sparkline": {"place": "beside"}}]
+    t = et.build_table(s, base_dir=EXAMPLES)
+    sp = [r for r in t["rows"] if "sparkline" in r]
+    assert sp and all(r["sparkline"]["place"] == "beside" for r in sp)
+    h = et.render(t, "html")
+    assert h.count('<th colspan="2">') == 3 * len(t["head"])
+    # one drawing per column per term (hp is missing in (1): an empty cell), spanning the
+    # estimate and its standard error; the sparkline rows themselves are gone
+    assert h.count('class="spark-side" rowspan="2"') == 6 and "spark-row" not in h
+    assert h.count('height="100%"') == 5 and '<td colspan="2">32</td>' in h
+    assert f'colspan="{1 + 2 * 3}"' in h  # notes span every column
+    # text formats keep the interval as a row
+    assert sp[0]["cells"][0] in et.render(t, "text")
+    w = et.render(t, "word")
+    assert w.count('rowspan="2"') == 6 and w.count("mso-height-rule:exactly") == 4
+    # the first term's two rows are 12 + 12 pt (32 px), the second's 15 + 12 pt (36 px)
+    assert w.count('height="32"') == 3 and w.count('height="36"') == 2
+    # without the estimate, the beside line's label moves to the first row left
+    s.update(uncertainty=[{"sparkline": {"place": "beside"}}, "std_error"], estimate=False)
+    h = et.render(et.build_table(s, base_dir=EXAMPLES), "html")
+    assert '<tr class="estimate"><th>Weight (1000 lbs)</th><td>(0.754)</td><td class="spark-side" rowspan="1"' in h
+    # a term whose only line is the drawing keeps it as a row
+    s["uncertainty"] = {"sparkline": {"place": "beside"}}
+    h = et.render(et.build_table(s, base_dir=EXAMPLES), "html")
+    assert "spark-side" not in h and h.count('<td colspan="2" class="spark"><svg') == 5
+    s["uncertainty"] = [{"sparkline": {"place": "beside"}}, {"sparkline": {"place": "beside"}}, {"sparkline": {"place": "x"}}]
+    assert [(i.path, i.message[:3]) for i in et.validate_table(s, schema=None)] == [
+        ("uncertainty[1].sparkline.place", "one"),
+        ("uncertainty[2].sparkline.place", "'be"),
+    ]
+
+
 def test_sparkline_validation():
     s = spec()
     s["uncertainty"] = [{"sparkline": {"color": "red", "scale": "diagonal"}}, {"sparkline": 1}]

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Table sparklines can sit beside the estimates (Ted 2026-11-07): `"place": "beside"` on a
+  sparkline line gives each column of estimates a column next to it, with one drawing per
+  term spanning the term's rows (its 0 rule their full height, so down a column the rules
+  join into one line). Headings and statistics rows span both columns. HTML, the viewer and
+  its web page lay it out (an SVG filling its cell), and Word (rows exactly 12 pt, 15 pt with
+  the space above a term, and an image of their height); other formats draw it below. One
+  sparkline at most is beside. The viewer's sparkline line has a "Where" choice.
 - Stata: fixed-effect names after reghdfe, ivreghdfe and ppmlhdfe come from
   `e(extended_absvars)` (`rep78`, `foreign#c.mpg`), not `e(dof_table)`'s row names (`1.rep78`);
   the same fix in `converters/reghdfe/`. ppmlhdfe's 8 test cases now run (records

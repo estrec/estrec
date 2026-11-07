@@ -148,6 +148,7 @@ table.estrec-table td { text-align: center; }
 table.estrec-table tr.uncertainty td { color: var(--muted); }
 table.estrec-table tbody tr.spark-row th, table.estrec-table tbody tr.spark-row td { padding-top: 0 !important; padding-bottom: 0 !important; line-height: 16px; }
 table.estrec-table td.spark svg { display: block; margin: 0 auto; }
+table.estrec-table td.spark-side.to-end { border-bottom: 1.5px solid var(--ink); }
 .spark-fields { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .spark-fields input[type=color] { width: 34px; height: 24px; padding: 0 2px; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); }
 table.estrec-table tbody tr.estimate:not(:first-child) th, table.estrec-table tbody tr.estimate:not(:first-child) td { padding-top: 6px; }
@@ -852,8 +853,8 @@ function renderLines() {
   if (!arr.length) box.append(el("p", { class: "empty", text: "No lines: estimates only." }));
   arr.forEach((x, i) => {
     if (x && typeof x === "object") {
-      const sp = Object.assign({ color: E.SPARK_COLOR, scale: "column" }, x.sparkline);
-      const save = () => { arr[i] = { sparkline: { color: sp.color, scale: sp.scale } }; setLines(arr); update({ keepControls: true }); };
+      const sp = Object.assign({ color: E.SPARK_COLOR, scale: "column", place: "below" }, x.sparkline);
+      const save = () => { arr[i] = { sparkline: Object.assign({ color: sp.color, scale: sp.scale }, sp.place === "beside" ? { place: "beside" } : {}) }; setLines(arr); update({ keepControls: true }); };
       const color = el("input", { type: "color", id: `line-${i}-color`, value: sp.color, "aria-label": "Sparkline colour" });
       color.addEventListener("input", () => { sp.color = color.value; save(); });
       const scale = el("select", { id: `line-${i}-scale`, "aria-label": "Sparklines that share an axis" },
@@ -862,7 +863,19 @@ function renderLines() {
         el("option", { value: "table", text: "One axis for the table" }));
       scale.value = sp.scale;
       scale.addEventListener("change", () => { sp.scale = scale.value; save(); });
-      box.append(el("div", { class: "item" }, el("div", { class: "fields spark-fields" }, el("span", { text: "Interval sparkline" }), color, scale), toolButtons(arr, i, () => { setLines(arr); update(); })));
+      // beside: a column next to each column of estimates, one drawing per term as tall as its rows
+      const place = el("select", { id: `line-${i}-place`, "aria-label": "Where the sparkline goes" },
+        el("option", { value: "below", text: "A row under the estimate" }),
+        el("option", { value: "beside", text: "A column beside the estimates" }));
+      place.value = sp.place;
+      place.addEventListener("change", () => {
+        sp.place = place.value;
+        // one sparkline at most goes beside: the others move back under the estimate
+        if (sp.place === "beside") arr.forEach((y, k) => { if (k !== i && y && typeof y === "object" && y.sparkline && y.sparkline.place === "beside") { const { place: _, ...rest } = y.sparkline; arr[k] = { sparkline: rest }; } });
+        save();
+        update();
+      });
+      box.append(el("div", { class: "item" }, el("div", { class: "fields spark-fields" }, el("span", { text: "Interval sparkline" }), color, scale, place), toolButtons(arr, i, () => { setLines(arr); update(); })));
       return;
     }
     const inp = el("input", { type: "text", id: `line-${i}`, value: E.NAMED_LINES[x] || x, "aria-label": `Line ${i + 1} under each estimate`, spellcheck: "false", class: "mono" });

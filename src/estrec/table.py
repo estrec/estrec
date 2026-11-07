@@ -74,6 +74,7 @@ _WORDS = {
 
 SPARK_COLOR = "#2b5f8e"
 SPARK_SCALES = ("column", "row", "table")
+SPARK_PLACES = ("below", "beside")
 _SPARK_TEXT = "[{conf_low}, {conf_high}]"
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 
@@ -88,13 +89,19 @@ def _line_items(spec: dict) -> list:
 def uncertainty_lines(spec: dict) -> list:
     """The lines under each estimate: `uncertainty` as a name, a template, a sparkline or a
     list of them, or None (no lines). Names become templates; a sparkline becomes
-    {"sparkline": {"color", "scale"}} with the defaults filled in."""
+    {"sparkline": {"color", "scale", "place"}} with the defaults filled in."""
     out = []
     for x in _line_items(spec):
         if isinstance(x, dict):
             sp = x.get("sparkline") or {}
             out.append(
-                {"sparkline": {"color": sp.get("color", SPARK_COLOR), "scale": sp.get("scale", "column")}}
+                {
+                    "sparkline": {
+                        "color": sp.get("color", SPARK_COLOR),
+                        "scale": sp.get("scale", "column"),
+                        "place": sp.get("place", "below"),
+                    }
+                }
             )
         else:
             out.append(NAMED_LINES.get(x, x))
@@ -109,6 +116,7 @@ def _line_issues(spec: dict) -> list[Issue]:
     if not isinstance(items, list):
         return [Issue("error", "uncertainty", "a name, a list of names and templates, or null")]
     out = []
+    beside = 0
     for j, x in enumerate(items):
         path = "uncertainty" if isinstance(unc, (str, dict)) else f"uncertainty[{j}]"
         if isinstance(x, dict):
@@ -120,6 +128,12 @@ def _line_issues(spec: dict) -> list[Issue]:
                 out.append(Issue("error", f"{path}.sparkline.color", "a colour as #rrggbb"))
             if "scale" in sp and sp["scale"] not in SPARK_SCALES:
                 out.append(Issue("error", f"{path}.sparkline.scale", "'column', 'row' or 'table'"))
+            if "place" in sp and sp["place"] not in SPARK_PLACES:
+                out.append(Issue("error", f"{path}.sparkline.place", "'below' or 'beside'"))
+            elif sp.get("place") == "beside":
+                beside += 1
+                if beside > 1:
+                    out.append(Issue("error", f"{path}.sparkline.place", "one sparkline at most is beside the estimates"))
         elif not isinstance(x, str):
             out.append(Issue("error", path, "a name, a template string or a sparkline"))
         elif x in NAMED_LINES:
@@ -589,27 +603,58 @@ def _spark_tikz(m: dict | None, color: str) -> str:
     )
 
 
-def _spark_svg(m: dict | None, color: str, label: str = "") -> str:
-    """One interval as a small SVG of fixed size, on its axis: a grey rule at 0 running the
-    full height (so stacked rows join), the interval as a thin line in `color` inside a
-    faint band that swells toward the estimate, a dot at each end and a darker dot at the
-    estimate, each with a thin halo of the background so the line is scalloped there."""
-    if m is None:
-        return ""
-    x0, xl, xe, xh = map(_tenths, _spark_xs(m))
-    y, top, bottom = "8.0", "2.0", "14.0"
+def _spark_y(n: int) -> str:
+    """A y position given in tenths of a pixel (may be negative)."""
+    return ("-" if n < 0 else "") + _tenths(abs(n))
+
+
+def _spark_marks(xl: str, xe: str, xh: str, yt: int, color: str) -> str:
+    """The band, the line and the dots of one interval, centred at yt tenths of a pixel."""
+    y, top, bottom = _spark_y(yt), _spark_y(yt - 60), _spark_y(yt + 60)
     return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{SPARK_W}" height="{SPARK_H}" '
-        f'viewBox="0 0 {SPARK_W} {SPARK_H}" role="img"'
-        + (f' aria-label="{html.escape(label)}"' if label else "")
-        + ">"
-        f'<line x1="{x0}" y1="0" x2="{x0}" y2="{SPARK_H}" stroke="#555555" stroke-width="1"/>'
         f'<path d="M{xl} {y}Q{xe} {top} {xh} {y}Q{xe} {bottom} {xl} {y}Z" fill="{color}" fill-opacity="0.22"/>'
         f'<line x1="{xl}" y1="{y}" x2="{xh}" y2="{y}" stroke="{color}" stroke-width="1.3" stroke-linecap="round"/>'
         f'<circle cx="{xl}" cy="{y}" r="1.9" fill="{color}" stroke-width="0.9" {_HALO}/>'
         f'<circle cx="{xh}" cy="{y}" r="1.9" fill="{color}" stroke-width="0.9" {_HALO}/>'
         f'<circle cx="{xe}" cy="{y}" r="2.9" fill="{_spark_dark(color)}" stroke-width="1.1" {_HALO}/>'
-        "</svg>"
+    )
+
+
+def _spark_svg(m: dict | None, color: str, label: str = "", height: int = SPARK_H) -> str:
+    """One interval as a small SVG of fixed size, on its axis: a grey rule at 0 running the
+    full height (so stacked rows join), the interval as a thin line in `color` inside a
+    faint band that swells toward the estimate, a dot at each end and a darker dot at the
+    estimate, each with a thin halo of the background so the line is scalloped there.
+    `height` (pixels) is the image's: the marks sit halfway down."""
+    if m is None:
+        return ""
+    x0, xl, xe, xh = map(_tenths, _spark_xs(m))
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{SPARK_W}" height="{height}" '
+        f'viewBox="0 0 {SPARK_W} {height}" role="img"'
+        + (f' aria-label="{html.escape(label)}"' if label else "")
+        + ">"
+        f'<line x1="{x0}" y1="0" x2="{x0}" y2="{height}" stroke="#555555" stroke-width="1"/>'
+        + _spark_marks(xl, xe, xh, height * 5, color)
+        + "</svg>"
+    )
+
+
+def _spark_svg_tall(m: dict | None, color: str, label: str = "") -> str:
+    """A sparkline beside the estimates: as tall as its cell (the term's rows), the 0 rule
+    its full height and the marks halfway down, so the cells of a column join into one axis.
+    The cell is `position:relative`; the SVG fills it."""
+    if m is None:
+        return ""
+    x0, xl, xe, xh = map(_tenths, _spark_xs(m))
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{SPARK_W}" height="100%" role="img"'
+        + (f' aria-label="{html.escape(label)}"' if label else "")
+        + ' style="position:absolute;top:0;left:calc(50% - 40px);overflow:visible">'
+        f'<line x1="{x0}" y1="0" x2="{x0}" y2="100%" stroke="#555555" stroke-width="1"/>'
+        '<svg y="50%" overflow="visible">'
+        + _spark_marks(xl, xe, xh, 0, color)
+        + "</svg></svg>"
     )
 
 
@@ -895,20 +940,60 @@ def _html_cell(r: dict, j: int) -> str:
     return f'<td class="spark">{_spark_svg(sp["marks"][j], sp["color"], r["cells"][j])}</td>'
 
 
-def _spark_img(m: dict | None, color: str, label: str) -> str:
+def _spark_img(m: dict | None, color: str, label: str, height: int = SPARK_H) -> str:
     """A sparkline as an <img> of its SVG (Word keeps images, not inline SVG)."""
     if m is None:
         return ""
-    data = base64.b64encode(_spark_svg(m, color).encode("ascii")).decode("ascii")
+    data = base64.b64encode(_spark_svg(m, color, height=height).encode("ascii")).decode("ascii")
     return (
-        f'<img width="{SPARK_W}" height="{SPARK_H}" style="display:block;margin:0 auto;vertical-align:middle" '
+        f'<img width="{SPARK_W}" height="{height}" style="display:block;margin:0 auto;vertical-align:middle" '
         f'alt="{html.escape(label)}" '
         f'src="data:image/svg+xml;base64,{data}">'
     )
 
 
+def _beside_plan(t: dict) -> dict | None:
+    """How a table with a sparkline beside the estimates is laid out (HTML, Word): each data
+    column gets a second column, and each term's drawing is one cell there spanning the
+    term's other rows. None without such a line. Keys: "start" {row: (drawn row, rows
+    spanned, block end)}, "skip" (rows drawn beside, not as rows), "inside" (rows under a
+    spanning cell), "label" {row: label moved from a skipped first row}. A term whose only
+    row is the sparkline keeps it as a row."""
+    rows = t["rows"]
+    if not any((r.get("sparkline") or {}).get("place") == "beside" for r in rows):
+        return None
+    plan: dict = {"start": {}, "skip": set(), "inside": set(), "label": {}}
+    i = 0
+    while i < len(rows):
+        if rows[i]["kind"] == "stat":
+            i += 1
+            continue
+        j = i + 1
+        while j < len(rows) and rows[j]["kind"] == "uncertainty":
+            j += 1
+        side = [k for k in range(i, j) if (rows[k].get("sparkline") or {}).get("place") == "beside"]
+        rest = [k for k in range(i, j) if k not in side]
+        if side and rest:
+            plan["start"][rest[0]] = (side[0], len(rest), j)
+            plan["skip"].add(side[0])
+            plan["inside"].update(rest[1:])
+            if side[0] == i:
+                plan["label"][rest[0]] = rows[i]["label"]
+        i = j
+    return plan
+
+
+def _row_kind(t: dict, plan: dict | None, i: int) -> str:
+    return "estimate" if plan and i in plan["label"] else t["rows"][i]["kind"]
+
+
+_SIDE_TD = 'style="position:relative;padding:0;width:80px;min-width:80px"'
+
+
 def _render_html(t: dict) -> str:
     h = html.escape
+    plan = _beside_plan(t)
+    span = ' colspan="2"' if plan else ""
     out = ['<table class="estrec-table">']
     if t["title"]:
         out.append(f"<caption>{h(t['title'])}</caption>")
@@ -916,7 +1001,7 @@ def _render_html(t: dict) -> str:
         "<thead>"
         + "".join(
             f'<tr class="head-{r["kind"]}"><th></th>'
-            + "".join(f"<th>{h(x)}</th>" for x in r["cells"])
+            + "".join(f"<th{span}>{h(x)}</th>" for x in r["cells"])
             + "</tr>"
             for r in t["head"]
         )
@@ -924,19 +1009,35 @@ def _render_html(t: dict) -> str:
     )
     out.append("<tbody>")
     prev = None
-    for r in t["rows"]:
-        cls = r["kind"] + (" first-stat" if r["kind"] == "stat" and prev != "stat" else "")
+    rows = t["rows"]
+    for i, r in enumerate(rows):
+        if plan and i in plan["skip"]:
+            continue
+        kind = _row_kind(t, plan, i)
+        cls = kind + (" first-stat" if kind == "stat" and prev != "stat" else "")
         cls += " spark-row" if "sparkline" in r else ""
-        out.append(
-            f'<tr class="{cls}"><th>{h(r["label"])}</th>'
-            + "".join(_html_cell(r, j) for j in range(len(r["cells"])))
-            + "</tr>"
-        )
-        prev = r["kind"]
+        label = plan["label"].get(i, r["label"]) if plan else r["label"]
+        if plan and i in plan["start"]:
+            k, n, end = plan["start"][i]
+            sp = rows[k]["sparkline"]
+            side = "spark-side" + (" to-end" if end == len(rows) else "")
+            cells = "".join(
+                _html_cell(r, j)
+                + f'<td class="{side}" rowspan="{n}" {_SIDE_TD}>'
+                + _spark_svg_tall(sp["marks"][j], sp["color"], rows[k]["cells"][j])
+                + "</td>"
+                for j in range(len(r["cells"]))
+            )
+        elif plan and i not in plan["inside"]:
+            cells = "".join(_html_cell(r, j).replace("<td", "<td colspan=\"2\"", 1) for j in range(len(r["cells"])))
+        else:
+            cells = "".join(_html_cell(r, j) for j in range(len(r["cells"])))
+        out.append(f'<tr class="{cls}"><th>{h(label)}</th>' + cells + "</tr>")
+        prev = kind
     out.append("</tbody>")
     if t["notes"]:
         out.append(
-            f'<tfoot><tr><td colspan="{len(t["header"]) + 1}">'
+            f'<tfoot><tr><td colspan="{len(t["header"]) * (2 if plan else 1) + 1}">'
             + "<br>".join(map(h, t["notes"]))
             + "</td></tr></tfoot>"
         )
@@ -990,7 +1091,15 @@ _WORD_CELL = "padding:0 5.4pt;border:none;white-space:nowrap"
 
 
 def _word_cell(
-    text: str, *, left: bool, top: str = "", bottom: str = "", pad_top: bool = False, raw: str | None = None
+    text: str,
+    *,
+    left: bool,
+    top: str = "",
+    bottom: str = "",
+    pad_top: bool = False,
+    raw: str | None = None,
+    attrs: str = "",
+    style_extra: str = "",
 ) -> str:
     style = _WORD_CELL + (";text-align:left" if left else ";text-align:center")
     if top:
@@ -999,13 +1108,17 @@ def _word_cell(
         style += f";border-bottom:{bottom} {_WORD_RULE}"
     if pad_top:
         style += ";padding-top:3pt"
-    return f'<td style="{style}">{html.escape(text) if raw is None else raw}</td>'
+    return f'<td{attrs} style="{style}{style_extra}">{html.escape(text) if raw is None else raw}</td>'
 
 
 def _render_word(t: dict) -> str:
     """A whole HTML document that Word, Google Docs, LibreOffice and Excel paste or open as a
-    formatted table (the viewer's Copy for Word puts it on the clipboard)."""
+    formatted table (the viewer's Copy for Word puts it on the clipboard). With a sparkline
+    beside the estimates, a term's rows are exactly 12 pt high (15 pt with the space above a
+    term) and its drawing is an image of their height, so a column of them joins."""
     h = html.escape
+    plan = _beside_plan(t)
+    span = ' colspan="2"' if plan else ""
     title = t["title"] or "Estimation table"
     out = [
         "<!doctype html>",
@@ -1022,35 +1135,58 @@ def _render_word(t: dict) -> str:
         out.append(
             "<tr>"
             + "".join(
-                _word_cell(x, left=i == 0, top=top, bottom=bottom) for i, x in enumerate([""] + hr["cells"])
+                _word_cell(x, left=i == 0, top=top, bottom=bottom, attrs=span if i else "")
+                for i, x in enumerate([""] + hr["cells"])
             )
             + "</tr>"
         )
+    rows = t["rows"]
     prev = None
-    last = len(t["rows"]) - 1
-    for k, r in enumerate(t["rows"]):
-        top = ".75pt" if r["kind"] == "stat" and prev != "stat" else ""
-        if k == 0 and not nh:
+    last = len(rows) - 1
+    shown = [i for i in range(len(rows)) if not (plan and i in plan["skip"])]
+    first = shown[0] if shown else 0
+
+    def pads(i):  # the space above a term; sparkline rows stay unpadded so they join
+        return _row_kind(t, plan, i) == "estimate" and i > first and "sparkline" not in rows[i]
+
+    for i in shown:
+        r = rows[i]
+        kind = _row_kind(t, plan, i)
+        top = ".75pt" if kind == "stat" and prev != "stat" else ""
+        if i == first and not nh:
             top = "1.5pt"
-        bottom = "1.5pt" if k == last else ""
+        bottom = "1.5pt" if i == last else ""
         sp = r.get("sparkline")
-        pad = r["kind"] == "estimate" and k > 0 and not sp
-        out.append(
-            "<tr>"
-            + "".join(
+        pad = pads(i)
+        label = plan["label"].get(i, r["label"]) if plan else r["label"]
+        exact = plan and (i in plan["start"] or i in plan["inside"])
+        tr = f'<tr style="height:{15 if pad else 12}pt;mso-height-rule:exactly">' if exact else "<tr>"
+        cells = []
+        for c, x in enumerate([label] + r["cells"]):
+            raw = _spark_img(sp["marks"][c - 1], sp["color"], x) if sp and c else None
+            many = plan and c and i not in plan["start"] and i not in plan["inside"]
+            cells.append(
                 _word_cell(
-                    x,
-                    left=i == 0,
-                    top=top,
-                    bottom=bottom,
-                    pad_top=pad,
-                    raw=_spark_img(sp["marks"][i - 1], sp["color"], x) if sp and i else None,
+                    x, left=c == 0, top=top, bottom=bottom, pad_top=pad, raw=raw, attrs=' colspan="2"' if many else ""
                 )
-                for i, x in enumerate([r["label"]] + r["cells"])
             )
-            + "</tr>"
-        )
-        prev = r["kind"]
+            if plan and c and i in plan["start"]:
+                k, n, end = plan["start"][i]
+                ssp = rows[k]["sparkline"]
+                height = sum(20 if pads(q) else 16 for q in range(i, end) if q not in plan["skip"])
+                cells.append(
+                    _word_cell(
+                        "",
+                        left=False,
+                        top=top,
+                        bottom="1.5pt" if end == len(rows) else "",
+                        raw=_spark_img(ssp["marks"][c - 1], ssp["color"], rows[k]["cells"][c - 1], height),
+                        attrs=f' rowspan="{n}"',
+                        style_extra=";padding:0;vertical-align:top",
+                    )
+                )
+        out.append(tr + "".join(cells) + "</tr>")
+        prev = kind
     out.append("</table>")
     for n in t["notes"]:
         out.append(f'<p style="margin:3pt 0 0 0;font-size:9pt">{h(n)}</p>')

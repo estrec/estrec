@@ -27,6 +27,7 @@
 
   const SPARK_COLOR = "#2b5f8e";
   const SPARK_SCALES = ["column", "row", "table"];
+  const SPARK_PLACES = ["below", "beside"];
   const SPARK_TEXT = "[{conf_low}, {conf_high}]";
   const isObj = (x) => x !== null && typeof x === "object" && !Array.isArray(x);
 
@@ -36,12 +37,12 @@
     return Array.isArray(unc) ? unc : [unc];
   }
 
-  // names become templates; a sparkline becomes {sparkline: {color, scale}} with defaults
+  // names become templates; a sparkline becomes {sparkline: {color, scale, place}} with defaults
   function uncertaintyLines(spec) {
     return lineItems(spec).map((x) => {
       if (isObj(x)) {
         const sp = x.sparkline || {};
-        return { sparkline: { color: sp.color !== undefined ? sp.color : SPARK_COLOR, scale: sp.scale !== undefined ? sp.scale : "column" } };
+        return { sparkline: { color: sp.color !== undefined ? sp.color : SPARK_COLOR, scale: sp.scale !== undefined ? sp.scale : "column", place: sp.place !== undefined ? sp.place : "below" } };
       }
       return NAMED_LINES[x] || x;
     });
@@ -52,6 +53,7 @@
     if (unc === null) return [];
     const items = Array.isArray(unc) ? unc : [unc];
     const out = [];
+    let beside = 0;
     items.forEach((x, j) => {
       const path = Array.isArray(unc) ? `uncertainty[${j}]` : "uncertainty";
       if (isObj(x)) {
@@ -59,6 +61,8 @@
         if (Object.keys(x).join() !== "sparkline" || !isObj(sp)) { out.push(issue("error", path, 'an object line is {"sparkline": {color, scale}}')); return; }
         if ("color" in sp && !(typeof sp.color === "string" && /^#[0-9a-fA-F]{6}$/.test(sp.color))) out.push(issue("error", `${path}.sparkline.color`, "a colour as #rrggbb"));
         if ("scale" in sp && !SPARK_SCALES.includes(sp.scale)) out.push(issue("error", `${path}.sparkline.scale`, "'column', 'row' or 'table'"));
+        if ("place" in sp && !SPARK_PLACES.includes(sp.place)) out.push(issue("error", `${path}.sparkline.place`, "'below' or 'beside'"));
+        else if (sp.place === "beside" && ++beside > 1) out.push(issue("error", `${path}.sparkline.place`, "one sparkline at most is beside the estimates"));
       } else if (typeof x !== "string") out.push(issue("error", path, "a name, a template string or a sparkline"));
       else if (x in NAMED_LINES) return;
       else if (!x.includes("{")) out.push(issue("error", path, `'${x}' is neither a name (${Object.keys(NAMED_LINES).join(", ")}) nor a template`));
@@ -582,26 +586,45 @@
       "}";
   }
 
-  function sparkSVG(m, color, label) {
-    if (!m) return "";
-    const [x0, xl, xe, xh] = sparkXs(m).map(tenths);
-    const y = "8.0", top = "2.0", bottom = "14.0";
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${SPARK_W}" height="${SPARK_H}" viewBox="0 0 ${SPARK_W} ${SPARK_H}" role="img"` +
-      (label ? ` aria-label="${escHTML(label)}"` : "") + ">" +
-      `<line x1="${x0}" y1="0" x2="${x0}" y2="${SPARK_H}" stroke="#555555" stroke-width="1"/>` +
-      `<path d="M${xl} ${y}Q${xe} ${top} ${xh} ${y}Q${xe} ${bottom} ${xl} ${y}Z" fill="${color}" fill-opacity="0.22"/>` +
+  const sparkY = (n) => (n < 0 ? "-" : "") + tenths(Math.abs(n));
+  // the band, the line and the dots of one interval, centred at yt tenths of a pixel
+  function sparkMarks(xl, xe, xh, yt, color) {
+    const y = sparkY(yt), top = sparkY(yt - 60), bottom = sparkY(yt + 60);
+    return `<path d="M${xl} ${y}Q${xe} ${top} ${xh} ${y}Q${xe} ${bottom} ${xl} ${y}Z" fill="${color}" fill-opacity="0.22"/>` +
       `<line x1="${xl}" y1="${y}" x2="${xh}" y2="${y}" stroke="${color}" stroke-width="1.3" stroke-linecap="round"/>` +
       `<circle cx="${xl}" cy="${y}" r="1.9" fill="${color}" stroke-width="0.9" ${HALO}/>` +
       `<circle cx="${xh}" cy="${y}" r="1.9" fill="${color}" stroke-width="0.9" ${HALO}/>` +
-      `<circle cx="${xe}" cy="${y}" r="2.9" fill="${sparkDark(color)}" stroke-width="1.1" ${HALO}/>` +
-      "</svg>";
+      `<circle cx="${xe}" cy="${y}" r="2.9" fill="${sparkDark(color)}" stroke-width="1.1" ${HALO}/>`;
+  }
+
+  function sparkSVG(m, color, label, height) {
+    if (!m) return "";
+    const H = height === undefined ? SPARK_H : height;
+    const [x0, xl, xe, xh] = sparkXs(m).map(tenths);
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${SPARK_W}" height="${H}" viewBox="0 0 ${SPARK_W} ${H}" role="img"` +
+      (label ? ` aria-label="${escHTML(label)}"` : "") + ">" +
+      `<line x1="${x0}" y1="0" x2="${x0}" y2="${H}" stroke="#555555" stroke-width="1"/>` +
+      sparkMarks(xl, xe, xh, H * 5, color) + "</svg>";
+  }
+
+  // a sparkline beside the estimates: as tall as its cell (the term's rows), the 0 rule its
+  // full height and the marks halfway down, so a column of them joins into one axis
+  function sparkSVGTall(m, color, label) {
+    if (!m) return "";
+    const [x0, xl, xe, xh] = sparkXs(m).map(tenths);
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${SPARK_W}" height="100%" role="img"` +
+      (label ? ` aria-label="${escHTML(label)}"` : "") +
+      ' style="position:absolute;top:0;left:calc(50% - 40px);overflow:visible">' +
+      `<line x1="${x0}" y1="0" x2="${x0}" y2="100%" stroke="#555555" stroke-width="1"/>` +
+      '<svg y="50%" overflow="visible">' + sparkMarks(xl, xe, xh, 0, color) + "</svg></svg>";
   }
 
   const b64 = (s) => (typeof btoa === "function" ? btoa(s) : Buffer.from(s, "ascii").toString("base64"));
 
-  function sparkImg(m, color, label) {
+  function sparkImg(m, color, label, height) {
     if (!m) return "";
-    return `<img width="${SPARK_W}" height="${SPARK_H}" style="display:block;margin:0 auto;vertical-align:middle" alt="${escHTML(label)}" src="data:image/svg+xml;base64,${b64(sparkSVG(m, color))}">`;
+    const H = height === undefined ? SPARK_H : height;
+    return `<img width="${SPARK_W}" height="${H}" style="display:block;margin:0 auto;vertical-align:middle" alt="${escHTML(label)}" src="data:image/svg+xml;base64,${b64(sparkSVG(m, color, "", H))}">`;
   }
 
   function htmlCell(r, j) {
@@ -788,20 +811,62 @@
     return lines.join("\n") + "\n";
   }
 
+  // a table with a sparkline beside the estimates (HTML, Word): each data column gets a
+  // second column, and each term's drawing is one cell there spanning its other rows
+  function besidePlan(t) {
+    const rows = t.rows;
+    const isSide = (r) => !!(r.sparkline && r.sparkline.place === "beside");
+    if (!rows.some(isSide)) return null;
+    const plan = { start: new Map(), skip: new Set(), inside: new Set(), label: new Map() };
+    let i = 0;
+    while (i < rows.length) {
+      if (rows[i].kind === "stat") { i++; continue; }
+      let j = i + 1;
+      while (j < rows.length && rows[j].kind === "uncertainty") j++;
+      const side = [], rest = [];
+      for (let k = i; k < j; k++) (isSide(rows[k]) ? side : rest).push(k);
+      if (side.length && rest.length) {
+        plan.start.set(rest[0], [side[0], rest.length, j]);
+        plan.skip.add(side[0]);
+        rest.slice(1).forEach((k) => plan.inside.add(k));
+        if (side[0] === i) plan.label.set(rest[0], rows[i].label);
+      }
+      i = j;
+    }
+    return plan;
+  }
+  const rowKind = (t, plan, i) => (plan && plan.label.has(i) ? "estimate" : t.rows[i].kind);
+  const SIDE_TD = 'style="position:relative;padding:0;width:80px;min-width:80px"';
+
   function renderHTML(t) {
     const h = escHTML;
+    const plan = besidePlan(t);
+    const span = plan ? ' colspan="2"' : "";
     const out = ['<table class="estrec-table">'];
     if (t.title) out.push(`<caption>${h(t.title)}</caption>`);
-    out.push("<thead>" + t.head.map((r) => `<tr class="head-${r.kind}"><th></th>` + r.cells.map((x) => `<th>${h(x)}</th>`).join("") + "</tr>").join("") + "</thead>");
+    out.push("<thead>" + t.head.map((r) => `<tr class="head-${r.kind}"><th></th>` + r.cells.map((x) => `<th${span}>${h(x)}</th>`).join("") + "</tr>").join("") + "</thead>");
     out.push("<tbody>");
     let prev = null;
-    for (const r of t.rows) {
-      const cls = r.kind + (r.kind === "stat" && prev !== "stat" ? " first-stat" : "") + (r.sparkline ? " spark-row" : "");
-      out.push(`<tr class="${cls}"><th>${h(r.label)}</th>` + r.cells.map((_, j) => htmlCell(r, j)).join("") + "</tr>");
-      prev = r.kind;
-    }
+    const rows = t.rows;
+    rows.forEach((r, i) => {
+      if (plan && plan.skip.has(i)) return;
+      const kind = rowKind(t, plan, i);
+      const cls = kind + (kind === "stat" && prev !== "stat" ? " first-stat" : "") + (r.sparkline ? " spark-row" : "");
+      const label = plan && plan.label.has(i) ? plan.label.get(i) : r.label;
+      let cells;
+      if (plan && plan.start.has(i)) {
+        const [k, n, end] = plan.start.get(i);
+        const sp = rows[k].sparkline;
+        const side = "spark-side" + (end === rows.length ? " to-end" : "");
+        cells = r.cells.map((_, j) => htmlCell(r, j) + `<td class="${side}" rowspan="${n}" ${SIDE_TD}>` + sparkSVGTall(sp.marks[j], sp.color, rows[k].cells[j]) + "</td>").join("");
+      } else if (plan && !plan.inside.has(i)) {
+        cells = r.cells.map((_, j) => htmlCell(r, j).replace("<td", '<td colspan="2"')).join("");
+      } else cells = r.cells.map((_, j) => htmlCell(r, j)).join("");
+      out.push(`<tr class="${cls}"><th>${h(label)}</th>` + cells + "</tr>");
+      prev = kind;
+    });
     out.push("</tbody>");
-    if (t.notes.length) out.push(`<tfoot><tr><td colspan="${t.header.length + 1}">` + t.notes.map(h).join("<br>") + "</td></tr></tfoot>");
+    if (t.notes.length) out.push(`<tfoot><tr><td colspan="${t.header.length * (plan ? 2 : 1) + 1}">` + t.notes.map(h).join("<br>") + "</td></tr></tfoot>");
     out.push("</table>");
     return out.join("\n") + "\n";
   }
@@ -838,18 +903,22 @@
   const WORD_RULE = "solid windowtext";
   const WORD_CELL = "padding:0 5.4pt;border:none;white-space:nowrap";
 
-  function wordCell(text, { left, top = "", bottom = "", padTop = false, raw = null }) {
+  function wordCell(text, { left, top = "", bottom = "", padTop = false, raw = null, attrs = "", styleExtra = "" }) {
     let style = WORD_CELL + (left ? ";text-align:left" : ";text-align:center");
     if (top) style += `;border-top:${top} ${WORD_RULE}`;
     if (bottom) style += `;border-bottom:${bottom} ${WORD_RULE}`;
     if (padTop) style += ";padding-top:3pt";
-    return `<td style="${style}">${raw === null ? escHTML(text) : raw}</td>`;
+    return `<td${attrs} style="${style}${styleExtra}">${raw === null ? escHTML(text) : raw}</td>`;
   }
 
   // A whole HTML document that Word, Google Docs, LibreOffice and Excel paste or open as a
-  // formatted table (the viewer's Copy for Word puts it on the clipboard).
+  // formatted table (the viewer's Copy for Word puts it on the clipboard). With a sparkline
+  // beside the estimates, a term's rows are exactly 12 pt high (15 pt with the space above a
+  // term) and its drawing is an image of their height, so a column of them joins.
   function renderWord(t) {
     const h = escHTML;
+    const plan = besidePlan(t);
+    const span = plan ? ' colspan="2"' : "";
     const out = ["<!doctype html>", '<html><head><meta charset="utf-8">', `<title>${h(t.title || "Estimation table")}</title></head><body>`];
     if (t.title) out.push(`<p style="margin:0 0 6pt 0"><b>${h(t.title)}</b></p>`);
     out.push('<table style="border-collapse:collapse;border:none;font-size:10pt">');
@@ -857,19 +926,42 @@
     t.head.forEach((hr, k) => {
       const top = k === 0 ? "1.5pt" : "";
       const bottom = k === nh - 1 ? ".75pt" : "";
-      out.push("<tr>" + ["", ...hr.cells].map((x, i) => wordCell(x, { left: i === 0, top, bottom })).join("") + "</tr>");
+      out.push("<tr>" + ["", ...hr.cells].map((x, i) => wordCell(x, { left: i === 0, top, bottom, attrs: i ? span : "" })).join("") + "</tr>");
     });
+    const rows = t.rows;
     let prev = null;
-    const last = t.rows.length - 1;
-    t.rows.forEach((r, k) => {
-      let top = r.kind === "stat" && prev !== "stat" ? ".75pt" : "";
-      if (k === 0 && !nh) top = "1.5pt";
-      const bottom = k === last ? "1.5pt" : "";
-      const padTop = r.kind === "estimate" && k > 0 && !r.sparkline;
+    const last = rows.length - 1;
+    const shown = rows.map((_, i) => i).filter((i) => !(plan && plan.skip.has(i)));
+    const first = shown.length ? shown[0] : 0;
+    // the space above a term; sparkline rows stay unpadded so they join
+    const pads = (i) => rowKind(t, plan, i) === "estimate" && i > first && !rows[i].sparkline;
+    for (const i of shown) {
+      const r = rows[i];
+      const kind = rowKind(t, plan, i);
+      let top = kind === "stat" && prev !== "stat" ? ".75pt" : "";
+      if (i === first && !nh) top = "1.5pt";
+      const bottom = i === last ? "1.5pt" : "";
       const sp = r.sparkline;
-      out.push("<tr>" + [r.label, ...r.cells].map((x, i) => wordCell(x, { left: i === 0, top, bottom, padTop, raw: sp && i ? sparkImg(sp.marks[i - 1], sp.color, x) : null })).join("") + "</tr>");
-      prev = r.kind;
-    });
+      const padTop = pads(i);
+      const label = plan && plan.label.has(i) ? plan.label.get(i) : r.label;
+      const exact = plan && (plan.start.has(i) || plan.inside.has(i));
+      const tr = exact ? `<tr style="height:${padTop ? 15 : 12}pt;mso-height-rule:exactly">` : "<tr>";
+      const cells = [];
+      [label, ...r.cells].forEach((x, c) => {
+        const raw = sp && c ? sparkImg(sp.marks[c - 1], sp.color, x) : null;
+        const many = plan && c && !plan.start.has(i) && !plan.inside.has(i);
+        cells.push(wordCell(x, { left: c === 0, top, bottom, padTop, raw, attrs: many ? ' colspan="2"' : "" }));
+        if (plan && c && plan.start.has(i)) {
+          const [k, n, end] = plan.start.get(i);
+          const ssp = rows[k].sparkline;
+          let height = 0;
+          for (let q = i; q < end; q++) if (!plan.skip.has(q)) height += pads(q) ? 20 : 16;
+          cells.push(wordCell("", { left: false, top, bottom: end === rows.length ? "1.5pt" : "", raw: sparkImg(ssp.marks[c - 1], ssp.color, rows[k].cells[c - 1], height), attrs: ` rowspan="${n}"`, styleExtra: ";padding:0;vertical-align:top" }));
+        }
+      });
+      out.push(tr + cells.join("") + "</tr>");
+      prev = kind;
+    }
     out.push("</table>");
     for (const n of t.notes) out.push(`<p style="margin:3pt 0 0 0;font-size:9pt">${h(n)}</p>`);
     out.push("</body></html>");
@@ -930,7 +1022,7 @@
     const json = JSON.stringify({ columns: t.column_records || [], records: used }).replace(/</g, "\\u003c");
     const table = renderHTML(t).replace(/<thead>(<tr class="head-\w+">)<th><\/th>(.*?)<\/tr>/, (_, tr, ths) => {
       let i = 0;
-      return "<thead>" + tr + "<th></th>" + ths.replace(/<th>(.*?)<\/th>/g, (__, h) => `<th><button type="button" class="col" data-col="${i++}" aria-haspopup="dialog">${h}</button></th>`) + "</tr>";
+      return "<thead>" + tr + "<th></th>" + ths.replace(/<th( colspan="2")?>(.*?)<\/th>/g, (__, sp, h) => `<th${sp || ""}><button type="button" class="col" data-col="${i++}" aria-haspopup="dialog">${h}</button></th>`) + "</tr>";
     });
     const title = escHTML(t.title || "Estimation table");
     return `<!doctype html>
@@ -956,6 +1048,7 @@ table.estrec-table td { text-align: center; }
 table.estrec-table tr.uncertainty td { color: var(--muted); }
 table.estrec-table tbody tr.spark-row th, table.estrec-table tbody tr.spark-row td { padding-top: 0 !important; padding-bottom: 0 !important; line-height: 16px; }
 table.estrec-table td.spark svg { display: block; margin: 0 auto; }
+table.estrec-table td.spark-side.to-end { border-bottom: 1.5px solid var(--ink); }
 table.estrec-table tbody tr.estimate:not(:first-child) th, table.estrec-table tbody tr.estimate:not(:first-child) td { padding-top: 6px; }
 table.estrec-table tr.first-stat th, table.estrec-table tr.first-stat td { border-top: 0.75px solid var(--ink); padding-top: 5px; }
 table.estrec-table tbody tr:last-child th, table.estrec-table tbody tr:last-child td { border-bottom: 1.5px solid var(--ink); padding-bottom: 5px; }
@@ -1029,7 +1122,22 @@ ${table}</div>
   }
   var tip = document.createElement("div"); tip.className = "tip"; tip.hidden = true; document.body.appendChild(tip);
   var dlg = document.getElementById("rec");
-  function cells(i, on) { var trs = document.querySelectorAll("table.estrec-table tr"); for (var k = 0; k < trs.length; k++) { var c = trs[k].children[i + 1]; if (c) c.classList.toggle("hl", on); } }
+  // a column's cells, through colspans and rowspans (a sparkline beside the estimates gives each column two)
+  function cells(i, on) {
+    var tbl = document.querySelector("table.estrec-table"); if (!tbl) return;
+    var w = tbl.querySelector("td.spark-side") ? 2 : 1, lo = 1 + i * w, hi = lo + w, taken = [];
+    var trs = tbl.querySelectorAll("tr");
+    for (var k = 0; k < trs.length; k++) {
+      var col = 0, row = taken[k] || {};
+      for (var c = trs[k].firstElementChild; c; c = c.nextElementSibling) {
+        while (row[col]) col++;
+        var cs = c.colSpan || 1, rs = c.rowSpan || 1;
+        for (var q = 1; q < rs; q++) { taken[k + q] = taken[k + q] || {}; for (var x = 0; x < cs; x++) taken[k + q][col + x] = true; }
+        if (col < hi && col + cs > lo && c.parentNode.parentNode.tagName !== "TFOOT") c.classList.toggle("hl", on);
+        col += cs;
+      }
+    }
+  }
   document.querySelectorAll("button.col").forEach(function (b) {
     var i = Number(b.dataset.col), r = recs[data.columns[i]];
     if (!r) return;
@@ -1098,7 +1206,7 @@ ${table}</div>
   return {
     TABLE_SCHEMA, DEFAULT_STARS, DEFAULT_HEAD, HEAD_KINDS, TABLE_METRICS, STAT_LABELS,
     twoSidedP, criticalValue, erfc, qnorm,
-    NAMED_LINES, PLACEHOLDERS, SPARK_COLOR, SPARK_SCALES, sparkSVG, sparkTikz, uncertaintyLines, pValue,
+    NAMED_LINES, PLACEHOLDERS, SPARK_COLOR, SPARK_SCALES, SPARK_PLACES, sparkSVG, sparkTikz, uncertaintyLines, pValue,
     num, vcovs, vcovLabel, pickVcov, tidy, glance, findTest,
     canonicalJSON, sha256Hex, recordSha256,
     indexRecords, validateTable, checkPins, columnResponse, buildTable, render, renderers: RENDERERS,

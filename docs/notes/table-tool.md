@@ -91,6 +91,15 @@ Decisions so far:
   FE rows `Y`/`N` are the default everywhere: `format.fe_yes` / `fe_no`; estrec's
   `glance()` keeps fixest's `X`).
 
+- Sparkline beside the estimates (Ted, 2026-11-07: option B, a sub-column whose cell spans
+  the term's rows so the 0 rule runs alongside the estimates without gaps; viewer and Word
+  only for now): spec `sparkline.place` `below` / `beside`; `_beside_plan` / `besidePlan`
+  lay it out in HTML and Word (Python = JS byte for byte, 3 parity specs); the HTML cell is
+  `position:relative` with an SVG of height 100% (marks in a nested SVG at y=50%); Word rows
+  get `mso-height-rule:exactly` heights and the image their sum (untested in real Word).
+  LaTeX, R, great_tables, text formats draw it below. Preview v10 (same link). Open: a
+  missing term leaves its cell empty, so the 0 rule breaks there; LaTeX/R beside later.
+
 ## Earlier hand-off: sparklines everywhere and the `show_table` refactor (Ted, 2026-11-07)
 
 1. **Sparklines in every renderer that can draw.** Today HTML, the web page, the viewer

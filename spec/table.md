@@ -128,7 +128,12 @@ row per line:
   row) or `"table"`. An axis spans the intervals it holds and always 0. HTML draws an SVG
   and LaTeX a TikZ picture with the same marks (the document needs `\usepackage{tikz}`);
   formats that can't draw (text, Markdown, CSV, a renderer without graphics) show
-  `[conf_low, conf_high]` instead;
+  `[conf_low, conf_high]` instead. `place` is `"below"` (the default: a row under the
+  estimate) or `"beside"`: each column of estimates gets a column next to it, and each
+  term's drawing is one cell there spanning the term's rows, its 0 rule their full height,
+  so down a column the rules join into one line alongside the estimates. Headings and
+  statistics rows span both columns. HTML, the viewer, its web page and Word lay it out
+  beside; other formats draw it below. One sparkline at most is beside;
 - a **list** of names, templates and sparklines, one row each, in order: `["std_error", "[{p_value}]"]`;
 - `null`: no lines.
 

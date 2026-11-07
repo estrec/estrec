@@ -129,7 +129,8 @@
               "type": "object",
               "properties": {
                 "color": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"},
-                "scale": {"enum": ["column", "row", "table"]}
+                "scale": {"enum": ["column", "row", "table"]},
+                "place": {"enum": ["below", "beside"], "description": "below (default): a row under the estimate; beside: a column next to each column of estimates, one drawing per term spanning its rows (HTML, the viewer and Word; other formats draw it below). One sparkline at most is beside."}
               },
               "additionalProperties": false
             }

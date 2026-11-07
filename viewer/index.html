@@ -224,7 +224,7 @@ details.raw pre { font: 12px/1.45 var(--font-mono); background: var(--bg); paddi
     <button class="btn" id="open-folder" type="button">Open folder</button>
     <button class="btn" id="load-examples" type="button">Examples</button>
     <button class="btn" id="clear" type="button">Clear</button>
-    <input id="file-input" type="file" multiple accept=".json,.jsonl" hidden>
+    <input id="file-input" type="file" multiple hidden>
     <input id="folder-input" type="file" webkitdirectory multiple hidden>
   </div>
 </header>
@@ -233,7 +233,7 @@ details.raw pre { font: 12px/1.45 var(--font-mono); background: var(--bg); paddi
   <aside class="panel" id="rail">
     <h2>Records</h2>
     <p class="example-note" id="example-note" hidden>Showing the format's example records. Open your own files to replace them.</p>
-    <div class="drop" id="drop">Drop <code>.estrec.json</code> records, collections (with their <code>.members.jsonl</code>) or a table spec here. Files stay on this computer.</div>
+    <div class="drop" id="drop">Drop <code>.estrec.json</code> records, collections (with their <code>.members.jsonl</code>) or a table spec here, or paste one (Ctrl+V or ⌘V). Files stay on this computer.</div>
     <div id="groups"></div>
   </aside>
 
@@ -347,7 +347,7 @@ details.raw pre { font: 12px/1.45 var(--font-mono); background: var(--bg); paddi
               <button class="btn small" id="print" type="button" title="Print the table alone, fitted to the Table width (6.5 in unless set in the Word export); choose Save as PDF in the print dialog for a PDF">Print / PDF</button>
               <button class="btn small" id="publish" type="button" hidden>Publish…</button>
               <button class="btn small" id="load-spec" type="button">Open table spec</button>
-              <input id="spec-input" type="file" accept=".json" hidden>
+              <input id="spec-input" type="file" hidden>
             </div>
             <p class="export-note" id="web-note" hidden></p>
             <p class="export-note" id="publish-panel" hidden></p>
@@ -432,7 +432,10 @@ async function loadFiles(files, { examples = false } = {}) {
   const texts = [];
   for (const f of files) {
     const name = f.name.split("/").pop();
-    if (!/\.(json|jsonl)$/i.test(name)) continue;
+    // any file is tried as JSON (a spec saved from a text editor may be table.json.txt); in a
+    // folder, only .json and .jsonl files
+    if ((f.inFolder || f.webkitRelativePath) && !/\.(json|jsonl)$/i.test(name)) continue;
+    if (/^\./.test(name)) continue;
     texts.push({ name, text: typeof f.text === "string" ? f.text : await f.text() });
   }
   // members files first, then records and collections, then table specs
@@ -443,7 +446,11 @@ async function loadFiles(files, { examples = false } = {}) {
   for (const t of texts) {
     if (/\.jsonl$/i.test(t.name)) continue;
     let doc;
-    try { doc = JSON.parse(t.text); } catch (e) { msgs.push({ level: "error", message: `${t.name}: not valid JSON (${e.message})` }); continue; }
+    try { doc = JSON.parse(t.text.replace(/^\uFEFF/, "")); } catch (e) {
+      const rtf = /^\{\\rtf/.test(t.text);
+      msgs.push({ level: "error", message: `${t.name}: not valid JSON (${rtf ? "it was saved as rich text: save it as plain text" : e.message})` });
+      continue;
+    }
     const r = addDoc(t.name, doc);
     if (r.spec) specs.push({ name: t.name, spec: r.spec });
     else if (r.error) msgs.push({ level: "error", message: r.error });
@@ -1169,7 +1176,9 @@ $("spec-input").addEventListener("change", async (e) => {
   const f = e.target.files[0]; e.target.value = "";
   if (!f) return;
   try {
-    const doc = JSON.parse(await f.text());
+    let doc;
+    const text = (await f.text()).replace(/^\uFEFF/, "");
+    try { doc = JSON.parse(text); } catch (err) { throw new Error(`${f.name} is not valid JSON` + (/^\{\\rtf/.test(text) ? ": it was saved as rich text; save it as plain text" : ` (${err.message})`)); }
     if (doc.schema !== "estrec-table/0.1") throw new Error(`${f.name} is not a table spec`);
     if (state.examples) clearAll();
     applySpec(doc, f.name);
@@ -1275,9 +1284,12 @@ $("copy").addEventListener("click", async () => {
 const EXT = { word: "html", latex: "tex", markdown: "md", html: "html", csv: "csv", text: "txt", web: "html", spec: "estrec-table.json" };
 $("save").hidden = embedded;
 // Print / PDF: the browser's print dialog (Save as PDF there); the table shrinks to fit the
-// Table width if it is wider (the drawings are SVG, so they stay sharp)
+// Table width if it is wider (the drawings are SVG, so they stay sharp). Where printing is
+// blocked (a sandboxed frame, such as a preview), the table opens as its own page to print.
 const printWidth = () => { const w = parseFloat($("opt-wordw").value); return (w >= 2 && w <= 20 ? w : 6.5) * 96; };
+let printing = false;
 window.addEventListener("beforeprint", () => {
+  printing = true;
   const t = $("preview").querySelector("table.estrec-table");
   if (!t) return;
   t.style.zoom = "";
@@ -1285,10 +1297,28 @@ window.addEventListener("beforeprint", () => {
   if (w > printWidth()) t.style.zoom = String(printWidth() / w);
 });
 window.addEventListener("afterprint", () => { const t = $("preview").querySelector("table.estrec-table"); if (t) t.style.zoom = ""; });
+
+// the table alone as a page that fits itself to the width and opens the print dialog
+function printPage() {
+  const extra = "<style>@page { margin: 1in; } @media print { :root { --bg: #ffffff; --ink: #000000; --muted: #444444; --line: #cccccc; --accent: #000000; --soft: #ffffff; color-scheme: light; } "
+    + "body { padding: 0; background: #ffffff; } .hint { display: none; } button.col { border-bottom: 0; } }</style>"
+    + "<script>addEventListener(\"load\", function () { var t = document.querySelector(\"table.estrec-table\"), a = " + printWidth()
+    + "; if (t) { var w = t.getBoundingClientRect().width; if (w > a) t.style.zoom = a / w; } setTimeout(function () { print(); }, 300); });<\/script>";
+  return E.renderWebPage(lastTable, []).replace("</head>", extra + "</head>");
+}
+
 $("print").addEventListener("click", () => {
   if (!lastTable) { toast("Build a table first: add records as columns"); return; }
   showTab("table");
-  try { window.print(); } catch { toast("Printing is blocked here: open the viewer in its own tab"); }
+  printing = false;
+  try { window.print(); } catch { /* blocked */ }
+  setTimeout(() => {
+    if (printing) return;
+    let w = null;
+    try { w = window.open(URL.createObjectURL(new Blob([printPage()], { type: "text/html" })), "_blank"); } catch { w = null; }
+    toast(w ? "Printing is blocked here: the table opened in a new tab to print or save as PDF"
+      : "Printing is blocked here: open the viewer in its own browser tab (estrec.org, or viewer/index.html) and try again");
+  }, 500);
 });
 
 $("save").addEventListener("click", () => {
@@ -1297,6 +1327,20 @@ $("save").addEventListener("click", () => {
   const base = (state.spec && state.spec.title ? state.spec.title.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase() : "") || "table";
   const a = el("a", { href: URL.createObjectURL(new Blob([text], { type: "text/plain" })), download: `${base}.${EXT[state.format]}` });
   document.body.append(a); a.click(); a.remove();
+});
+// Paste: JSON text pasted anywhere outside a text box (a table spec, a record, a collection)
+// opens as if it were a dropped file
+document.addEventListener("paste", (e) => {
+  const tgt = e.target;
+  if (tgt && (tgt.tagName === "INPUT" || tgt.tagName === "TEXTAREA" && !tgt.readOnly || tgt.isContentEditable)) return;
+  const text = ((e.clipboardData || window.clipboardData).getData("text") || "").trim();
+  if (!text) return;
+  e.preventDefault();
+  let doc;
+  try { doc = JSON.parse(text); } catch { toast("Pasted text isn't JSON: paste a table spec, a record or a collection"); return; }
+  const name = doc && doc.schema === "estrec-table/0.1" ? "pasted.estrec-table.json" : "pasted.json";
+  loadFiles([{ name, text }]);
+  toast(doc && doc.schema === "estrec-table/0.1" ? "Opened the pasted table spec" : "Opened the pasted JSON");
 });
 document.addEventListener("dragover", (e) => { e.preventDefault(); document.body.classList.add("dragging"); });
 document.addEventListener("dragleave", (e) => { if (!e.relatedTarget) document.body.classList.remove("dragging"); });
@@ -1314,6 +1358,7 @@ document.addEventListener("drop", async (e) => {
   };
   const entries = [...(e.dataTransfer.items || [])].map((i) => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
   if (entries.length) for (const en of entries) await walk(en);
+  if (entries.some((en) => en.isDirectory)) for (const f of files) f.inFolder = true;
   else files.push(...e.dataTransfer.files);
   loadFiles(files);
 });

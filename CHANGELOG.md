@@ -5,6 +5,10 @@
 - Viewer: **Print / PDF** (Ted 2026-11-07) prints the table preview alone, in light colours
   with 1 in margins, shrunk to the Table width (6.5 in by default) if wider; Save as PDF in
   the browser's print dialog gives a PDF (vector, sparklines included).
+  Where printing is blocked (a sandboxed frame), the table opens as its own page to print.
+- Viewer: files of any name are tried as JSON (a spec saved from a text editor as
+  `table.json.txt` was greyed out in the file dialog and skipped), with a hint for rich-text
+  saves; JSON pasted anywhere outside a text box opens like a dropped file.
 - Word export of a set width (Ted 2026-11-07): `render(t, "word", width=6.5)` (inches; the
   viewer's Word export has a Table width box, 6.5 by default) fixes the table's and every
   column's width (label column by its longest label, 36 pt to 40%; the rest shared; beside

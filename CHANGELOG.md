@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Word export of a set width (Ted 2026-11-07): `render(t, "word", width=6.5)` (inches; the
+  viewer's Word export has a Table width box, 6.5 by default) fixes the table's and every
+  column's width (label column by its longest label, 36 pt to 40%; the rest shared; beside
+  the estimates, numbers then drawing) and draws each sparkline to its column's width; the
+  marks keep their size and only the axis narrows, so nothing needs scaling in Word.
 - Published tables keep the viewer's column labels: estrec.org rebuilds a table from the spec
   and the bare records, so a column labelled by its collection member fell back to the
   record's `meta.title` (for R records, the estimation call). Publish now writes each such

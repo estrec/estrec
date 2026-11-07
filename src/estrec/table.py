@@ -546,14 +546,15 @@ SPARK_W, SPARK_H = 80, 16
 _HALO = 'style="stroke:var(--bg,#ffffff)"'
 
 
-def _spark_xs(m: dict) -> tuple[int, int, int, int]:
-    """Where 0, the low end, the estimate and the high end fall across the 80-pixel width,
-    in tenths of a pixel, rounded half up with integers so every renderer draws the same."""
+def _spark_xs(m: dict, width: int = 80) -> tuple[int, int, int, int]:
+    """Where 0, the low end, the estimate and the high end fall across the drawing's width
+    (80 pixels unless a Word table's width sets it), in tenths of a pixel, rounded half up
+    with integers so every renderer draws the same."""
     lo, hi = m["domain"]
     pad = 4.0
 
     def x(v):
-        return math.floor((pad + (v - lo) / (hi - lo) * (SPARK_W - 2 * pad)) * 10 + 0.5)
+        return math.floor((pad + (v - lo) / (hi - lo) * (width - 2 * pad)) * 10 + 0.5)
 
     return x(0.0), x(m["low"]), x(m["estimate"]), x(m["high"])
 
@@ -625,20 +626,26 @@ def _spark_marks(xl: str, xe: str, xh: str, yt: int, color: str) -> str:
 
 
 def _spark_svg(
-    m: dict | None, color: str, label: str = "", height: int = SPARK_H, mid: int | None = None, style: str = ""
+    m: dict | None,
+    color: str,
+    label: str = "",
+    height: int = SPARK_H,
+    mid: int | None = None,
+    style: str = "",
+    width: int = SPARK_W,
 ) -> str:
     """One interval as a small SVG of fixed size, on its axis: a grey rule at 0 running the
     full height (so stacked rows join), the interval as a thin line in `color` inside a
     faint band that swells toward the estimate, a dot at each end and a darker dot at the
     estimate, each with a thin halo of the background so the line is scalloped there.
     `height` (pixels) is the image's; the marks sit halfway down, or `mid` tenths of a pixel
-    down; `style` goes on the <svg>."""
+    down; `style` goes on the <svg>; `width` (pixels) narrows the axis, not the marks."""
     if m is None:
         return ""
-    x0, xl, xe, xh = map(_tenths, _spark_xs(m))
+    x0, xl, xe, xh = map(_tenths, _spark_xs(m, width))
     return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{SPARK_W}" height="{height}" '
-        f'viewBox="0 0 {SPARK_W} {height}" role="img"'
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'viewBox="0 0 {width} {height}" role="img"'
         + (f' aria-label="{html.escape(label)}"' if label else "")
         + (f' style="{style}"' if style else "")
         + ">"
@@ -648,12 +655,12 @@ def _spark_svg(
     )
 
 
-def _spark_rule(m: dict | None, height: int | None = None) -> str:
+def _spark_rule(m: dict | None, height: int | None = None, width: int = SPARK_W) -> str:
     """Only the 0 rule of a sparkline beside the estimates, for the term's other rows: an
     image `height` pixels tall, or (None) an SVG filling its `position:relative` cell."""
     if m is None:
         return ""
-    x0 = _tenths(_spark_xs(m)[0])
+    x0 = _tenths(_spark_xs(m, width)[0])
     if height is None:
         return (
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{SPARK_W}" height="100%" aria-hidden="true"'
@@ -661,7 +668,7 @@ def _spark_rule(m: dict | None, height: int | None = None) -> str:
             f'<line x1="{x0}" y1="0" x2="{x0}" y2="100%" stroke="#555555" stroke-width="1"/></svg>'
         )
     return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{SPARK_W}" height="{height}" viewBox="0 0 {SPARK_W} {height}">'
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">'
         f'<line x1="{x0}" y1="0" x2="{x0}" y2="{height}" stroke="#555555" stroke-width="1"/></svg>'
     )
 
@@ -967,16 +974,22 @@ def _html_cell(r: dict, j: int) -> str:
 
 
 def _spark_img(
-    m: dict | None, color: str, label: str, height: int = SPARK_H, mid: int | None = None, rule_only: bool = False
+    m: dict | None,
+    color: str,
+    label: str,
+    height: int = SPARK_H,
+    mid: int | None = None,
+    rule_only: bool = False,
+    width: int = SPARK_W,
 ) -> str:
     """A sparkline as an <img> of its SVG (Word keeps images, not inline SVG); `rule_only`
     draws only its 0 rule."""
     if m is None:
         return ""
-    svg = _spark_rule(m, height) if rule_only else _spark_svg(m, color, height=height, mid=mid)
+    svg = _spark_rule(m, height, width) if rule_only else _spark_svg(m, color, height=height, mid=mid, width=width)
     data = base64.b64encode(svg.encode("ascii")).decode("ascii")
     return (
-        f'<img width="{SPARK_W}" height="{height}" style="display:block;margin:0 auto;vertical-align:middle" '
+        f'<img width="{width}" height="{height}" style="display:block;margin:0 auto;vertical-align:middle" '
         f'alt="{"" if rule_only else html.escape(label)}" '
         f'src="data:image/svg+xml;base64,{data}">'
     )
@@ -1163,13 +1176,47 @@ def _word_cell(
     return f'<td{attrs} style="{style}{style_extra}">{html.escape(text) if raw is None else raw}</td>'
 
 
-def _render_word(t: dict) -> str:
+def _word_widths(t: dict, plan: dict | None, width: float) -> dict:
+    """Column widths for a Word table `width` inches wide, in tenths of a point: the label
+    column as wide as its longest label (about 5 pt a character at 10 pt, plus padding),
+    between 36 pt and 40% of the table; the data columns share the rest equally. Beside the
+    estimates, a data column splits into the numbers (as wide as the longest, at least 20 pt)
+    and the drawing (the rest, at least 24 pt); the drawings' widths in pixels follow."""
+    total = math.floor(width * 720 + 0.5)
+    n = len(t["header"])
+    rows = t["rows"]
+    lab = max([len(r["label"]) for r in rows] + [0])
+    label = min(max(50 * lab + 108, 360), total * 2 // 5)
+    col = (total - label) // n
+    out = {"total": total, "label": total - col * n, "col": col, "below_px": max((col - 108) * 4 // 30, 1)}
+    if plan:
+        block = [rows[i] for i in list(plan["start"]) + list(plan["inside"])]
+        numc = max([len(c) for r in block for c in r["cells"]] + [0])
+        num = min(max(55 * numc + 108, 200), col - 240) if col >= 440 else col // 2
+        out.update(num=num, side=col - num, side_px=max((col - num) * 4 // 30, 1))
+    return out
+
+
+def _pt(n: int) -> str:
+    return f"{n // 10}.{n % 10}pt"
+
+
+def _render_word(t: dict, width: float | None = None) -> str:
     """A whole HTML document that Word, Google Docs, LibreOffice and Excel paste or open as a
     formatted table (the viewer's Copy for Word puts it on the clipboard). With a sparkline
     beside the estimates, a term's rows are exactly 12 pt high (15 pt with the space above a
-    term) and its drawing is an image of their height, so a column of them joins."""
+    term) and its drawing is an image of their height, so a column of them joins. `width`
+    (inches, e.g. 6.5) fixes the table's and every column's width and draws the sparklines
+    to fit (`_word_widths`); without it the table takes its natural width."""
     h = html.escape
     plan = _beside_plan(t)
+    W = _word_widths(t, plan, width) if width else None
+
+    def wd(n):  # a cell's width, when the table's is fixed
+        return f";width:{_pt(n)}" if W else ""
+
+    spw = W["below_px"] if W else SPARK_W
+    sidew = W["side_px"] if W and plan else SPARK_W
     span = ' colspan="2"' if plan else ""
     title = t["title"] or "Estimation table"
     out = [
@@ -1179,7 +1226,8 @@ def _render_word(t: dict) -> str:
     ]
     if t["title"]:
         out.append(f'<p style="margin:0 0 6pt 0"><b>{h(t["title"])}</b></p>')
-    out.append('<table style="border-collapse:collapse;border:none;font-size:10pt">')
+    fixed = f";width:{_pt(W['total'])};table-layout:fixed" if W else ""
+    out.append(f'<table style="border-collapse:collapse;border:none;font-size:10pt{fixed}">')
     nh = len(t["head"])
     for k, hr in enumerate(t["head"]):
         top = "1.5pt" if k == 0 else ""
@@ -1187,7 +1235,14 @@ def _render_word(t: dict) -> str:
         out.append(
             "<tr>"
             + "".join(
-                _word_cell(x, left=i == 0, top=top, bottom=bottom, attrs=span if i else "")
+                _word_cell(
+                    x,
+                    left=i == 0,
+                    top=top,
+                    bottom=bottom,
+                    attrs=span if i else "",
+                    style_extra=wd(W["col"] if i else W["label"]) if W else "",
+                )
                 for i, x in enumerate([""] + hr["cells"])
             )
             + "</tr>"
@@ -1215,11 +1270,21 @@ def _render_word(t: dict) -> str:
         tr = f'<tr style="height:{15 if pad else 12}pt;mso-height-rule:exactly">' if exact else "<tr>"
         cells = []
         for c, x in enumerate([label] + r["cells"]):
-            raw = _spark_img(sp["marks"][c - 1], sp["color"], x) if sp and c else None
+            raw = _spark_img(sp["marks"][c - 1], sp["color"], x, width=spw) if sp and c else None
             many = plan and c and i not in plan["start"] and i not in plan["inside"]
+            cw = ""
+            if W:
+                cw = wd(W["label"] if c == 0 else W["num"] if plan and not many else W["col"])
             cells.append(
                 _word_cell(
-                    x, left=c == 0, top=top, bottom=bottom, pad_top=pad, raw=raw, attrs=' colspan="2"' if many else ""
+                    x,
+                    left=c == 0,
+                    top=top,
+                    bottom=bottom,
+                    pad_top=pad,
+                    raw=raw,
+                    attrs=' colspan="2"' if many else "",
+                    style_extra=cw,
                 )
             )
             if plan and c and plan["align"] == "estimate" and (i in plan["start"] or i in plan["inside"]):
@@ -1239,8 +1304,9 @@ def _render_word(t: dict) -> str:
                             px,
                             mid=(px - 8) * 10,
                             rule_only=i not in plan["start"],
+                            width=sidew,
                         ),
-                        style_extra=";padding:0;vertical-align:top",
+                        style_extra=";padding:0;vertical-align:top" + (wd(W["side"]) if W else ""),
                     )
                 )
             elif plan and c and i in plan["start"]:
@@ -1253,9 +1319,9 @@ def _render_word(t: dict) -> str:
                         left=False,
                         top=top,
                         bottom="1.5pt" if end == len(rows) else "",
-                        raw=_spark_img(ssp["marks"][c - 1], ssp["color"], rows[k]["cells"][c - 1], height),
+                        raw=_spark_img(ssp["marks"][c - 1], ssp["color"], rows[k]["cells"][c - 1], height, width=sidew),
                         attrs=f' rowspan="{n}"',
-                        style_extra=";padding:0;vertical-align:top",
+                        style_extra=";padding:0;vertical-align:top" + (wd(W["side"]) if W else ""),
                     )
                 )
         out.append(tr + "".join(cells) + "</tr>")

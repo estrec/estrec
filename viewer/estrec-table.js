@@ -558,10 +558,12 @@
 
   // where 0, the low end, the estimate and the high end fall across the 80-pixel width, in
   // tenths of a pixel, rounded half up with integers so every renderer draws the same
-  function sparkXs(m) {
+  // across the drawing's width: 80 pixels unless a Word table's width sets it
+  function sparkXs(m, width) {
+    const w = width === undefined ? SPARK_W : width;
     const [lo, hi] = m.domain;
     const pad = 4;
-    const x = (v) => Math.floor((pad + (v - lo) / (hi - lo) * (SPARK_W - 2 * pad)) * 10 + 0.5);
+    const x = (v) => Math.floor((pad + (v - lo) / (hi - lo) * (w - 2 * pad)) * 10 + 0.5);
     return [x(0), x(m.low), x(m.estimate), x(m.high)];
   }
   const tenths = (n) => `${Math.floor(n / 10)}.${n % 10}`;
@@ -600,11 +602,12 @@
   }
 
   // height: the image's (pixels); the marks sit halfway down, or mid tenths of a pixel down
-  function sparkSVG(m, color, label, height, mid, style) {
+  function sparkSVG(m, color, label, height, mid, style, width) {
     if (!m) return "";
     const H = height === undefined ? SPARK_H : height;
-    const [x0, xl, xe, xh] = sparkXs(m).map(tenths);
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${SPARK_W}" height="${H}" viewBox="0 0 ${SPARK_W} ${H}" role="img"` +
+    const Wd = width === undefined ? SPARK_W : width;
+    const [x0, xl, xe, xh] = sparkXs(m, Wd).map(tenths);
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${Wd}" height="${H}" viewBox="0 0 ${Wd} ${H}" role="img"` +
       (label ? ` aria-label="${escHTML(label)}"` : "") + (style ? ` style="${style}"` : "") + ">" +
       `<line x1="${x0}" y1="0" x2="${x0}" y2="${H}" stroke="#555555" stroke-width="1"/>` +
       sparkMarks(xl, xe, xh, mid === undefined || mid === null ? H * 5 : mid, color) + "</svg>";
@@ -612,14 +615,15 @@
 
   // only the 0 rule, for a term's other rows: an image height pixels tall, or (none) an SVG
   // filling its position:relative cell
-  function sparkRule(m, height) {
+  function sparkRule(m, height, width) {
     if (!m) return "";
-    const x0 = tenths(sparkXs(m)[0]);
+    const Wd = width === undefined ? SPARK_W : width;
+    const x0 = tenths(sparkXs(m, Wd)[0]);
     if (height === undefined || height === null) {
       return `<svg xmlns="http://www.w3.org/2000/svg" width="${SPARK_W}" height="100%" aria-hidden="true" style="position:absolute;top:0;left:calc(50% - 40px)">` +
         `<line x1="${x0}" y1="0" x2="${x0}" y2="100%" stroke="#555555" stroke-width="1"/></svg>`;
     }
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${SPARK_W}" height="${height}" viewBox="0 0 ${SPARK_W} ${height}">` +
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${Wd}" height="${height}" viewBox="0 0 ${Wd} ${height}">` +
       `<line x1="${x0}" y1="0" x2="${x0}" y2="${height}" stroke="#555555" stroke-width="1"/></svg>`;
   }
 
@@ -637,11 +641,12 @@
 
   const b64 = (s) => (typeof btoa === "function" ? btoa(s) : Buffer.from(s, "ascii").toString("base64"));
 
-  function sparkImg(m, color, label, height, mid, ruleOnly) {
+  function sparkImg(m, color, label, height, mid, ruleOnly, width) {
     if (!m) return "";
     const H = height === undefined ? SPARK_H : height;
-    const svg = ruleOnly ? sparkRule(m, H) : sparkSVG(m, color, "", H, mid);
-    return `<img width="${SPARK_W}" height="${H}" style="display:block;margin:0 auto;vertical-align:middle" alt="${ruleOnly ? "" : escHTML(label)}" src="data:image/svg+xml;base64,${b64(svg)}">`;
+    const Wd = width === undefined ? SPARK_W : width;
+    const svg = ruleOnly ? sparkRule(m, H, Wd) : sparkSVG(m, color, "", H, mid, undefined, Wd);
+    return `<img width="${Wd}" height="${H}" style="display:block;margin:0 auto;vertical-align:middle" alt="${ruleOnly ? "" : escHTML(label)}" src="data:image/svg+xml;base64,${b64(svg)}">`;
   }
 
   function htmlCell(r, j) {
@@ -941,18 +946,46 @@
   // formatted table (the viewer's Copy for Word puts it on the clipboard). With a sparkline
   // beside the estimates, a term's rows are exactly 12 pt high (15 pt with the space above a
   // term) and its drawing is an image of their height, so a column of them joins.
-  function renderWord(t) {
+  // Column widths for a Word table `width` inches wide, in tenths of a point: the label column
+  // as wide as its longest label (about 5 pt a character, plus padding), between 36 pt and 40%
+  // of the table; the data columns share the rest. Beside the estimates, a data column splits
+  // into the numbers (the longest, at least 20 pt) and the drawing (the rest, at least 24 pt).
+  function wordWidths(t, plan, width) {
+    const total = Math.floor(width * 720 + 0.5);
+    const n = t.header.length;
+    const rows = t.rows;
+    const lab = Math.max(0, ...rows.map((r) => r.label.length));
+    const label = Math.min(Math.max(50 * lab + 108, 360), Math.floor((total * 2) / 5));
+    const col = Math.floor((total - label) / n);
+    const out = { total, label: total - col * n, col, below_px: Math.max(Math.floor(((col - 108) * 4) / 30), 1) };
+    if (plan) {
+      const block = [...plan.start.keys(), ...plan.inside.keys()].map((i) => rows[i]);
+      const numc = Math.max(0, ...block.flatMap((r) => r.cells.map((c) => c.length)));
+      const num = col >= 440 ? Math.min(Math.max(55 * numc + 108, 200), col - 240) : Math.floor(col / 2);
+      Object.assign(out, { num, side: col - num, side_px: Math.max(Math.floor(((col - num) * 4) / 30), 1) });
+    }
+    return out;
+  }
+  const ptOf = (n) => `${Math.floor(n / 10)}.${n % 10}pt`;
+
+  function renderWord(t, opts) {
     const h = escHTML;
     const plan = besidePlan(t);
     const span = plan ? ' colspan="2"' : "";
+    const width = opts && opts.width;
+    const W = width ? wordWidths(t, plan, width) : null;
+    const wd = (n) => (W ? `;width:${ptOf(n)}` : "");
+    const spw = W ? W.below_px : SPARK_W;
+    const sidew = W && plan ? W.side_px : SPARK_W;
     const out = ["<!doctype html>", '<html><head><meta charset="utf-8">', `<title>${h(t.title || "Estimation table")}</title></head><body>`];
     if (t.title) out.push(`<p style="margin:0 0 6pt 0"><b>${h(t.title)}</b></p>`);
-    out.push('<table style="border-collapse:collapse;border:none;font-size:10pt">');
+    const fixed = W ? `;width:${ptOf(W.total)};table-layout:fixed` : "";
+    out.push(`<table style="border-collapse:collapse;border:none;font-size:10pt${fixed}">`);
     const nh = t.head.length;
     t.head.forEach((hr, k) => {
       const top = k === 0 ? "1.5pt" : "";
       const bottom = k === nh - 1 ? ".75pt" : "";
-      out.push("<tr>" + ["", ...hr.cells].map((x, i) => wordCell(x, { left: i === 0, top, bottom, attrs: i ? span : "" })).join("") + "</tr>");
+      out.push("<tr>" + ["", ...hr.cells].map((x, i) => wordCell(x, { left: i === 0, top, bottom, attrs: i ? span : "", styleExtra: W ? wd(i ? W.col : W.label) : "" })).join("") + "</tr>");
     });
     const rows = t.rows;
     let prev = null;
@@ -974,20 +1007,21 @@
       const tr = exact ? `<tr style="height:${padTop ? 15 : 12}pt;mso-height-rule:exactly">` : "<tr>";
       const cells = [];
       [label, ...r.cells].forEach((x, c) => {
-        const raw = sp && c ? sparkImg(sp.marks[c - 1], sp.color, x) : null;
+        const raw = sp && c ? sparkImg(sp.marks[c - 1], sp.color, x, undefined, undefined, false, spw) : null;
         const many = plan && c && !plan.start.has(i) && !plan.inside.has(i);
-        cells.push(wordCell(x, { left: c === 0, top, bottom, padTop, raw, attrs: many ? ' colspan="2"' : "" }));
+        const cw = W ? wd(c === 0 ? W.label : plan && !many ? W.num : W.col) : "";
+        cells.push(wordCell(x, { left: c === 0, top, bottom, padTop, raw, attrs: many ? ' colspan="2"' : "", styleExtra: cw }));
         if (plan && c && plan.align === "estimate" && (plan.start.has(i) || plan.inside.has(i))) {
           const k = plan.start.has(i) ? plan.start.get(i)[0] : plan.inside.get(i);
           const ssp = rows[k].sparkline;
           const px = padTop ? 20 : 16;
-          cells.push(wordCell("", { left: false, top, bottom, raw: sparkImg(ssp.marks[c - 1], ssp.color, rows[k].cells[c - 1], px, (px - 8) * 10, !plan.start.has(i)), styleExtra: ";padding:0;vertical-align:top" }));
+          cells.push(wordCell("", { left: false, top, bottom, raw: sparkImg(ssp.marks[c - 1], ssp.color, rows[k].cells[c - 1], px, (px - 8) * 10, !plan.start.has(i), sidew), styleExtra: ";padding:0;vertical-align:top" + (W ? wd(W.side) : "") }));
         } else if (plan && c && plan.start.has(i)) {
           const [k, n, end] = plan.start.get(i);
           const ssp = rows[k].sparkline;
           let height = 0;
           for (let q = i; q < end; q++) if (!plan.skip.has(q)) height += pads(q) ? 20 : 16;
-          cells.push(wordCell("", { left: false, top, bottom: end === rows.length ? "1.5pt" : "", raw: sparkImg(ssp.marks[c - 1], ssp.color, rows[k].cells[c - 1], height), attrs: ` rowspan="${n}"`, styleExtra: ";padding:0;vertical-align:top" }));
+          cells.push(wordCell("", { left: false, top, bottom: end === rows.length ? "1.5pt" : "", raw: sparkImg(ssp.marks[c - 1], ssp.color, rows[k].cells[c - 1], height, undefined, false, sidew), attrs: ` rowspan="${n}"`, styleExtra: ";padding:0;vertical-align:top" + (W ? wd(W.side) : "") }));
         }
       });
       out.push(tr + cells.join("") + "</tr>");

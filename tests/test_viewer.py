@@ -275,7 +275,8 @@ def test_renderers_match_python(node_result):
         py = et.build_table(spec, base_dir=EXAMPLES)
         script = (
             "const E=require(process.argv[1]);const t=JSON.parse(require('fs').readFileSync(0,'utf8'));"
-            "process.stdout.write(JSON.stringify(Object.fromEntries(['text','markdown','latex','html','csv','word'].map(f=>[f,E.render(t,f)]))))"
+            "process.stdout.write(JSON.stringify(Object.assign(Object.fromEntries(['text','markdown','latex','html','csv','word'].map(f=>[f,E.render(t,f)])),"
+            "{'word 6.5':E.render(t,'word',{width:6.5}),'word 4':E.render(t,'word',{width:4})})))"
         )
         run = subprocess.run(
             [NODE, "-e", script, str(ROOT / "viewer" / "estrec-table.js")],
@@ -286,7 +287,9 @@ def test_renderers_match_python(node_result):
         )
         assert run.returncode == 0, run.stderr
         for fmt, text in json.loads(run.stdout).items():
-            assert text == et.render(py, fmt), (spec.get("head"), fmt)
+            f, _, w = fmt.partition(" ")
+            want = et.render(py, f, width=float(w)) if w else et.render(py, f)
+            assert text == want, (spec.get("head"), fmt)
 
 
 def test_distributions_match_python(node_result):

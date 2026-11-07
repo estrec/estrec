@@ -482,6 +482,31 @@ def test_sparkline_beside_the_estimates():
     ]
 
 
+def test_word_table_width():
+    """A Word table of a set width: every column fixed, sparklines drawn to fit."""
+    import base64
+    import re
+
+    for unc in (["std_error", {"sparkline": {}}], ["std_error", "[{p_value}]", {"sparkline": {"place": "beside"}}]):
+        s = spec()
+        s["uncertainty"] = unc
+        t = et.build_table(s, base_dir=EXAMPLES)
+        natural = et.render(t, "word")
+        assert "table-layout" not in natural and "width:" not in natural.split("<table", 1)[1].split(">", 1)[0]
+        w = et.render(t, "word", width=6.5)
+        assert 'style="border-collapse:collapse;border:none;font-size:10pt;width:468.0pt;table-layout:fixed"' in w
+        first = w.split("<tr>")[1]  # the first heading row: label column + 3 data columns = 468 pt
+        widths = [int(x.replace(".", "")) for x in re.findall(r"width:([0-9.]+)pt", first)]
+        assert len(widths) == 4 and sum(widths) == 4680
+        svgs = [base64.b64decode(x).decode() for x in re.findall(r"base64,([A-Za-z0-9+/=]+)", w)]
+        assert svgs and all('width="80"' not in x for x in svgs)
+        narrow = et.render(t, "word", width=4)
+        n_w = int(re.search(r'<img width="(\d+)"', narrow).group(1))
+        assert n_w < int(re.search(r'<img width="(\d+)"', w).group(1))
+        # the marks keep their size: only the axis narrows
+        assert 'r="2.9"' in base64.b64decode(re.search(r"base64,([A-Za-z0-9+/=]+)", narrow).group(1)).decode()
+
+
 def test_sparkline_validation():
     s = spec()
     s["uncertainty"] = [{"sparkline": {"color": "red", "scale": "diagonal"}}, {"sparkline": 1}]

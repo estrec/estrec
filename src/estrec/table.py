@@ -780,7 +780,7 @@ def build_table(spec: dict, *, base_dir: str | os.PathLike | None = None, record
         elif "fixed_effect" in s:
             fe = s["fixed_effect"]
             label = s.get("label") or f"FE: {fe}"
-            yes, no = fmt.get("fe_yes", "Yes"), fmt.get("fe_no", "")
+            yes, no = fmt.get("fe_yes", "Y"), fmt.get("fe_no", "N")
             for c in cols:
                 has = fe in ((c["found"].record.get("specification") or {}).get("fixed_effects") or [])
                 cells.append(yes if has else no)

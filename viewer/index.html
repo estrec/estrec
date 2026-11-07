@@ -250,7 +250,7 @@ details.raw pre { font: 12px/1.45 var(--font-mono); background: var(--bg); paddi
               </label>
               <label class="stack">Decimals<input type="number" id="opt-digits" min="0" max="8" value="3"></label>
             </div>
-            <label class="stack">FE marker<input type="text" id="opt-feyes" value="Yes"></label>
+            <label class="stack">FE marker<input type="text" id="opt-feyes" value="Y"></label>
             <label class="stack">Notes (one per line)<textarea id="opt-notes" rows="2"></textarea></label>
           </fieldset>
 
@@ -802,7 +802,7 @@ function readOptions() {
   const d = parseInt($("opt-digits").value, 10);
   if (Number.isFinite(d) && d >= 0 && d <= 12) s.format.digits = d;
   const fe = $("opt-feyes").value;
-  if (fe && fe !== "Yes") s.format.fe_yes = fe; else delete s.format.fe_yes;
+  if (fe && fe !== "Y") s.format.fe_yes = fe; else delete s.format.fe_yes;
   const pd = parseInt($("opt-pdigits").value, 10);
   if (Number.isFinite(pd) && pd >= 0 && pd <= 12) s.format.p_digits = pd; else delete s.format.p_digits;
   if ($("opt-pstyle").value === "less_than") s.format.p_style = "less_than"; else delete s.format.p_style;
@@ -817,7 +817,7 @@ function writeOptions() {
   const st = (s.stars || []).join(",");
   $("opt-stars").value = [...$("opt-stars").options].some((o) => o.value === st) ? st : st ? (() => { $("opt-stars").append(el("option", { value: st, text: (s.stars || []).join(" / ") })); return st; })() : "";
   $("opt-digits").value = (s.format || {}).digits !== undefined ? s.format.digits : 3;
-  $("opt-feyes").value = (s.format || {}).fe_yes || "Yes";
+  $("opt-feyes").value = (s.format || {}).fe_yes || "Y";
   $("opt-pdigits").value = (s.format || {}).p_digits !== undefined ? s.format.p_digits : "";
   $("opt-pstyle").value = (s.format || {}).p_style === "less_than" ? "less_than" : "fixed";
   $("opt-notes").value = (s.notes || []).join("\n");

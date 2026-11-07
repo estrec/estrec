@@ -158,7 +158,7 @@ Each entry of `stats` is one row, of one of these kinds:
 |---|---|---|
 | metric | `metric` (the record's name: `nobs`, `r2`, `r2_within`, `aic`, ...; `rmse` is `sqrt(rss / nobs)` when the record has no `rmse`) | the value; blank when the record hasn't got it |
 | vcov | `vcov`: `"type"` or `"n_clusters"` | the column's vcov as `by: firm` or its type; or its cluster counts |
-| fixed effect | `fixed_effect` (a name in `specification.fixed_effects`) | `format.fe_yes` (default `"Yes"`) when the record has it, else `format.fe_no` (default `""`) |
+| fixed effect | `fixed_effect` (a name in `specification.fixed_effects`) | `format.fe_yes` (default `"Y"`) when the record has it, else `format.fe_no` (default `"N"`) |
 | test | `test` (a `tests[*].label`, else `name`), `value`: `"statistic"` (default) or `"p_value"` | the test's value |
 | literal | `values` (one string per column) | the text, for what records don't hold |
 

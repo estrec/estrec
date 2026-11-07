@@ -61,8 +61,33 @@ def test_table_aligns_terms_and_stats():
     w = next(ln for ln in lines if ln.startswith("w "))
     assert w.split()[1:] == ["-0.250"]  # only in b
     assert next(ln for ln in lines if ln.startswith("N ")).split()[1:] == ["123,456", "123,456"]
-    assert next(ln for ln in lines if ln.startswith("FE: firm")).split()[2:] == ["X"]
+    assert lines[1].split() == ["y", "y"]  # the dependent variable under the names
+    assert next(ln for ln in lines if ln.startswith("FE: firm")).split()[2:] == ["N", "Y"]
     assert "z" not in [ln.split()[0] for ln in lines if ln.strip()]  # dropped terms left out
+    assert lines[-1] == "Standard errors in parentheses."
+
+
+def test_table_is_the_table_spec_rendered():
+    """show_table is new_table + build_table + render(..., "text"), so it can't drift."""
+    from estrec import table as et
+
+    named = [("a", rec(1)), ("b", rec(2))]
+    spec = et.new_table(
+        [r for _, r in named], headers=["a", "b"], stats=["nobs", "r2", {"vcov": "type"}],
+        head=["label", "response"], format={"digits": 3},
+    )
+    assert sh.show_table(named) == et.render(et.build_table(spec, records=[r for _, r in named]), "text").rstrip("\n")
+
+
+def test_table_component_with_several_responses_gets_a_column_each():
+    r = rec(1)
+    r["parameters"] += [
+        {"term": "z1", "estimate": 0.6, "std_error": 0.03, "p_value": 0.0, "component": "first_stage", "response": "x"},
+        {"term": "z1", "estimate": 0.2, "std_error": 0.05, "p_value": 0.0, "component": "first_stage", "response": "w"},
+    ]
+    lines = sh.show_table([("iv", r)], component="first_stage").splitlines()
+    assert lines[0].split() == ["iv", "iv"] and lines[1].split() == ["x", "w"]
+    assert next(ln for ln in lines if ln.startswith("z1")).split()[1:] == ["0.600***", "0.200***"]
 
 
 def test_fmt():
@@ -105,4 +130,4 @@ def test_show_uses_the_table_star_cuts():
     assert sh.STARS == DEFAULT_STARS == [0.1, 0.05, 0.01]
     assert [sh._stars(p) for p in (0.2, 0.07, 0.03, 0.005, None)] == ["", "*", "**", "***", ""]
     text = sh.show_table([("a", rec(1))])
-    assert text.splitlines()[-1] == "* p < 0.1, ** p < 0.05, *** p < 0.01"
+    assert "* p < 0.1, ** p < 0.05, *** p < 0.01" in text.splitlines()

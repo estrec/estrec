@@ -111,8 +111,8 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
         return(if (length(n)) paste(vapply(n, .tab_value, "", 0, big, missing), collapse = " / ") else missing)
       }
       if (!is.null(s$fixed_effect))
-        return(if (s$fixed_effect %in% unlist(rec$specification$fixed_effects)) fmt$fe_yes %||% "Yes"
-               else fmt$fe_no %||% "")
+        return(if (s$fixed_effect %in% unlist(rec$specification$fixed_effects)) fmt$fe_yes %||% "Y"
+               else fmt$fe_no %||% "N")
       if (!is.null(s$test)) {
         tt <- Filter(function(t) identical(t$label, s$test), rec$tests %||% list())
         if (!length(tt)) tt <- Filter(function(t) identical(t$name, s$test), rec$tests %||% list())

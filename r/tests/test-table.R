@@ -16,7 +16,7 @@ if (dir.exists(ex)) {
             identical(cells(x, "N"), c("32", "32", "32")),
             identical(cells(x, "RMSE"), c("2.392", "2.241", "2.240")),
             identical(cells(x, "Std. errors"), c("iid", "HC1", "HC1")),
-            identical(cells(x, "Cylinders FE"), c("Yes", "Yes", "Yes")),
+            identical(cells(x, "Cylinders FE"), c("Y", "Y", "Y")),
             identical(cells(x, "Wald p"), c("0.000", "0.000", "0.001")),
             identical(cells(x, "Controls"), c("No", "No", "qsec")),
             !"qsec" %in% x$term)
@@ -126,7 +126,7 @@ if (requireNamespace("fixest", quietly = TRUE)) {
             identical(x$term[x$part == "estimates"], c("Treatment", "Treatment", "z", "z")),
             identical(cells(x, "Std. errors"), c("iid", "by: id", "iid", "HC1")),
             identical(cells(x, "Clusters"), c("", "30", "", "")),
-            identical(cells(x, "FE: id"), c("", "X", "X", "")),
+            identical(cells(x, "FE: id"), c("N", "X", "X", "N")),  # fe_yes = "X"; fe_no defaults to "N"
             identical(cells(x, "Sample"), rep("all", 4)),
             identical(cells(x, "N"), rep("300", 4)))
   se <- function(col) as.numeric(gsub("[()]", "", x[2, col]))

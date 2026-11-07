@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Fixed-effect rows in tables default to `Y` / `N` (Ted 2026-11-07; were `Yes` / blank):
+  `format.fe_yes` and `format.fe_no`, in Python, the viewer and estrec's `render_table`.
+  estrec's `glance()` keeps `X`, as fixest's does, so modelsummary gives the same table from
+  records as from fits.
+- `estrec show`'s side-by-side table is now `new_table` + `build_table` + `render(..., "text")`
+  (Ted 2026-11-07), so it can't drift from `estrec table`: names, then the dependent
+  variable, as heading rows; the table's statistic labels (`R²`, `Adj. R²`, ...); `Y`/`N`
+  fixed-effect rows; the stars and standard-error notes. With `--component`, a component
+  with several responses (first stages) gets a column per response, headed by it.
 - Table sparklines are drawn in LaTeX too, as a TikZ picture per cell with the SVG's marks
   (1 px = 0.75 pt; rows 12 pt high so a column joins; the output's first line says it needs
   `\usepackage{tikz}`), by the Python `render`, the viewer's script (byte for byte) and

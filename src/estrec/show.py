@@ -3,7 +3,8 @@
 """`estrec show`: a quick look at records in the terminal. One record gets a detail view
 (estimates, metrics, fixed effects, vcov, tests, messages); several records, a folder or a
 collection get a side-by-side regression table (estimates over standard errors, then N,
-R-squareds, the standard errors' type and fixed-effect rows)."""
+R-squareds, the standard errors' type and fixed-effect rows), built as a table spec
+(`table.new_table`) and rendered as text."""
 
 from __future__ import annotations
 
@@ -14,19 +15,20 @@ from typing import Any
 
 from .collection import is_collection, loads_collection
 from .records import loads
-from .table import DEFAULT_STARS
+from .table import DEFAULT_STARS, build_table, new_table, render
 from .table import _stars as _star_mark
 from .views import _locator_label, _num, glance, pick_vcov, tidy, vcovs
 
 # the same cuts as new tables (`table.DEFAULT_STARS`), so a quick look and a table agree
 STARS = DEFAULT_STARS
 STAR_SYMBOLS = ["*" * (i + 1) for i in range(len(STARS))]
+# the metrics the side-by-side table shows when any record has them (labels: table.STAT_LABELS)
 TABLE_ROWS = (
     ("nobs", "N"),
-    ("r2", "R2"),
-    ("adj_r2", "R2 adj."),
-    ("r2_within", "R2 within"),
-    ("pseudo_r2", "R2 pseudo"),
+    ("r2", "R²"),
+    ("adj_r2", "Adj. R²"),
+    ("r2_within", "Within R²"),
+    ("pseudo_r2", "Pseudo R²"),
     ("aic", "AIC"),
     ("bic", "BIC"),
     ("rmse", "RMSE"),
@@ -188,59 +190,34 @@ def show_record(rec: dict, *, vcov: Any = None, digits: int = 4, member: dict | 
 def show_table(
     named: list[tuple[str, dict]], *, vcov: Any = None, digits: int = 3, component: Any = None
 ) -> str:
-    """A side-by-side regression table of several records."""
-    tidies = [tidy(r, vcov=vcov, component=component) for _, r in named]
-    glances = [glance(r, vcov=vcov) for _, r in named]
-    terms: list[str] = []
-    for t in tidies:
-        for row in t:
-            key = f"{row['response']}: {row['term']}" if row.get("response") and component else row["term"]
-            if key not in terms:
-                terms.append(key)
-    header = [""] + [n for n, _ in named]
-    body = []
-    for term in terms:
-        est_row, se_row = [term], [""]
-        for t in tidies:
-            hit = next(
-                (
-                    r
-                    for r in t
-                    if (f"{r['response']}: {r['term']}" if r.get("response") and component else r["term"])
-                    == term
-                ),
-                None,
-            )
-            if hit is None:
-                est_row.append("")
-                se_row.append("")
-            else:
-                est_row.append(_fmt(hit["estimate"], digits) + _stars(hit["p_value"]))
-                se = hit["std_error"]
-                se_row.append(f"({_fmt(se, digits)})" if not math.isnan(se) else "")
-        body += [est_row, se_row]
-    stats = []
-    for key, label in TABLE_ROWS:
-        vals = [g.get(key) for g in glances]
-        if any(v is not None for v in vals):
-            stats.append([label] + [_fmt(v, digits) if v is not None else "" for v in vals])
+    """A side-by-side regression table of several records: the table spec `new_table` makes
+    for them, built and rendered as text, so `estrec show` matches `estrec table`. Columns
+    are headed by the names, then the dependent variable; the statistics rows are the
+    metrics in TABLE_ROWS that any record has, the standard errors' type and a row per fixed
+    effect. A component with several responses (first stages) gets a column per response."""
+    recs = [r for _, r in named]
+    glances = [glance(r, vcov=vcov) for r in recs]
+    stats: list = [k for k, _ in TABLE_ROWS if any(g.get(k) is not None for g in glances)]
     if any(g.get("vcov_type") for g in glances):
-        stats.append(["Std. errors"] + [g.get("vcov_type", "") for g in glances])
-    fe_names: list[str] = []
-    for g in glances:
-        for f in g.get("fixed_effects") or []:
-            if f not in fe_names:
-                fe_names.append(f)
-    for f in fe_names:
-        stats.append([f"FE: {f}"] + ["X" if f in (g.get("fixed_effects") or []) else "" for g in glances])
-    right = set(range(1, len(header)))
-    lines = _table(body + [["-"] * len(header)] + stats, right=right, header=header)
-    # the separator row between estimates and statistics, drawn full width
-    widths = [len(c) for c in lines[1].split("  ")]
-    sep = "  ".join("-" * w for w in widths)
-    lines = [sep if set(ln.replace(" ", "")) == {"-"} and i > 1 else ln for i, ln in enumerate(lines)]
-    lines.append(", ".join(f"{sym} p < {t:g}" for t, sym in zip(STARS, STAR_SYMBOLS)))
-    return "\n".join(lines)
+        stats.append({"vcov": "type"})
+    spec = new_table(recs, headers=[n for n, _ in named], stats=stats, head=["label", "response"])
+    cols = []
+    for c, r in zip(spec["columns"], recs):
+        if vcov is not None:
+            c["vcov"] = vcov
+        if component is not None:
+            c["component"] = component
+            resp = []
+            for row in tidy(r, vcov=vcov, component=component):
+                if row.get("response") and row["response"] not in resp:
+                    resp.append(row["response"])
+            if len(resp) > 1:
+                cols += [dict(c, response=x) for x in resp]
+                continue
+        cols.append(c)
+    spec["columns"] = cols
+    spec["format"] = {"digits": digits}
+    return render(build_table(spec, records=recs), "text").rstrip("\n")
 
 
 def load_for_show(paths: list[str | os.PathLike]) -> list[tuple[str, dict, dict | None]]:

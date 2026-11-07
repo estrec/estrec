@@ -714,7 +714,7 @@
         }
       } else if ("fixed_effect" in s) {
         label = s.label || `FE: ${s.fixed_effect}`;
-        const yes = fmt.fe_yes !== undefined ? fmt.fe_yes : "Yes", no = fmt.fe_no !== undefined ? fmt.fe_no : "";
+        const yes = fmt.fe_yes !== undefined ? fmt.fe_yes : "Y", no = fmt.fe_no !== undefined ? fmt.fe_no : "N";
         for (const c of cols) cells.push(((c.found.record.specification || {}).fixed_effects || []).includes(s.fixed_effect) ? yes : no);
       } else if ("test" in s) {
         label = s.label || s.test;

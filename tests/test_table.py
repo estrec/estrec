@@ -31,7 +31,7 @@ def test_example_builds():
     assert cells(t, "Horsepower")[0] == ""  # not in column (1)
     assert cells(t, "N") == ["32", "32", "32"]
     assert cells(t, "Std. errors") == ["iid", "HC1", "HC1"]
-    assert cells(t, "Cylinders FE") == ["Yes", "Yes", "Yes"]
+    assert cells(t, "Cylinders FE") == ["Y", "Y", "Y"]
     assert cells(t, "Controls") == ["No", "No", "qsec"]
     assert "* p < 0.1, ** p < 0.05, *** p < 0.01" in t["notes"]
     assert t["warnings"] == []
@@ -157,7 +157,7 @@ def test_column_vcov_and_clusters():
     assert t["rows"][1]["cells"][2] == f"({iid['std_error']:.3f})"
     assert cells(t, "Std. errors") == ["by: firm", "by: firm", "iid"]
     assert cells(t, "Clusters")[0] == "980" and cells(t, "Clusters")[2] == ""
-    assert cells(t, "FE: firm") == ["Yes", "Yes", "Yes"]
+    assert cells(t, "FE: firm") == ["Y", "Y", "Y"]
 
 
 def test_new_table_and_round_trip(tmp_path):

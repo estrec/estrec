@@ -199,6 +199,18 @@ details.raw pre { font: 12px/1.45 var(--font-mono); background: var(--bg); paddi
 .toolbar select { width: auto; }
 .toast { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--surface); padding: 8px 14px; border-radius: var(--r); font-size: 13px; }
 @media (prefers-reduced-motion: no-preference) { .toast { transition: opacity 0.2s; } }
+/* Print / PDF: the table preview alone, in light colours (fitted to width in beforeprint) */
+@media print {
+  :root, :root:not([data-theme="light"]), :root[data-theme="dark"] {
+    --bg: #ffffff; --surface: #ffffff; --ink: #000000; --muted: #444444; --line: #cccccc; --paper: #ffffff; color-scheme: light;
+  }
+  @page { margin: 1in; }
+  body { background: #ffffff; padding: 0; }
+  header.bar, #rail, .controls, .export, .msgs, .tabs, .toast, #view-record { display: none !important; }
+  .layout, .builder, .preview-wrap { display: block; }
+  .panel, .paper { border: 0; padding: 0; background: #ffffff; border-radius: 0; overflow: visible; }
+  table.estrec-table thead th.linked span { border-bottom: 0; }
+}
 </style>
 </head>
 <body>
@@ -332,6 +344,7 @@ details.raw pre { font: 12px/1.45 var(--font-mono); background: var(--bg); paddi
               <label class="inline" id="redact-wrap" hidden><input type="checkbox" id="opt-redact" checked> Leave out identifying details</label>
               <button class="btn small" id="copy" type="button">Copy</button>
               <button class="btn small" id="save" type="button">Save file</button>
+              <button class="btn small" id="print" type="button" title="Print the table alone, fitted to the Table width (6.5 in unless set in the Word export); choose Save as PDF in the print dialog for a PDF">Print / PDF</button>
               <button class="btn small" id="publish" type="button" hidden>Publish…</button>
               <button class="btn small" id="load-spec" type="button">Open table spec</button>
               <input id="spec-input" type="file" accept=".json" hidden>
@@ -1261,6 +1274,23 @@ $("copy").addEventListener("click", async () => {
 });
 const EXT = { word: "html", latex: "tex", markdown: "md", html: "html", csv: "csv", text: "txt", web: "html", spec: "estrec-table.json" };
 $("save").hidden = embedded;
+// Print / PDF: the browser's print dialog (Save as PDF there); the table shrinks to fit the
+// Table width if it is wider (the drawings are SVG, so they stay sharp)
+const printWidth = () => { const w = parseFloat($("opt-wordw").value); return (w >= 2 && w <= 20 ? w : 6.5) * 96; };
+window.addEventListener("beforeprint", () => {
+  const t = $("preview").querySelector("table.estrec-table");
+  if (!t) return;
+  t.style.zoom = "";
+  const w = t.getBoundingClientRect().width;
+  if (w > printWidth()) t.style.zoom = String(printWidth() / w);
+});
+window.addEventListener("afterprint", () => { const t = $("preview").querySelector("table.estrec-table"); if (t) t.style.zoom = ""; });
+$("print").addEventListener("click", () => {
+  if (!lastTable) { toast("Build a table first: add records as columns"); return; }
+  showTab("table");
+  try { window.print(); } catch { toast("Printing is blocked here: open the viewer in its own tab"); }
+});
+
 $("save").addEventListener("click", () => {
   const text = $("export-text").value;
   if (!text) return;

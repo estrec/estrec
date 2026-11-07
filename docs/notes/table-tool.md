@@ -104,6 +104,11 @@ Decisions so far:
   numbers' line, a rule-only SVG in the other rows; Word images per row, marks at the text's
   middle) or `middle` (the rowspan cell). Preview v11.
 
+- Word export width (Ted: fit a 6.5 in Word table; sparklines can't be scaled in Word):
+  `render(t, "word", width=in)`, the viewer's Table width box; each sparkline drawn at its
+  column's width. Then **Print / PDF** in the viewer (print CSS + zoom to the Table width in
+  `beforeprint`; untested in a browser; likely blocked inside the artifact preview).
+
 ## Earlier hand-off: sparklines everywhere and the `show_table` refactor (Ted, 2026-11-07)
 
 1. **Sparklines in every renderer that can draw.** Today HTML, the web page, the viewer

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Viewer: **Print / PDF** (Ted 2026-11-07) prints the table preview alone, in light colours
+  with 1 in margins, shrunk to the Table width (6.5 in by default) if wider; Save as PDF in
+  the browser's print dialog gives a PDF (vector, sparklines included).
 - Word export of a set width (Ted 2026-11-07): `render(t, "word", width=6.5)` (inches; the
   viewer's Word export has a Table width box, 6.5 by default) fixes the table's and every
   column's width (label column by its longest label, 36 pt to 40%; the rest shared; beside

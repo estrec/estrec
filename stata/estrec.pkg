@@ -7,11 +7,12 @@ d small-sample correction, N and drops, tests, and the software that ran it.
 d Records from Stata, R and Python can then be compared without rerunning.
 d
 d Supported: regress, areg, xtreg (fe, re), reghdfe, ivregress, ivreg2, ivreghdfe,
-d logit, logistic, probit, poisson, nbreg, glm. Other e-class commands get a
-d core record with no profile claims.
+d logit, logistic, probit, poisson, nbreg, glm, ppmlhdfe, clogit, stcox, streg,
+d mixed, me* (melogit, mepoisson, ...), and the svy:, bootstrap: and mi estimate:
+d prefixes. Other e-class commands get a core record with no profile claims.
 d
 d Requires: Stata 16 or newer
-d Distribution-Date: 20261106
+d Distribution-Date: 20261107
 d License: MIT
 d Author: the estrec contributors
 d Support: https://github.com/estrec/estrec/issues

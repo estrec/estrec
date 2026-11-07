@@ -48,6 +48,17 @@
   Disclosure levels 1-5 as in the converters. `reghdfe` records equal
   `converters/reghdfe`'s apart from the writer and the formula text. `tests/test_stata.py`:
   22 commands at every level validate with no warnings and match Stata's results table.
+- `estrec` for Stata, Tier 2: `ppmlhdfe` (inference, glm, ppmlhdfe; from the profile, not yet
+  run), `clogit` (conditional-logit), `stcox` and `streg` (survival; `estat phtest, detail`
+  after `stcox`), `mixed` and `me*` (mixed), and the `svy:` (survey), `bootstrap:` and
+  `vce(bootstrap)` (resampling) and `mi estimate:` (mi, with the new `imputation()` option)
+  prefixes. Variance components are recorded in `e(b)`'s metric with only the tests and
+  intervals Stata's table shows; `mixed, dfmethod(kroger)` records `e(V_df)` as the default
+  vcov with per-row `df`; `mi estimate` rows carry Rubin's components and their own df;
+  bootstrap rows keep the bootstrap SE and intervals beside `e(V_modelbased)`. ML records also
+  record `specification.options.optimizer` (`e(technique)`). The Stata test now compares every
+  value of `r(table)`, including those between 0 and 1 that it used to read as missing, and
+  checks that a record has no test where Stata shows none.
 
 - Table specs, `estimation-table/0.1` (`spec/table.md`, `schema/estimation-table-0.1.json`,
   catalog entry `table`; proposal `docs/proposals/table-spec.md`, Ted 2026-11-05): a saved

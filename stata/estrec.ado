@@ -13,9 +13,15 @@
 *   logit, logistic, probit,        inference/0.1, glm/0.1
 *     poisson, nbreg
 *   glm                             inference/0.1, glm/0.1 (glm, irls: inference/0.1 only)
+*   ppmlhdfe                        inference/0.1, glm/0.1, ppmlhdfe/0.1
+*   clogit                          inference/0.1, conditional-logit/0.1
+*   stcox, streg                    inference/0.1, survival/0.1
+*   mixed, me* (meglm)              mixed/0.1
 *
+* Prefixes: svy: claims inference/0.1 and survey/0.1; bootstrap: (and vce(bootstrap)) adds
+* resampling/0.1 to the command's profiles; mi estimate: claims inference/0.1 and, when
+* imputation() says how the data were imputed, mi/0.1.
 * Any other e-class command with e(b) and e(V) gets a core record with no profile claims.
-* Results from prefixes (svy:, mi estimate:, bootstrap:, ...) aren't supported yet.
 *
 * Options:
 *   replace          overwrite the file
@@ -24,7 +30,9 @@
 *   nodatasignature  skip the in-memory data checksum (datasignature)
 *   call(string)     the command as written (default: e(cmdline))
 *   noestat          don't run estat (firststage/overid/endogenous after ivregress, gof after
-*                    poisson, logit, logistic, probit)
+*                    poisson, logit, logistic, probit, phtest after stcox)
+*   imputation(str)  after mi estimate: how the data were imputed (chained, mvn, monotone, ...);
+*                    Stata doesn't keep it, so without it the record doesn't claim mi/0.1
 *
 * The record has no core digest (meta.core_digest is optional): computing it needs RFC 8785
 * canonical JSON. Add it with the reference tool: `estrec digest --write FILE`.
@@ -46,7 +54,7 @@ end
 
 program define _estrec_write
 	version 16
-	syntax using/ [, REPLACE noIDENTifying noDATASIGnature CALL(string asis) LEVel(integer 4) noESTat]
+	syntax using/ [, REPLACE noIDENTifying noDATASIGnature CALL(string asis) LEVel(integer 4) noESTat IMPutation(string)]
 	if `level' < 1 | `level' > 5 {
 		di as err "estrec write: level() must be 1 to 5"
 		exit 198
@@ -55,21 +63,29 @@ program define _estrec_write
 		di as err "estrec write: no estimation results; run an estimation command first"
 		exit 301
 	}
-	if "`e(prefix)'" != "" {
-		di as err "estrec write: results from the `e(prefix)' prefix aren't supported yet"
+	* Prefixes: svy, bootstrap (also vce(bootstrap)) and mi estimate (e(mi), not e(prefix))
+	local prefix "`e(prefix)'"
+	if "`e(mi)'" == "mi" local prefix mi
+	if !inlist("`prefix'", "", "svy", "bootstrap", "mi") {
+		di as err "estrec write: results from the `prefix' prefix aren't supported yet"
 		exit 198
 	}
-	capture confirm matrix e(b)
+	* mi estimate keeps the pooled results in e(b_mi), e(V_mi) (in e(b), e(V) too with post)
+	local bm = cond("`prefix'" == "mi", "b_mi", "b")
+	local vm = cond("`prefix'" == "mi", "V_mi", "V")
+	capture confirm matrix e(`bm')
 	local rc = _rc
-	capture confirm matrix e(V)
+	capture confirm matrix e(`vm')
 	if `rc' | _rc {
-		di as err "estrec write: `e(cmd)' posted no e(b) and e(V)"
+		di as err "estrec write: `e(cmd)' posted no e(`bm') and e(`vm')"
 		exit 301
 	}
+	if "`prefix'" == "mi" & `"`call'"' == "" local call `"`e(cmdline_mi)'"'
 	if `"`call'"' == "" local call `"`e(cmdline)'"'
 
-	* Which mapping applies
+	* Which mapping applies: the command inside a prefix
 	local cmd `e(cmd)'
+	if "`prefix'" == "mi" local cmd `e(cmd_mi)'
 	if "`cmd'" == "regress" local kind regress
 	else if "`cmd'" == "areg" local kind areg
 	else if "`cmd'" == "xtreg" & inlist("`e(model)'", "fe", "re") local kind xtreg_`e(model)'
@@ -78,7 +94,16 @@ program define _estrec_write
 	else if inlist("`cmd'", "ivreg2", "ivreghdfe") local kind `cmd'
 	else if inlist("`cmd'", "logit", "logistic", "probit", "poisson", "nbreg") local kind ml
 	else if "`cmd'" == "glm" local kind glm
+	else if "`cmd'" == "ppmlhdfe" local kind ppmlhdfe
+	else if "`cmd'" == "clogit" local kind clogit
+	else if "`cmd'" == "cox" & "`e(cmd2)'" == "stcox" local kind stcox
+	else if "`e(cmd2)'" == "streg" & inlist("`cmd'", "ereg", "weibull", "gompertz", "lnormal", "llogistic", "gamma") local kind streg
+	else if "`cmd'" == "mixed" local kind mixed
+	else if "`cmd'" == "meglm" local kind meglm
 	else local kind generic
+	* The command as typed (stcox stores e(cmd) cox, streg the distribution, melogit meglm)
+	local vcmd `cmd'
+	if inlist("`kind'", "stcox", "streg", "meglm") local vcmd `e(cmd2)'
 
 	* The data as the user has it, before any temporary variable is added
 	local nvars = c(k)
@@ -90,7 +115,8 @@ program define _estrec_write
 
 	* Rows dropped for missing values: the model's variables, marked out over the whole data
 	local names `e(depvar)' `e(absvars)' `e(absvar)' `e(clustvar)' `e(ivar)' `e(instd)' `e(insts)' `e(exog)' `e(endog)'
-	local cols : colnames e(b)
+	local names `names' `e(group)' `e(ivars)' `e(wvar)' `e(su1)' `e(strata1)' `e(cluster)'
+	local cols : colnames e(`bm')
 	local cols = subinstr(`"`cols'"', "#", " ", .)
 	foreach t of local cols {
 		local names `names' `=ustrregexra("`t'", "^.*\.", "")'
@@ -104,6 +130,9 @@ program define _estrec_write
 		if !_rc local vars `vars' `t'
 	}
 	local vars : list uniq vars
+	* stset's variables are missing outside the st sample, which isn't a missing value of the data
+	local stvars _t _t0 _d _st
+	local vars : list vars - stvars
 	tempvar touse
 	quietly generate byte `touse' = 1
 	if "`vars'" != "" markout `touse' `vars', strok
@@ -114,7 +143,7 @@ program define _estrec_write
 	local n_used = cond(_rc | r(N) == 0, ., r(N))
 
 	* Versions from the first line of each package's ado file
-	foreach p in `cmd' ftools ranktest ivreg2 {
+	foreach p in `vcmd' ftools ranktest ivreg2 reghdfe {
 		local ver_`p'
 		capture findfile `p'.ado
 		if !_rc {
@@ -125,7 +154,7 @@ program define _estrec_write
 			if ustrregexm(`"`line'"', "([0-9]+\.[0-9]+(\.[0-9]+)*)") local ver_`p' = ustrregexs(1)
 		}
 	}
-	local ver_cmd `ver_`cmd''
+	local ver_cmd `ver_`vcmd''
 
 	* UTC time from the OS (Stata has none)
 	tempfile clock
@@ -372,10 +401,18 @@ struct ertests {
 	real scalar n
 }
 
-// One test: name, category, statistic, distribution ("F", "chi2" or ""), df1, df2, p
+// One test: name, category, statistic, distribution ("F", "chi2", "chibar2" or ""), df1, df2, p
 void _ta(struct ertests scalar T, string scalar category, string scalar name, real scalar stat,
 	string scalar dist, real scalar df1, real scalar df2, real scalar p, string scalar origin,
 	string scalar response, string scalar label, string scalar source)
+{
+	_tae(T, category, name, stat, dist, df1, df2, p, origin, response, label, source, J(1, 0, ""), J(1, 0, ""))
+}
+
+// The same, with more fields (already encoded): terms, options, ...
+void _tae(struct ertests scalar T, string scalar category, string scalar name, real scalar stat,
+	string scalar dist, real scalar df1, real scalar df2, real scalar p, string scalar origin,
+	string scalar response, string scalar label, string scalar source, string rowvector xk, string rowvector xv)
 {
 	string rowvector k, v
 	if (missing(stat) & missing(p)) return
@@ -388,12 +425,12 @@ void _ta(struct ertests scalar T, string scalar category, string scalar name, re
 		k = k, ("df1", "df2")
 		v = v, (_ej_nx(df1), _ej_nx(df2))
 	}
-	else if (dist == "chi2") {
+	else if (dist == "chi2" | dist == "chibar2") {
 		k = k, "df"
 		v = v, _ej_nx(df1)
 	}
-	k = k, ("p_value", "source")
-	v = v, (_ej_nx(p), source)
+	k = k, ("p_value", "source"), xk
+	v = v, (_ej_nx(p), source), xv
 	T.t = T.t, _ej_o(k, v)
 }
 
@@ -412,34 +449,60 @@ void _er_write(string scalar fn, real scalar replace, real scalar lv)
 	real scalar doestat, dev, alpha, rc, isiid, haveabs, fw, gofd, gofp, gofdf, gofpd, gofpp
 	struct erobj scalar meta, metrics, spec, sample, structures, prov, est, vc, opts, num, vm
 	struct ertests scalar T
+	string scalar prefix, vcmd, mimethod
+	real matrix RT, dfmi
+	real scalar svy, bs, mi, mlx, mixedk, survk, dfrow, crow, nsep, inf, kr
+	real matrix Vraw, dfv
+	string scalar rgroup, rvc
+	string rowvector rk, rx
+	string matrix reqs
 
-	cmd = _eg("cmd")
+	cmd = st_local("cmd")       // the command, inside any prefix
+	vcmd = st_local("vcmd")     // as typed (stcox, streg, melogit)
 	kind = st_local("kind")
+	prefix = st_local("prefix")
+	mimethod = strlower(strtrim(st_local("imputation")))
+	svy = prefix == "svy"
+	bs = prefix == "bootstrap"
+	mi = prefix == "mi"
 	wver = "0.1.0"
 	ver_cmd = st_local("ver_cmd")
 	ident = strtoreal(st_local("ident"))
-	doestat = strtoreal(st_local("doestat"))
+	doestat = strtoreal(st_local("doestat")) & prefix == ""
 	created = st_local("created")
 	rows_input = strtoreal(st_local("rows_input"))
 	n_complete = strtoreal(st_local("n_complete"))
 	n_used = strtoreal(st_local("n_used"))
 	depvar = _eg("depvar")
 
-	b = st_matrix("e(b)")
-	V = st_matrix("e(V)")
-	cs = st_matrixcolstripe("e(b)")
-	N = _e("N")
-	dfr = _e("df_r")
+	b = st_matrix("e(" + st_local("bm") + ")")
+	V = st_matrix("e(" + st_local("vm") + ")")
+	cs = st_matrixcolstripe("e(" + st_local("bm") + ")")
+	N = mi ? _e("N_mi") : _e("N")
+	// mi estimate leaves the complete-data e(df_r) (or none); its tests use each row's e(df_mi)
+	dfr = mi ? . : _e("df_r")
 	rank = _e("rank")
-	if (missing(rank)) rank = sum(diagonal(st_matrix("e(V)")) :!= 0)
-	level = c("level")
+	if (missing(rank) & !mi) rank = sum(diagonal(V) :!= 0)
+	level = mi & !missing(_e("cilevel_mi")) ? _e("cilevel_mi") : c("level")
+	dfmi = mi ? st_matrix("e(df_mi)") : J(0, 0, .)
+	// mixed, dfmethod(kroger): Stata's table uses the adjusted e(V_df); e(V) is the unadjusted one
+	Vraw = st_matrix("e(V_df)")
+	kr = kind == "mixed" & rows(Vraw) == rows(V)
+	if (kr) {
+		Vraw = V
+		V = st_matrix("e(V_df)")
+	}
 	wtype = _eg("wtype")
 	wvar = strtrim(subinstr(_eg("wexp"), "=", "", 1))
 	fw = wtype == "fweight"
 	nobs = N    // as Stata reports it; with fweights e(N) is the sum of the weights (Ted, 2026-11-07)
 
 	linear = _isin(kind, ("regress", "areg", "xtreg_fe", "xtreg_re", "reghdfe", "ivregress", "ivreg2", "ivreghdfe"))
-	ml = _isin(kind, ("ml", "glm"))
+	ml = _isin(kind, ("ml", "glm", "ppmlhdfe"))
+	mixedk = _isin(kind, ("mixed", "meglm"))
+	survk = _isin(kind, ("stcox", "streg"))
+	// likelihood fits: z tests, oim, ML robust and cluster adjustments
+	mlx = ml | mixedk | survk | kind == "clogit"
 	endog = tokens(kind == "ivregress" ? _eg("endog") : _eg("instd"))
 	iv = length(endog) > 0
 	if (kind == "ivregress") {
@@ -453,16 +516,24 @@ void _er_write(string scalar fn, real scalar replace, real scalar lv)
 	if (kind == "ivregress") small = _eg("small") == "small"
 	else if (_isin(kind, ("regress", "areg", "xtreg_fe", "reghdfe"))) small = 1
 	else if (_isin(kind, ("ivreg2", "ivreghdfe"))) small = !missing(dfr)
-	else if (_isin(kind, ("xtreg_re", "ml", "glm"))) small = 0
+	else if (kind == "xtreg_re" | mlx) small = 0
 	else small = !missing(dfr)
 	dft = small ? dfr : .
 	if (kind == "glm" | kind == "generic") dft = dfr
+	// svy: t tests on the design df, for every command; bootstrap: z tests; mi: per-row df
+	if (svy) dft = dfr
+	if (bs | mi) dft = .
 
 	// ---- vcov ----
-	vce = strlower(_eg("vce"))
+	vce = strlower(mi ? _eg("wvce_mi") : _eg("vce"))
 	clusters = tokens(_eg("clustvar"))
+	// clogit's vce(robust) clusters on the groups (its footnote says so, and it equals
+	// vce(cluster group)); Stata posts no e(clustvar) or e(N_clust) for it
+	if (kind == "clogit" & vce == "robust") clusters = tokens(_eg("group"))
+	if (svy | bs) clusters = J(1, 0, "")
 	ncl = length(clusters)
-	if (ncl == 2) vtype = "twoway"
+	if (svy | bs) vtype = vce
+	else if (ncl == 2) vtype = "twoway"
 	else if (ncl > 2) vtype = "multiway"
 	else if (ncl == 1) vtype = "CRV1"
 	else if (_eg("kernel") != "") vtype = "HAC"
@@ -472,31 +543,10 @@ void _er_write(string scalar fn, real scalar replace, real scalar lv)
 	else if (strpos(vce, "robust")) vtype = kind == "generic" ? "robust" : ((linear & small) ? "HC1" : "HC0")
 	else if (_isin(vce, ("", "ols", "unadjusted", "conventional"))) vtype = linear | kind == "generic" ? "iid" : "oim"
 	else vtype = vce
+	if (kr) vtype = "kenward_roger"
 	isiid = vtype == "iid"
 
-	conv = "stata"
-	formula = kcounts = ""
-	if (kind == "reghdfe" | (kind == "ivreghdfe" & small & haveabs)) {
-		conv = cmd
-		// The worked converter's strings (converters/reghdfe), so its records and these compare equal
-		formula = vtype == "CRV1" ? "(N-1)/(N-K) * G/(G-1), K = df_m + df_a" : (vtype == "HC1" ? "N/(N-K), K = df_m + df_a" : (isiid ? "s2 = RSS/(N-K), K = df_m + df_a" : ""))
-		kcounts = "df_m regressors plus df_a absorbed levels (initial minus redundant minus nested in clusters)"
-	}
-	else if (linear & small) {
-		conv = kind == "areg" ? "stata areg" : (kind == "xtreg_fe" ? "stata xtreg" : (kind == "regress" ? "stata" : (kind == "ivregress" ? "stata ivregress" : cmd)))
-		formula = vtype == "CRV1" ? "(N-1)/(N-K) * G/(G-1)" : (vtype == "HC1" ? "N/(N-K)" : (isiid ? "s2 = RSS/(N-K)" : ""))
-		if (kind == "areg") kcounts = "K = rank + df_a: absorbed levels counted even when nested in the clusters"
-		else if (kind == "xtreg_fe") kcounts = vtype == "CRV1" ? "K = rank: the panels are nested in the clusters, so absorbed levels are not counted" : "K = rank + df_a"
-		else kcounts = "K = rank"
-	}
-	else if (_isin(kind, ("ivregress", "ivreg2", "ivreghdfe"))) {
-		conv = kind == "ivregress" ? "stata ivregress" : cmd
-		formula = isiid ? "s2 = RSS/N" : ((vtype == "HC0" | vtype == "CRV1" | vtype == "twoway") ? "none: no N/(N-K), (N-1)/(N-K) or G/(G-1)" : "")
-	}
-	else if (kind == "xtreg_re") conv = "stata xtreg"
-	else if (ml) {
-		formula = _isin(vtype, ("oim", "opg", "eim")) ? "none" : (vtype == "HC0" ? "N/(N-1)" : (vtype == "CRV1" ? "G/(G-1)" : ""))
-	}
+	_er_ssc(conv, formula, kcounts, kind, cmd, vtype, small, haveabs, linear, mlx, mixedk, svy, bs, mi, isiid)
 
 	vrows = J(1, rows(V), "")
 	for (i = 1; i <= rows(V); i++) vrows[i] = _ej_na(V[i, .])
@@ -507,6 +557,7 @@ void _er_write(string scalar fn, real scalar replace, real scalar lv)
 		eq = cs[j, 1]
 		term = cs[j, 2]
 		if (eq == "/") term = "/" + term
+		else if (kind == "mixed" & eq != eq1) term = eq + ":" + term    // lns1_1_1:_cons, as _b[] names it
 		cn[j] = term
 	}
 
@@ -520,7 +571,7 @@ void _er_write(string scalar fn, real scalar replace, real scalar lv)
 	if (ncl) {
 		rn = J(1, ncl, "")
 		for (i = 1; i <= ncl; i++) rn[i] = _ej_nx(ncl == 1 ? _e("N_clust") : _e(sprintf("N_clust%g", i)))
-		_oa(vc, "n_clusters", _ej_o(clusters, rn), 3)
+		if (any(rn :!= "")) _oa(vc, "n_clusters", _ej_o(clusters, rn), 3)
 		_oa(vc, "n_clusters_min", _en("N_clust"), 3)
 	}
 	_oa(vc, "ssc", _ej_o(("convention", "formula", "K_counts", "factors"), (_ej_s(conv),
@@ -531,9 +582,24 @@ void _er_write(string scalar fn, real scalar replace, real scalar lv)
 	_oa(vc, "default", "true", 2)
 	vcovs = _or(vc, lv)
 
+	// mixed with Kenward-Roger: the unadjusted e(V) beside the adjusted default
+	if (kr) {
+		for (i = 1; i <= rows(Vraw); i++) vrows[i] = _ej_na(Vraw[i, .])
+		vm = _on()
+		_oa(vm, "kind", _ej_s("matrix"), 2)
+		_oa(vm, "labels", _ej_sa(cn), 2)
+		_oa(vm, "data", "[" + invtokens(vrows, ", ") + "]", 2)
+		_oa(vm, "type", _ej_s("oim"), 2)
+		_oa(vm, "tool_type", _ej_s("V"), 2)
+		_oa(vm, "ssc", _ej_o(("convention", "formula"), (_ej_s("stata"), _ej_s("none"))), 2)
+		_oa(vm, "df_t", "null", 2)
+		_oa(vm, "default", "false", 2)
+		vcovs = vcovs, _or(vm, lv)
+	}
+
 	// The model-based vcov kept beside a robust or cluster one
 	Vm = st_matrix("e(V_modelbased)")
-	if (rows(Vm) == rows(V) & (kind == "regress" | ml)) {
+	if (rows(Vm) == rows(V) & (kind == "regress" | ml | kind == "clogit" | survk) & !svy & !mi) {
 		for (i = 1; i <= rows(Vm); i++) vrows[i] = _ej_na(Vm[i, .])
 		vm = _on()
 		_oa(vm, "kind", _ej_s("matrix"), 2)
@@ -541,7 +607,7 @@ void _er_write(string scalar fn, real scalar replace, real scalar lv)
 		_oa(vm, "data", "[" + invtokens(vrows, ", ") + "]", 2)
 		_oa(vm, "type", _ej_s(kind == "regress" ? "iid" : ((kind == "glm" & _eg("opt") == "irls") ? "eim" : "oim")), 2)
 		_oa(vm, "tool_type", _ej_s("V_modelbased"), 2)
-		_oa(vm, "ssc", _ej_o(("convention", "formula", "K_counts"), (_ej_s(conv),
+		_oa(vm, "ssc", _ej_o(("convention", "formula", "K_counts"), (_ej_s(bs ? "stata" : conv),
 			_ej_s(kind == "regress" ? "s2 = RSS/(N-K)" : "none"), (kind == "regress" ? _ej_s("K = rank") : ""))), 2)
 		_oa(vm, "df_t", _ej_n(kind == "regress" ? N - rank : .), 2)
 		_oa(vm, "default", "false", 2)
@@ -549,13 +615,25 @@ void _er_write(string scalar fn, real scalar replace, real scalar lv)
 	}
 
 	// ---- parameters (from the default vcov; t with df_t, else z) ----
+	// mixed and me*: the variance components as Stata's table reports them, from a replay
+	// (mixed in its estimation metric, the metric of e(b)); a replay leaves e() as it is
+	RT = J(0, 0, .)
+	if (mixedk) {
+		if (!_stata(kind == "mixed" ? "quietly mixed, estmetric" : "quietly meglm", 1)) RT = st_matrix("r(table)")
+		if (cols(RT) != cols(b) | rows(RT) < 7) RT = J(0, 0, .)
+	}
+	// per-row df: mi estimate's e(df_mi); mixed's e(df) with dfmethod() (a replay drops it, so
+	// the fixed effects' tests come from e(df) and the vcov, e(V_df) with Kenward-Roger)
+	dfv = mi ? dfmi : (kind == "mixed" & _eg("dfmethod") != "" ? st_matrix("e(df)") : J(0, 0, .))
+	if (mixedk) _er_reqs(reqs, kind, cs, eq1)
 	crit = missing(dft) ? invnormal(1 - (1 - level / 100) / 2) : invttail(dft, (1 - level / 100) / 2)
 	for (j = 1; j <= cols(b); j++) {
 		eq = cs[j, 1]
 		term = cn[j]
-		canon = dropped = ""
-		if (eq != "/") _er_term(cs[j, 2], canon, dropped)
-		s = eq == "/" ? _ej_s("auxiliary") : ((eq != eq1 & eq != "") ? _ej_s(eq) : "")
+		canon = dropped = rgroup = rvc = ""
+		if (mixedk) _er_vcrow(reqs, kind, eq, cs[j, 2], eq1, rgroup, rvc)
+		if (eq != "/" & rvc == "") _er_term(cs[j, 2], canon, dropped)
+		s = rvc != "" ? _ej_s("random") : (eq == "/" ? _ej_s("auxiliary") : ((eq != eq1 & eq != "") ? _ej_s(eq) : ""))
 		if (dropped != "") {
 			params = params, _ej_o(("term", "canonical", "component", "dropped"), (_ej_s(term), canon, s, _ej_s(dropped)))
 			continue
@@ -567,10 +645,39 @@ void _er_write(string scalar fn, real scalar replace, real scalar lv)
 			params = params, _ej_o(("term", "component", "estimate", "std_error"), (_ej_s(term), s, _ej_n(b[j]), _ej_n(se)))
 			continue
 		}
-		params = params, _ej_o(("term", "canonical", "component", "estimate", "std_error", "statistic", "p_value", "conf_low", "conf_high"),
-			(_ej_s(term), canon, s, _ej_n(b[j]), _ej_n(se), _ej_n(t),
-			 _ej_n(missing(dft) ? 2 * normal(-abs(t)) : 2 * ttail(dft, abs(t))),
-			 _ej_n(b[j] - crit * se), _ej_n(b[j] + crit * se)))
+		rk = ("term", "canonical", "component", "group", "vc", "estimate", "std_error")
+		rx = (_ej_s(term), canon, s, (rgroup != "" ? _ej_s(rgroup) : ""), rvc, _ej_n(b[j]), _ej_n(se))
+		if (rvc != "" & rows(RT)) {
+			// as Stata's table has them: no test or interval where it shows none
+			rk = rk, ("statistic", "p_value", "conf_low", "conf_high")
+			rx = rx, (_ej_nx(RT[3, j]), _ej_nx(RT[4, j]), _ej_nx(RT[5, j]), _ej_nx(RT[6, j]))
+		}
+		else if (mixedk & rvc != "") {
+			// no table to read: estimate and standard error only
+		}
+		else {
+			dfrow = cols(dfv) >= j ? dfv[j] : dft
+			crow = cols(dfv) >= j ? invttail(dfrow, (1 - level / 100) / 2) : crit
+			rk = rk, ("statistic", "p_value", "conf_low", "conf_high", "df")
+			rx = rx, (_ej_n(t), _ej_n(missing(dfrow) ? 2 * normal(-abs(t)) : 2 * ttail(dfrow, abs(t))),
+				_ej_n(b[j] - crow * se), _ej_n(b[j] + crow * se), ((kind == "mixed" & cols(dfv) >= j) ? _ej_nx(dfrow) : ""))
+		}
+		if (mi) {
+			rk = rk, "mi"
+			rx = rx, _ej_o(("ubar", "b", "riv", "fmi", "df", "relative_efficiency"),
+				(_ej_nx(_er_at("e(W_mi)", j, j)), _ej_nx(_er_at("e(B_mi)", j, j)), _ej_nx(_er_at("e(rvi_mi)", 1, j)),
+				 _ej_nx(_er_at("e(fmi_mi)", 1, j)), _ej_nx(dfmi[j]), _ej_nx(_er_at("e(re_mi)", 1, j))))
+		}
+		if (bs) {
+			rk = rk, "resampling"
+			rx = rx, _ej_o(("std_error", "mean", "bias", "reps", "statistic", "p_value", "conf_low", "conf_high", "intervals"),
+				(_ej_nx(_er_at("e(se)", 1, j)), _ej_nx(_er_at("e(b_bs)", 1, j)), _ej_nx(_er_at("e(bias)", 1, j)),
+				 _ej_nx(_er_at("e(reps)", 1, j)), _ej_n(t), _ej_n(2 * normal(-abs(t))),
+				 _ej_nx(_er_at("e(ci_normal)", 1, j)), _ej_nx(_er_at("e(ci_normal)", 2, j)),
+				 _ej_o(("normal", "percentile", "bias_corrected", "bca"), (_er_ci("e(ci_normal)", j),
+					_er_ci("e(ci_percentile)", j), _er_ci("e(ci_bc)", j), _er_ci("e(ci_bca)", j)))))
+		}
+		params = params, _ej_o(rk, rx)
 	}
 
 	// ---- convergence ----
@@ -582,69 +689,38 @@ void _er_write(string scalar fn, real scalar replace, real scalar lv)
 		(_ej_s("warning"), _ej_s("not_converged"), _ej_s(cmd), _ej_s("convergence not achieved")))
 
 	// ---- metrics ----
-	nsing = _isin(kind, ("reghdfe", "ivreghdfe")) ? _e("num_singletons") : (_isin(kind, ("areg", "xtreg_fe")) ? 0 : .)
+	gofd = gofp = gofdf = gofpd = gofpp = .
+	if (ml & cmd == "poisson" & doestat) {
+		if (!_stata("quietly estat gof", 1)) {
+			gofd = _sc("r(chi2_d)"); gofp = _sc("r(chi2_p)"); gofdf = _sc("r(df)")
+			gofpd = _sc("r(p_d)"); gofpp = _sc("r(p_p)")
+		}
+	}
+	nsing = _isin(kind, ("reghdfe", "ivreghdfe", "ppmlhdfe")) ? _e("num_singletons") : (_isin(kind, ("areg", "xtreg_fe")) ? 0 : .)
 	metrics = _on()
 	_oa(metrics, "nobs", _ej_def(_ej_n(nobs), fw ? "Stata e(N): with frequency weights each row counts as its weight's number of observations" : ""), 1)
 	_oa(metrics, "nobs_full", _en("N_full"), 2)
 	_oa(metrics, "n_singletons", _ej_nx(nsing), 2)
 	dfdef = ""
 	if (!missing(dfr)) {
-		if (ncl & kind == "reghdfe") dfdef = "min(G) - 1 under clustering (reghdfe e(df_r))"
+		if (svy) dfdef = "design df (svy e(df_r)): PSUs minus strata"
+		else if (ncl & kind == "reghdfe") dfdef = "min(G) - 1 under clustering (reghdfe e(df_r))"
 		else if (ncl) dfdef = (ncl == 1 ? "G - 1" : "min(G) - 1") + " under clustering (" + cmd + " e(df_r))"
 		_oa(metrics, "df_residual", _ej_def(_ej_n(dfr), dfdef), 1)
 	}
-	else if (kind == "glm") _oa(metrics, "df_residual", _en("df"), 1)
+	else if (kind == "glm" | kind == "ppmlhdfe") _oa(metrics, "df_residual", _en("df"), 1)
 	// z-test fits (no e(df_r)) record no df_residual: the default vcov's df_t is null (inference/0.1)
 	_oa(metrics, "df_model", _ej_def(_en("df_m"), kind == "xtreg_fe" ? "regressors plus absorbed levels (xtreg, fe e(df_m))" : ""), 2)
-	if (_isin(kind, ("areg", "xtreg_fe", "reghdfe", "ivreghdfe"))) {
+	if (_isin(kind, ("areg", "xtreg_fe", "reghdfe", "ivreghdfe", "ppmlhdfe"))) {
 		_oa(metrics, "df_absorbed", _en("df_a"), 2)
 		_oa(metrics, "df_absorbed_nested", _en("df_a_nested"), 2)
 	}
-	if (linear) {
-		s = (wtype == "aweight" & kind == "reghdfe") ? ", with aweights rescaled to sum to N" : ""
-		_oa(metrics, "rss", _ej_def(_en("rss"), s != "" ? "weighted RSS" + s : ""), 2)
-		if (_isin(kind, ("regress", "ivregress")) & !missing(_e("mss"))) _oa(metrics, "tss", _ej_n(_e("mss") + _e("rss")), 2)
-		else if (kind != "xtreg_re") _oa(metrics, "tss", _en("tss"), 2)
-		_oa(metrics, "tss_within", _en("tss_within"), 2)
-		_oa(metrics, "r2", _en("r2"), 2)
-		_oa(metrics, "adj_r2", _en("r2_a"), 2)
-		_oa(metrics, "r2_within", (kind == "reghdfe" | kind == "ivreghdfe") ? _en("r2_within") : _en("r2_w"), 2)
-		_oa(metrics, "adj_r2_within", _en("r2_a_within"), 2)
-		_oa(metrics, "r2_between", _en("r2_b"), 2)
-		_oa(metrics, "r2_overall", _en("r2_o"), 2)
-		if (kind == "xtreg_re") _oa(metrics, "sigma", _ej_def(_en("sigma_e"), "sigma_e, the SD of the idiosyncratic error"), 2)
-		else _oa(metrics, "sigma", _ej_def(_en("rmse"), small ? (s != "" ? "sqrt(RSS / (N - K))" + s : "") : "sqrt(RSS / N)"), 2)
-		_oa(metrics, "sigma_fe", _en("sigma_u"), 2)
-		_oa(metrics, "rho", _en("rho"), 2)
-	}
-	_oa(metrics, "log_lik", _en("ll"), 2)
-	_oa(metrics, "log_lik_null", _en("ll_0"), 2)
-	if (ml) {
-		// Only what Stata reports (Ted, 2026-11-07): glm's e(deviance), or after poisson the deviance
-		// goodness-of-fit of estat gof (equal to glm, family(poisson)'s e(deviance)); logit, probit
-		// and nbreg report none
-		gofd = gofp = gofdf = gofpd = gofpp = .
-		if (cmd == "poisson" & doestat) {
-			if (!_stata("quietly estat gof", 1)) {
-				gofd = _sc("r(chi2_d)"); gofp = _sc("r(chi2_p)"); gofdf = _sc("r(df)")
-				gofpd = _sc("r(p_d)"); gofpp = _sc("r(p_p)")
-			}
-		}
-		if (kind == "glm") _oa(metrics, "deviance", _en("deviance"), 2)
-		else _oa(metrics, "deviance", _ej_def(_ej_nx(gofd), "Stata estat gof, Deviance goodness-of-fit (r(chi2_d))"), 2)
-		_oa(metrics, "pseudo_r2", _en("r2_p"), 2)
-		if (!missing(_e("N_cds"))) _oa(metrics, "n_completely_determined", _ej_n(_e("N_cds") + _e("N_cdf")), 2)
-		_oa(metrics, "alpha", _en("alpha"), 2)
-		_oa(metrics, "aic", _ej_def(_en("aic"), "(-2 log_lik + 2 K) / N, per observation (Stata glm)"), 2)
-		_oa(metrics, "bic", _ej_def(_en("bic"), "deviance - df_residual * ln(N) (Stata glm)"), 2)
-		_oa(metrics, "dispersion", _en("phi"), 2)
-		if (kind == "glm") _oa(metrics, "pearson_chi2", _en("deviance_p"), 2)
-		else _oa(metrics, "pearson_chi2", _ej_def(_ej_nx(gofp), "Stata estat gof, Pearson goodness-of-fit (r(chi2_p))"), 2)
-	}
+	_er_metrics1(metrics, kind, cmd, linear, ml, small, wtype, gofd, gofp)
 	if (iv) {
 		_oa(metrics, "kappa", (kind == "ivregress" ? (_eg("estimator") == "liml" ? _en("kappa") : "") : _en("lambda")), 2)
 		_oa(metrics, "fuller", _en("fuller"), 2)
 	}
+	_er_metrics2(metrics, kind, cmd, survk, svy, bs, mi)
 	_oa(metrics, "sum_weights", fw ? _ej_def(_ej_n(N), "Stata e(N), which with frequency weights is the sum of the weights") : _en("sumweights"), 2)
 	_oa(metrics, "rank", _ej_nx(rank), 2)
 	_oa(metrics, "conf_level", _ej_n(level / 100), 1)
@@ -652,7 +728,15 @@ void _er_write(string scalar fn, real scalar replace, real scalar lv)
 	// ---- tests ----
 	T.t = J(1, 0, "")
 	T.n = 0
-	if (!missing(_e("F"))) {
+	if (svy) {
+		// svy's adjusted Wald F: F(df_m, df_r - df_m + 1), as its header shows it, with e(p)
+		_ta(T, "model", "wald", _e("F"), "F", _e("df_m"), dfr - _e("df_m") + 1, _e("p"), "estimation", "", "adjusted Wald", "")
+	}
+	else if (mi) {
+		_ta(T, "model", "wald", _e("F_mi"), "F", _e("df_m_mi"), _e("df_r_mi"), _e("p_mi"), "estimation", "",
+			_eg("modeltest_mi") != "" ? "model F test, " + _eg("modeltest_mi") : "", "")
+	}
+	else if (!missing(_e("F"))) {
 		if (_isin(kind, ("ivreg2", "ivreghdfe"))) _ta(T, "model", isiid ? "f" : "wald", _e("F"), "F", _e("Fdf1"), _e("Fdf2"), _e("Fp"), "estimation", "", "", "")
 		else {
 			// xtreg, fe counts the absorbed levels in e(df_m); its F test doesn't
@@ -665,6 +749,12 @@ void _er_write(string scalar fn, real scalar replace, real scalar lv)
 		_ta(T, "model", s == "lr" ? "likelihood_ratio" : "wald", _e("chi2"), "chi2", _e("df_m"), ., chi2tail(_e("df_m"), _e("chi2")), "estimation", "", "", "")
 	}
 	if (kind == "xtreg_fe") _ta(T, "fixed_effects", "f", _e("F_f"), "F", _e("df_a"), dfr, _e("p_f"), "estimation", "", "", "")
+	// mixed, me*: LR test against the model without random effects; with one variance component
+	// it's on the boundary, chibar2(01), else Stata calls its chi2 conservative
+	if (mixedk & !svy & !mi) {
+		if (_e("df_c") == 1) _ta(T, "random_effects", "likelihood_ratio", _e("chi2_c"), "chibar2", 1, ., _e("p_c"), "estimation", "", "chibar2(01), against the model without random effects", "")
+		else _ta(T, "random_effects", "likelihood_ratio", _e("chi2_c"), "chi2", _e("df_c"), ., _e("p_c"), "estimation", "", "against the model without random effects; conservative (Stata)", "")
+	}
 	if (iv & _isin(kind, ("ivreg2", "ivreghdfe"))) {
 		_ta(T, "underidentification", isiid ? "anderson_lm" : "kleibergen_paap_rk_lm", _e("idstat"), "chi2", _e("iddf"), ., _e("idp"), "estimation", "", "", "")
 		_ta(T, "weak_identification", "cragg_donald_f", _e("cdf"), "", ., ., ., "estimation", "", "", "")
@@ -693,6 +783,7 @@ void _er_write(string scalar fn, real scalar replace, real scalar lv)
 		}
 	}
 	if (iv & kind == "ivregress" & doestat) _er_estat(T, perendog, endog, isiid, lv)
+	if (kind == "stcox" & doestat) _er_phtest(T, cn, lv)
 	if (ml & doestat) {
 		s = lv < 4 ? "" : _ej_o(("name", "version", "call"), (_ej_s("stata"), _ej_s(strofreal(c("stata_version"))), _ej_s("estat gof")))
 		if (!missing(gofd)) {
@@ -708,24 +799,30 @@ void _er_write(string scalar fn, real scalar replace, real scalar lv)
 	// ---- specification ----
 	sample = _on()
 	n_missing = rows_input - n_complete
-	n_other = rows_input - n_missing - (missing(n_used) ? N : n_used) - (missing(nsing) ? 0 : nsing)
+	nsep = kind == "ppmlhdfe" ? _e("num_separated") : .
+	n_other = rows_input - n_missing - (missing(n_used) ? N : n_used) - (missing(nsing) ? 0 : nsing) - (missing(nsep) ? 0 : nsep)
 	_oa(sample, "restriction", "null", 3)
-	_oa(sample, "rows_input", _ej_n(rows_input), 3)
-	_oa(sample, "dropped", _ej_o(("missing", "singletons", "other"),
-		(_ej_n(n_missing), _ej_nx(nsing), (n_other > 0 ? _ej_n(n_other) : ""))), 3)
+	// mi data hold the imputations as extra rows (or columns), so the rows in memory aren't the input
+	if (!mi) {
+		_oa(sample, "rows_input", _ej_n(rows_input), 3)
+		_oa(sample, "dropped", _ej_o(("missing", "singletons", "separated", "other"),
+			(_ej_n(n_missing), _ej_nx(nsing), _ej_nx(nsep), (n_other > 0 ? _ej_n(n_other) : ""))), 3)
+	}
 
 	opts = _on()
-	if (_isin(kind, ("reghdfe", "ivreghdfe"))) _oa(opts, "drop_singletons", _ej_b(_e("drop_singletons")), 3)
+	if (_isin(kind, ("reghdfe", "ivreghdfe", "ppmlhdfe"))) _oa(opts, "drop_singletons", _ej_b(_e("drop_singletons")), 3)
 	else if (_isin(kind, ("areg", "xtreg_fe"))) _oa(opts, "drop_singletons", "false", 3)
 	if (kind == "ivregress") _oa(opts, "small", _ej_b(small), 3)
 	if (cmd == "nbreg") _oa(opts, "dispersion", _ej_s(_eg("dispers")), 3)
 	if (kind == "glm") _oa(opts, "algorithm", _ej_s(_eg("opt") == "irls" ? "irls" : "ml"), 3)
+	_er_opts2(opts, kind, survk, mlx, mi, vtype)
 
 	s = _eg("offset")
 	spec = _on()
 	_oa(spec, "call", _ej_s(st_local("call")), 3)
-	_oa(spec, "formula", _ej_o(("text", "syntax"), (_ej_s(_er_formula(_eg("cmdline"), absvars, kind)), _ej_s("stata"))), 3)
-	_oa(spec, "terms", _ej_sa(_er_terms(cs)), 3)
+	// the command inside a prefix: svy and bootstrap keep it in e(command), mi estimate in e(cmdline)
+	_oa(spec, "formula", _ej_o(("text", "syntax"), (_ej_s(_er_formula((svy | bs) & _eg("command") != "" ? _eg("command") : _eg("cmdline"), absvars, kind)), _ej_s("stata"))), 3)
+	_oa(spec, "terms", _ej_sa(cn), 3)
 	_oa(spec, "weights", (wtype == "" ? "null" : _ej_o(("variable", "type"), (_ej_s(wvar),
 		_ej_s(wtype == "aweight" ? "analytic" : (wtype == "fweight" ? "frequency" : (wtype == "pweight" ? "probability" : (wtype == "iweight" ? "importance" : wtype))))))), 3)
 	if (haveabs) _oa(spec, "fixed_effects", _ej_sa(absvars), 3)
@@ -736,6 +833,14 @@ void _er_write(string scalar fn, real scalar replace, real scalar lv)
 	}
 	if (ml) _oa(spec, "offset", (s == "" ? "null" : (regexm(s, "^ln\((.*)\)$") ?
 		_ej_o(("variable", "exposure"), (_ej_s(regexs(1)), "true")) : _ej_o(("variable", "exposure"), (_ej_s(s), "false")))), 3)
+	if (kind == "clogit") _oa(spec, "groups", _ej_sa(tokens(_eg("group"))), 3)
+	if (survk) _oa(spec, "survival", _er_stset(), 3)
+	if (mixedk) _oa(spec, "random_effects", _er_respec(reqs), 3)
+	if (svy) _oa(spec, "survey_design", _er_svyset(), 3)
+	if (bs) _oa(spec, "resampling", _er_bsspec(), 3)
+	if (mi) _oa(spec, "imputation", _ej_o(("m", "method", "imputed", "style"), (_en("M_mi"),
+		(mimethod != "" ? _ej_s(mimethod) : ""), _ej_sa(tokens(st_global("_dta[_mi_ivars]"))),
+		(st_global("_dta[_mi_style]") != "" ? _ej_s(st_global("_dta[_mi_style]")) : ""))), 3)
 	_oa(spec, "sample", _or(sample, lv), 3)
 	if (_isin(kind, ("xtreg_fe", "xtreg_re"))) _oa(spec, "state", _ej_o("xtset", _ej_o(("panelvar", "timevar"),
 		(_ej_s(st_local("iis")), (st_local("tis") != "" ? _ej_s(st_local("tis")) : "")))), 3)
@@ -743,7 +848,7 @@ void _er_write(string scalar fn, real scalar replace, real scalar lv)
 
 	// ---- structures ----
 	fe = J(1, 0, "")
-	if (_isin(kind, ("reghdfe", "ivreghdfe"))) {
+	if (_isin(kind, ("reghdfe", "ivreghdfe", "ppmlhdfe"))) {
 		dof = st_matrix("e(dof_table)")
 		if (rows(dof)) {
 			rs = st_matrixrowstripe("e(dof_table)")
@@ -769,11 +874,12 @@ void _er_write(string scalar fn, real scalar replace, real scalar lv)
 		_oa(num, "iterations", _en("ic"), 4)
 		_oa(num, "converged", _ej_b(conv_ok), 4)
 	}
-	else if (ml) {
+	else if (mlx) {
 		_oa(num, "kind", _ej_s("object"), 4)
 		_oa(num, "iterative", "true", 4)
-		_oa(num, "algorithm", (_eg("opt") == "irls" ? _ej_s("irls") : (_eg("technique") != "" ? _ej_s(_eg("technique")) : "")), 4)
+		_oa(num, "algorithm", ((_eg("opt") == "irls" | kind == "ppmlhdfe") ? _ej_s("irls") : (_eg("technique") != "" ? _ej_s(_eg("technique")) : "")), 4)
 		_oa(num, "iterations", _en("ic"), 4)
+		if (kind == "ppmlhdfe") _oa(num, "fixef_iterations", _ej_def(_en("ic2"), "reghdfe iterations summed over the IRLS steps (ppmlhdfe e(ic2))"), 4)
 		_oa(num, "converged", missing(conv_ok) ? "" : _ej_b(conv_ok), 4)
 	}
 
@@ -782,36 +888,17 @@ void _er_write(string scalar fn, real scalar replace, real scalar lv)
 	_oa(structures, "fixed_effects", _ej_l(fe), 3)
 	_oa(structures, "first_stage", length(perendog) ? _ej_o(("kind", "per_endogenous"), (_ej_s("object"), _ej_l(perendog))) : "", 2)
 	_oa(structures, "numerics", _or(num, lv), 4)
+	if (kind == "clogit") _oa(structures, "groups", _ej_o(("kind", "multiple_positive"), (_ej_s("object"), _ej_b(_eg("multiple") == "multiple"))), 3)
+	if (mixedk) _oa(structures, "random_effects", _er_restruct(reqs), 3)
 
 	// ---- provenance ----
-	src = _isin(cmd, ("reghdfe", "ivreghdfe", "ivreg2")) ? "SSC" : "Stata"
-	software = _ej_o(("name", "version", "purl", "role", "source"), (_ej_s(cmd),
-		(ver_cmd != "" ? _ej_s(ver_cmd) : _ej_s(strofreal(c("stata_version")))),
-		(src == "SSC" & ver_cmd != "" ? _ej_s("pkg:generic/" + cmd + "@" + ver_cmd) : ""), _ej_s("estimator"), _ej_s(src)))
-	software = software, _ej_o(("name", "version", "purl", "role", "attributes"), (_ej_s("stata"), _ej_s(strofreal(c("stata_version"))),
-		_ej_s("pkg:generic/stata@" + strofreal(c("stata_version"))), _ej_s("language"),
-		(lv >= 5 ? _ej_o(("edition", "born_date", "processors"), (_ej_s(c("edition_real")), _ej_s(c("born_date")), _ej_n(c("processors")))) : "")))
-	software = software, _ej_o(("name", "version", "role"), (_ej_s("estrec"), _ej_s(wver), _ej_s("writer")))
-	if (lv >= 5) {
-		if (_isin(cmd, ("reghdfe", "ivreghdfe"))) software = software, _er_dep("ftools", st_local("ver_ftools"))
-		if (cmd == "ivreghdfe") software = software, _er_dep("ivreg2", st_local("ver_ivreg2"))
-		if (_isin(cmd, ("ivreg2", "ivreghdfe"))) software = software, _er_dep("ranktest", st_local("ver_ranktest"))
-	}
-	s = st_local("datasig")
-	prov = _on()
-	_oa(prov, "software", _ej_l(software), 4)
-	_oa(prov, "environment", _ej_o(("os", "machine", "random"), (_ej_s(c("os")), _ej_s(c("machine_type")), _ej_o("rngtype", _ej_s(c("rngtype"))))), 5)
-	_oa(prov, "data", "[" + _ej_o(("role", "location", "rows", "columns", "checksum"),
-		(_ej_s("estimation"), (ident & lv >= 5 & c("filename") != "" ? _ej_s(c("filename")) : ""), _ej_n(rows_input), st_local("nvars"),
-		 (s != "" ? _ej_o(("algorithm", "value", "of", "method"), (_ej_s("datasignature"), _ej_s(s), _ej_s("in-memory"), _ej_s("Stata datasignature (rows, columns, names, contents)"))) : ""))) + "]", 4)
-	if (ident) _oa(prov, "agent", _ej_o(("user", "host"), (_ej_s(c("username")), _ej_s(c("hostname")))), 5)
+	prov = _er_prov(cmd, vcmd, ver_cmd, wver, lv, ident, bs, rows_input)
 
 	// ---- meta ----
-	profiles = J(1, 0, "")
-	if (lv >= 2 & (linear | ml)) profiles = profiles, "inference/0.1"
-	if (lv >= 3 & iv) profiles = profiles, "iv/0.1"
-	if (lv >= 3 & _isin(kind, ("areg", "xtreg_fe", "reghdfe", "ivreghdfe"))) profiles = profiles, "linear-fe/0.1"
-	if (lv >= 4 & ml & !missing(conv_ok)) profiles = profiles, "glm/0.1"
+	// Model profiles describe a fit, not results pooled over imputations or a design-based fit;
+	// svy and mi results claim inference and their own profile. mixed and me* report no test
+	// for most variance components, so they don't claim inference
+	_er_profiles(profiles, messages, kind, lv, linear, ml, iv, survk, mixedk, svy, bs, mi, conv_ok, mimethod)
 	if (kind == "generic") messages = messages, _ej_o(("level", "code", "source", "message"),
 		(_ej_s("info"), _ej_s("no_profile"), _ej_s("estrec"), _ej_s("estrec has no mapping for " + cmd + ": core fields only, no profiles claimed")))
 	if (!missing(nsing) & nsing > 0) messages = messages, _ej_o(("level", "code", "source", "message"),
@@ -864,6 +951,225 @@ void _er_write(string scalar fn, real scalar replace, real scalar lv)
 	fclose(fh)
 }
 
+// Metrics of the Tier 2 commands and prefixes
+void _er_metrics2(struct erobj scalar metrics, string scalar kind, string scalar cmd, real scalar survk,
+	real scalar svy, real scalar bs, real scalar mi)
+{
+	if (kind == "clogit") {
+		_oa(metrics, "pseudo_r2", _en("r2_p"), 2)
+		_oa(metrics, "n_dropped_uninformative", _en("N_drop"), 2)
+		_oa(metrics, "n_groups_dropped", _en("N_group_drop"), 2)
+	}
+	if (survk) {
+		_oa(metrics, "n_events", _en("N_fail"), 2)
+		_oa(metrics, "n_subjects", _en("N_sub"), 2)
+		_oa(metrics, "time_at_risk", _en("risk"), 2)
+		_oa(metrics, "pseudo_r2", _en("r2_p"), 2)
+		// streg's ancillary parameters, as posted
+		if (_isin(cmd, ("weibull", "gompertz"))) _oa(metrics, "shape", _ej_def(_en(cmd == "weibull" ? "aux_p" : "gamma"), cmd == "weibull" ? "Weibull p (streg e(aux_p))" : "Gompertz gamma (streg e(gamma))"), 2)
+		if (cmd == "lnormal") _oa(metrics, "scale", _ej_def(_en("sigma"), "lognormal sigma (streg e(sigma))"), 2)
+		if (cmd == "llogistic") _oa(metrics, "scale", _ej_def(_en("gamma"), "loglogistic gamma (streg e(gamma))"), 2)
+		if (cmd == "gamma") {
+			_oa(metrics, "scale", _ej_def(_en("sigma"), "generalized gamma sigma (streg e(sigma))"), 2)
+			_oa(metrics, "shape", _ej_def(_en("kappa"), "generalized gamma kappa (streg e(kappa))"), 2)
+		}
+	}
+	if (svy) {
+		_oa(metrics, "n_strata", _en("N_strata"), 2)
+		_oa(metrics, "n_psu", _en("N_psu"), 2)
+		_oa(metrics, "population_size", _en("N_pop"), 2)
+		_oa(metrics, "df_design", _en("df_r"), 2)
+		_oa(metrics, "n_subpop", _ej_def(_en("N_sub"), "observations in the subpopulation (svy e(N_sub))"), 2)
+		_oa(metrics, "subpop_size", _ej_def(_en("N_subpop"), "subpopulation size, the sum of its weights (svy e(N_subpop))"), 2)
+	}
+	if (bs) _oa(metrics, "n_reps_failed", _en("N_misreps"), 2)
+	if (mi) {
+		_oa(metrics, "nobs_min", (_e("N_min_mi") != _e("N_max_mi") ? _en("N_min_mi") : ""), 2)
+		_oa(metrics, "nobs_max", (_e("N_min_mi") != _e("N_max_mi") ? _en("N_max_mi") : ""), 2)
+	}
+}
+
+// specification.options of the Tier 2 commands and prefixes
+void _er_opts2(struct erobj scalar opts, string scalar kind, real scalar survk, real scalar mlx,
+	real scalar mi, string scalar vtype)
+{
+	string scalar s
+	if (kind == "ppmlhdfe") {
+		// e(separation) as a list; ppmlhdfe's ir is relu (its help file)
+		_oa(opts, "separation", _ej_sa(_er_sub(tokens(_eg("separation")), "ir", "relu")), 3)
+		_oa(opts, "tolerance", _en("tolerance"), 3)
+		_oa(opts, "fixef_tolerance", _en("itolerance"), 3)
+		_oa(opts, "max_iterations", _en("maxiterations"), 3)
+		_oa(opts, "guess", (_eg("guess") != "" ? _ej_s(_eg("guess")) : ""), 3)
+	}
+	if (kind == "clogit") {
+		_oa(opts, "likelihood", _ej_s("exact"), 3)
+		_oa(opts, "drop_uninformative", "true", 3)
+	}
+	if (kind == "stcox") {
+		s = _eg("ties")
+		_oa(opts, "ties", _ej_s(s == "exactm" ? "exact_marginal" : (s == "exactp" ? "exact_partial" : s)), 3)
+	}
+	if (survk) _oa(opts, "robust", _ej_b(vtype != "oim"), 3)
+	if (kind == "mixed" & _eg("dfmethod") != "") {
+		s = strlower(_eg("dfmethod"))
+		_oa(opts, "df_method", _ej_s(s == "kroger" ? "kenward_roger" : s), 3)
+	}
+	if (kind == "meglm") _oa(opts, "n_quadrature", _ej_nx(strtoreal(_eg("n_quad"))), 3)
+	if ((mlx & kind != "glm") | kind == "glm" & _eg("opt") != "irls") _oa(opts, "optimizer", (_eg("technique") != "" ? _ej_s(_eg("technique")) : ""), 3)
+	if (mi) {
+		s = strlower(_eg("dfadjust_mi"))
+		_oa(opts, "combining_rule", _ej_s("rubin"), 3)
+		_oa(opts, "df_method", (s == "small sample" ? _ej_s("barnard_rubin") : (s == "large sample" ? _ej_s("rubin_1987") : "")), 3)
+		_oa(opts, "dfcom", _en("df_c_mi"), 3)
+	}
+}
+
+// The profiles a record claims
+void _er_profiles(string rowvector profiles, string rowvector messages, string scalar kind, real scalar lv,
+	real scalar linear, real scalar ml, real scalar iv, real scalar survk, real scalar mixedk, real scalar svy,
+	real scalar bs, real scalar mi, real scalar conv_ok, string scalar mimethod)
+{
+	real scalar inf
+	profiles = J(1, 0, "")
+	inf = linear | ml | kind == "clogit" | survk
+	if (lv >= 2 & inf) profiles = profiles, "inference/0.1"
+	if (!svy & !mi) {
+		if (lv >= 3 & iv) profiles = profiles, "iv/0.1"
+		if (lv >= 3 & _isin(kind, ("areg", "xtreg_fe", "reghdfe", "ivreghdfe"))) profiles = profiles, "linear-fe/0.1"
+		if (lv >= 4 & ml & !missing(conv_ok)) profiles = profiles, "glm/0.1"
+		if (lv >= 4 & kind == "ppmlhdfe" & !missing(conv_ok)) profiles = profiles, "ppmlhdfe/0.1"
+		if (lv >= 3 & kind == "clogit") profiles = profiles, "conditional-logit/0.1"
+		if (lv >= 3 & survk) profiles = profiles, "survival/0.1"
+		if (lv >= 4 & mixedk & !missing(conv_ok)) profiles = profiles, "mixed/0.1"
+	}
+	if (lv >= 3 & svy & inf) profiles = profiles, "survey/0.1"
+	if (lv >= 3 & bs & kind != "generic") profiles = profiles, "resampling/0.1"
+	if (lv >= 3 & mi & inf & mimethod != "") profiles = profiles, "mi/0.1"
+	if (lv >= 2 & mi & inf & mimethod == "") messages = messages, _ej_o(("level", "code", "source", "message"),
+		(_ej_s("info"), _ej_s("profile_not_claimed"), _ej_s("estrec"), _ej_s("mi/0.1 not claimed: Stata doesn't keep how the data were imputed; give it with estrec write's imputation() option")))
+}
+
+// Metrics of the linear and GLM-type fits
+void _er_metrics1(struct erobj scalar metrics, string scalar kind, string scalar cmd, real scalar linear,
+	real scalar ml, real scalar small, string scalar wtype, real scalar gofd, real scalar gofp)
+{
+	string scalar s
+	if (linear) {
+		s = (wtype == "aweight" & kind == "reghdfe") ? ", with aweights rescaled to sum to N" : ""
+		_oa(metrics, "rss", _ej_def(_en("rss"), s != "" ? "weighted RSS" + s : ""), 2)
+		if (_isin(kind, ("regress", "ivregress")) & !missing(_e("mss"))) _oa(metrics, "tss", _ej_n(_e("mss") + _e("rss")), 2)
+		else if (kind != "xtreg_re") _oa(metrics, "tss", _en("tss"), 2)
+		_oa(metrics, "tss_within", _en("tss_within"), 2)
+		_oa(metrics, "r2", _en("r2"), 2)
+		_oa(metrics, "adj_r2", _en("r2_a"), 2)
+		_oa(metrics, "r2_within", (kind == "reghdfe" | kind == "ivreghdfe") ? _en("r2_within") : _en("r2_w"), 2)
+		_oa(metrics, "adj_r2_within", _en("r2_a_within"), 2)
+		_oa(metrics, "r2_between", _en("r2_b"), 2)
+		_oa(metrics, "r2_overall", _en("r2_o"), 2)
+		if (kind == "xtreg_re") _oa(metrics, "sigma", _ej_def(_en("sigma_e"), "sigma_e, the SD of the idiosyncratic error"), 2)
+		else _oa(metrics, "sigma", _ej_def(_en("rmse"), small ? (s != "" ? "sqrt(RSS / (N - K))" + s : "") : "sqrt(RSS / N)"), 2)
+		_oa(metrics, "sigma_fe", _en("sigma_u"), 2)
+		_oa(metrics, "rho", _en("rho"), 2)
+	}
+	_oa(metrics, "log_lik", _ej_def(_en("ll"), (kind == "mixed" & _eg("method") == "REML") ? "restricted (REML) log-likelihood (mixed e(ll))" : ""), 2)
+	// ppmlhdfe's e(ll_0) is the FE-only model's
+	_oa(metrics, kind == "ppmlhdfe" ? "log_lik_fe_only" : "log_lik_null", _en("ll_0"), 2)
+	if (ml) {
+		// Only what Stata reports (Ted, 2026-11-07): glm's e(deviance), or after poisson the deviance
+		// goodness-of-fit of estat gof (equal to glm, family(poisson)'s e(deviance)); logit, probit
+		// and nbreg report none
+		if (kind == "glm" | kind == "ppmlhdfe") _oa(metrics, "deviance", _en("deviance"), 2)
+		else _oa(metrics, "deviance", _ej_def(_ej_nx(gofd), "Stata estat gof, Deviance goodness-of-fit (r(chi2_d))"), 2)
+		_oa(metrics, "pseudo_r2", _ej_def(_en("r2_p"), kind == "ppmlhdfe" ? "1 - ll/ll_0, ll_0 FE-only" : ""), 2)
+		if (kind == "ppmlhdfe") _oa(metrics, "n_separated", _en("num_separated"), 2)
+		if (!missing(_e("N_cds"))) _oa(metrics, "n_completely_determined", _ej_n(_e("N_cds") + _e("N_cdf")), 2)
+		_oa(metrics, "alpha", _en("alpha"), 2)
+		_oa(metrics, "aic", _ej_def(_en("aic"), "(-2 log_lik + 2 K) / N, per observation (Stata glm)"), 2)
+		_oa(metrics, "bic", _ej_def(_en("bic"), "deviance - df_residual * ln(N) (Stata glm)"), 2)
+		_oa(metrics, "dispersion", _en("phi"), 2)
+		if (kind == "glm") _oa(metrics, "pearson_chi2", _en("deviance_p"), 2)
+		else _oa(metrics, "pearson_chi2", _ej_def(_ej_nx(gofp), "Stata estat gof, Pearson goodness-of-fit (r(chi2_p))"), 2)
+	}
+}
+
+// The default vcov's small-sample correction: convention, formula and what K counts
+void _er_ssc(string scalar conv, string scalar formula, string scalar kcounts, string scalar kind,
+	string scalar cmd, string scalar vtype, real scalar small, real scalar haveabs, real scalar linear,
+	real scalar mlx, real scalar mixedk, real scalar svy, real scalar bs, real scalar mi, real scalar isiid)
+{
+	conv = "stata"
+	formula = kcounts = ""
+	if (svy) {
+		conv = "stata svy"
+		if (vtype == "linearized") formula = "linearized: sum over strata of (1 - f_h) n_h/(n_h - 1) times the spread of the PSU score totals"
+	}
+	else if (bs) {
+		conv = "stata bootstrap"
+		formula = _eg("mse") != "" ? "sum over replications of (b_r - b)^2 / R (mse)" : "sum over replications of (b_r - mean(b_r))^2 / (R - 1)"
+	}
+	else if (kind == "reghdfe" | (kind == "ivreghdfe" & small & haveabs)) {
+		conv = cmd
+		// The worked converter's strings (converters/reghdfe), so its records and these compare equal
+		formula = vtype == "CRV1" ? "(N-1)/(N-K) * G/(G-1), K = df_m + df_a" : (vtype == "HC1" ? "N/(N-K), K = df_m + df_a" : (isiid ? "s2 = RSS/(N-K), K = df_m + df_a" : ""))
+		kcounts = "df_m regressors plus df_a absorbed levels (initial minus redundant minus nested in clusters)"
+	}
+	else if (linear & small) {
+		conv = kind == "areg" ? "stata areg" : (kind == "xtreg_fe" ? "stata xtreg" : (kind == "regress" ? "stata" : (kind == "ivregress" ? "stata ivregress" : cmd)))
+		formula = vtype == "CRV1" ? "(N-1)/(N-K) * G/(G-1)" : (vtype == "HC1" ? "N/(N-K)" : (isiid ? "s2 = RSS/(N-K)" : ""))
+		if (kind == "areg") kcounts = "K = rank + df_a: absorbed levels counted even when nested in the clusters"
+		else if (kind == "xtreg_fe") kcounts = vtype == "CRV1" ? "K = rank: the panels are nested in the clusters, so absorbed levels are not counted" : "K = rank + df_a"
+		else kcounts = "K = rank"
+	}
+	else if (_isin(kind, ("ivregress", "ivreg2", "ivreghdfe"))) {
+		conv = kind == "ivregress" ? "stata ivregress" : cmd
+		formula = isiid ? "s2 = RSS/N" : ((vtype == "HC0" | vtype == "CRV1" | vtype == "twoway") ? "none: no N/(N-K), (N-1)/(N-K) or G/(G-1)" : "")
+	}
+	else if (kind == "xtreg_re") conv = "stata xtreg"
+	else if (mixedk) formula = _isin(vtype, ("oim", "opg", "eim")) ? "none" : (vtype == "kenward_roger" ? "Kenward-Roger adjustment of the REML vcov (mixed e(V_df))" : "")
+	else if (mlx) {
+		if (kind == "ppmlhdfe") conv = "ppmlhdfe"
+		formula = _isin(vtype, ("oim", "opg", "eim")) ? "none" : (vtype == "HC0" ? "N/(N-1)" : (vtype == "CRV1" ? "G/(G-1)" : ""))
+	}
+	// mi: Rubin's rules over the imputations' vcovs, each with its command's correction
+	if (mi) {
+		formula = "T = W + (1 + 1/M) B, W the mean within-imputation vcov" + (formula != "" ? " (" + formula + ")" : "") + ", B the between-imputation variance"
+		conv = "stata mi estimate, " + conv
+	}
+}
+// provenance
+struct erobj scalar _er_prov(string scalar cmd, string scalar vcmd, string scalar ver_cmd, string scalar wver, real scalar lv,
+	real scalar ident, real scalar bs, real scalar rows_input)
+{
+	struct erobj scalar prov
+	string rowvector software
+	string scalar src, s
+	prov = _on()
+	src = _isin(cmd, ("reghdfe", "ivreghdfe", "ivreg2", "ppmlhdfe")) ? "SSC" : "Stata"
+	software = _ej_o(("name", "version", "purl", "role", "source"), (_ej_s(vcmd),
+		(ver_cmd != "" ? _ej_s(ver_cmd) : _ej_s(strofreal(c("stata_version")))),
+		(src == "SSC" & ver_cmd != "" ? _ej_s("pkg:generic/" + cmd + "@" + ver_cmd) : ""), _ej_s("estimator"), _ej_s(src)))
+	software = software, _ej_o(("name", "version", "purl", "role", "attributes"), (_ej_s("stata"), _ej_s(strofreal(c("stata_version"))),
+		_ej_s("pkg:generic/stata@" + strofreal(c("stata_version"))), _ej_s("language"),
+		(lv >= 5 ? _ej_o(("edition", "born_date", "processors"), (_ej_s(c("edition_real")), _ej_s(c("born_date")), _ej_n(c("processors")))) : "")))
+	software = software, _ej_o(("name", "version", "role"), (_ej_s("estrec"), _ej_s(wver), _ej_s("writer")))
+	if (lv >= 5) {
+		if (cmd == "ppmlhdfe") software = software, _er_dep("reghdfe", st_local("ver_reghdfe"))
+		if (_isin(cmd, ("reghdfe", "ivreghdfe", "ppmlhdfe"))) software = software, _er_dep("ftools", st_local("ver_ftools"))
+		if (cmd == "ivreghdfe") software = software, _er_dep("ivreg2", st_local("ver_ivreg2"))
+		if (_isin(cmd, ("ivreg2", "ivreghdfe"))) software = software, _er_dep("ranktest", st_local("ver_ranktest"))
+	}
+	s = st_local("datasig")
+	_oa(prov, "software", _ej_l(software), 4)
+	_oa(prov, "environment", _ej_o(("os", "machine", "random"), (_ej_s(c("os")), _ej_s(c("machine_type")),
+		_ej_o(("rngtype", "rngstate"), (_ej_s(c("rngtype")), (bs & _eg("rngstate") != "" ? _ej_s(_eg("rngstate")) : ""))))), 5)
+	_oa(prov, "data", "[" + _ej_o(("role", "location", "rows", "columns", "checksum"),
+		(_ej_s("estimation"), (ident & lv >= 5 & c("filename") != "" ? _ej_s(c("filename")) : ""), _ej_n(rows_input), st_local("nvars"),
+		 (s != "" ? _ej_o(("algorithm", "value", "of", "method"), (_ej_s("datasignature"), _ej_s(s), _ej_s("in-memory"), _ej_s("Stata datasignature (rows, columns, names, contents)"))) : ""))) + "]", 4)
+	if (ident) _oa(prov, "agent", _ej_o(("user", "host"), (_ej_s(c("username")), _ej_s(c("hostname")))), 5)
+	return(prov)
+}
+
 // Which elements of a are in b
 real rowvector _er_in(string rowvector a, string rowvector b)
 {
@@ -909,6 +1215,45 @@ void _er_estimator(struct erobj scalar est, string scalar kind, string scalar cm
 {
 	string scalar m, d, l
 	if (kind == "generic") return
+	if (kind == "clogit") {
+		_oa(est, "family", _ej_s("conditional_logit"), 2)
+		_oa(est, "method", _ej_s("conditional_mle"), 2)
+		_oa(est, "distribution", _ej_s("binomial"), 2)
+		_oa(est, "link", _ej_s("logit"), 2)
+		return
+	}
+	if (kind == "stcox" | kind == "streg") {
+		_oa(est, "family", _ej_s("survival"), 2)
+		_oa(est, "method", _ej_s(kind == "stcox" ? "cox" : "parametric"), 2)
+		if (kind == "streg") {
+			d = cmd == "ereg" ? "exponential" : (cmd == "lnormal" ? "lognormal" : (cmd == "llogistic" ? "loglogistic" : (cmd == "gamma" ? "generalized_gamma" : cmd)))
+			_oa(est, "distribution", _ej_s(d), 2)
+			// e(frm2): hazard (PH metric) or time (AFT)
+			_oa(est, "metric", _ej_s(_eg("frm2") == "hazard" ? "ph" : "aft"), 2)
+		}
+		return
+	}
+	if (kind == "mixed") {
+		_oa(est, "family", _ej_s("mixed"), 2)
+		_oa(est, "method", _ej_s(strlower(_eg("method"))), 2)
+		return
+	}
+	if (kind == "meglm") {
+		_oa(est, "family", _ej_s("mixed"), 2)
+		_oa(est, "method", _ej_s(_eg("intmethod") == "laplace" ? "laplace" : "agq"), 2)
+		_oa(est, "integration", _ej_s(_eg("intmethod")), 2)
+		d = strlower(_eg("family"))
+		_oa(est, "distribution", _ej_s(d == "bernoulli" ? "binomial" : (d == "nbinomial" ? "negative_binomial" : d)), 2)
+		_oa(est, "link", _ej_s(strlower(_eg("link"))), 2)
+		return
+	}
+	if (kind == "ppmlhdfe") {
+		_oa(est, "family", _ej_s("glm"), 2)
+		_oa(est, "method", _ej_s("irls"), 2)
+		_oa(est, "distribution", _ej_s("poisson"), 2)
+		_oa(est, "link", _ej_s("log"), 2)
+		return
+	}
 	if (kind == "ml" | kind == "glm") {
 		_oa(est, "family", _ej_s("glm"), 2)
 		_oa(est, "method", _ej_s(kind == "glm" & _eg("opt") == "irls" ? "irls" : "mle"), 2)
@@ -983,6 +1328,288 @@ void _er_estat(struct ertests scalar T, string rowvector perendog, string rowvec
 		_ta(T, "endogeneity", "wu_hausman", _sc("r(wu)"), "F", df, _sc("r(wudf_r)"), _sc("r(p_wu)"), "postestimation", "", "", s)
 		_ta(T, "endogeneity", "score", _sc("r(r_score)"), "chi2", df, ., _sc("r(p_r_score)"), "postestimation", "", "robust score", s)
 		_ta(T, "endogeneity", "f", _sc("r(regF)"), "F", _sc("r(regFdf_n)"), _sc("r(regFdf_d)"), _sc("r(p_regF)"), "postestimation", "", "robust regression-based", s)
+	}
+}
+
+// Element (i, j) of a Stata matrix, or missing
+real scalar _er_at(string scalar name, real scalar i, real scalar j)
+{
+	real matrix M
+	M = st_matrix(name)
+	return(rows(M) >= i & cols(M) >= j ? M[i, j] : .)
+}
+
+// Column j of a 2 x k interval matrix (bootstrap e(ci_*)) as [low, high]; "" when absent
+string scalar _er_ci(string scalar name, real scalar j)
+{
+	real scalar lo, hi
+	lo = _er_at(name, 1, j)
+	hi = _er_at(name, 2, j)
+	if (missing(lo) & missing(hi)) return("")
+	return("[" + _ej_n(lo) + ", " + _ej_n(hi) + "]")
+}
+
+string rowvector _er_sub(string rowvector v, string scalar a, string scalar b)
+{
+	real scalar i
+	for (i = 1; i <= length(v); i++) if (v[i] == a) v[i] = b
+	return(v)
+}
+
+// A random-effect term in the record's form: the random intercept is (Intercept)
+string scalar _er_reterm(string scalar t)
+{
+	return(t == "_cons" ? "(Intercept)" : t)
+}
+
+// The random-effects equations, one row each: ivar, level, index within the level,
+// covariance (Stata's word), terms (space-separated, as Stata names them), text as written
+void _er_reqs(string matrix R, string scalar kind, string matrix cs, string scalar eq1)
+{
+	string rowvector iv, vt, rv, segs, levs, gt, parts
+	real rowvector dim
+	real scalar e, pos, j, i, l
+	string scalar g, t, cmdline
+
+	// the || parts of the command line, one per equation
+	cmdline = _eg("cmdline")
+	segs = J(1, 0, "")
+	while ((pos = strpos(cmdline, "||"))) {
+		cmdline = substr(cmdline, pos + 2, .)
+		t = strpos(cmdline, "||") ? substr(cmdline, 1, strpos(cmdline, "||") - 1) : cmdline
+		// up to its options: the last equation's comma also starts the command's own options
+		if (strpos(t, ",")) t = substr(t, 1, strpos(t, ",") - 1)
+		segs = segs, "|| " + strtrim(t)
+	}
+	if (kind == "mixed") {
+		iv = tokens(_eg("ivars"))
+		vt = tokens(_eg("vartypes"))
+		rv = tokens(_eg("revars"))
+		dim = strtoreal(tokens(_eg("redim")))
+		R = J(length(iv), 6, "")
+		levs = J(1, 0, "")
+		pos = 0
+		for (e = 1; e <= length(iv); e++) {
+			if (!anyof(levs, iv[e])) levs = levs, iv[e]
+			for (l = 1; l <= length(levs); l++) if (levs[l] == iv[e]) break
+			R[e, 1] = iv[e]
+			R[e, 2] = strofreal(l)
+			R[e, 3] = strofreal(e > 1 ? sum(R[1..e-1, 1] :== iv[e]) + 1 : 1)
+			R[e, 4] = e <= length(vt) ? vt[e] : ""
+			R[e, 5] = e <= length(dim) & pos + dim[e] <= length(rv) ? invtokens(rv[pos+1..pos+dim[e]]) : ""
+			R[e, 6] = e <= length(segs) ? segs[e] : ""
+			if (e <= length(dim)) pos = pos + dim[e]
+		}
+		return
+	}
+	// me*: the groups and terms of the var() and cov() rows of e(b)
+	iv = tokens(_eg("ivars"))
+	R = J(0, 6, "")
+	for (j = 1; j <= rows(cs); j++) {
+		if (cs[j, 1] != "/" | !regexm(cs[j, 2], "^var\((.*)\)$")) continue
+		t = regexs(1)
+		if (!regexm(t, "^(.+)\[(.+)\]$")) continue
+		g = regexs(2)
+		t = regexs(1)
+		gt = tokens(g, ">")
+		g = gt[length(gt)]
+		for (i = 1; i <= rows(R); i++) if (R[i, 1] == g) break
+		if (i > rows(R)) {
+			for (l = 1; l <= length(iv); l++) if (iv[l] == g) break
+			R = R \ (g, strofreal(l), "1", "", t, (rows(R) < length(segs) ? segs[rows(R) + 1] : ""))
+		}
+		else R[i, 5] = R[i, 5] + " " + t
+	}
+}
+
+// For one column of e(b): its group and vc object when it is a variance component, else ""
+void _er_vcrow(string matrix R, string scalar kind, string scalar eq, string scalar name,
+	string scalar eq1, string scalar group, string scalar vc)
+{
+	string rowvector terms, parts, tl, ps
+	string scalar ty, inner, g
+	real scalar l, k, i, j, r, n
+
+	group = vc = ""
+	tl = J(1, 0, "")
+	if (kind == "mixed") {
+		if (eq == "lnsig_e") {
+			group = "Residual"
+			tl = "Residual"
+			ty = "log_sd"
+		}
+		else if (regexm(eq, "^(lns|atr)([0-9]+)_([0-9]+)_([0-9]+)(_([0-9]+))?$")) {
+			ty = regexs(1) == "lns" ? "log_sd" : "atanh_cor"
+			l = strtoreal(regexs(2))
+			k = strtoreal(regexs(3))
+			i = strtoreal(regexs(4))
+			j = regexs(6) != "" ? strtoreal(regexs(6)) : .
+			for (r = 1; r <= rows(R); r++) if (R[r, 2] == strofreal(l) & R[r, 3] == strofreal(k)) break
+			if (r > rows(R)) return
+			group = R[r, 1]
+			terms = tokens(R[r, 5])
+			// identity and exchangeable: one variance (and one correlation) for all the terms
+			if (anyof(("identity", "exchangeable"), strlower(R[r, 4]))) tl = terms
+			else if (ty == "log_sd" & i <= length(terms)) tl = terms[i]
+			else if (ty == "atanh_cor" & i <= length(terms) & j <= length(terms)) tl = (terms[i], terms[j])
+		}
+		else if (regexm(eq, "^r_(lns|atr)")) {
+			group = "Residual"
+			tl = eq
+			ty = regexs(1) == "lns" ? "log_sd" : "atanh_cor"
+		}
+		else return
+	}
+	else {
+		if (eq != "/" | !regexm(name, "^(var|cov)\((.*)\)$")) return
+		ty = regexs(1)
+		inner = regexs(2)
+		parts = tokens(inner, ",")
+		parts = select(parts, parts :!= ",")
+		for (n = 1; n <= length(parts); n++) {
+			if (regexm(parts[n], "^e\.(.+)$")) {
+				g = "Residual"
+				tl = tl, "Residual"
+			}
+			else if (regexm(parts[n], "^(.+)\[(.+)\]$")) {
+				ps = tokens(regexs(2), ">")
+				g = ps[length(ps)]
+				tl = tl, regexs(1)
+			}
+			else return
+		}
+		group = g
+	}
+	for (n = 1; n <= length(tl); n++) tl[n] = _er_reterm(tl[n])
+	vc = _ej_o(("group", "terms", "type"), (_ej_s(group), _ej_sa(tl), _ej_s(ty)))
+}
+
+// specification.random_effects: one entry per equation
+string scalar _er_respec(string matrix R)
+{
+	string rowvector out, tl
+	string scalar cv, nest
+	real scalar e, n, l
+	out = J(1, 0, "")
+	for (e = 1; e <= rows(R); e++) {
+		tl = tokens(R[e, 5])
+		for (n = 1; n <= length(tl); n++) tl[n] = _er_reterm(tl[n])
+		cv = strlower(R[e, 4])
+		cv = cv == "independent" ? "diagonal" : cv
+		// a level is nested in the one before it
+		nest = ""
+		l = strtoreal(R[e, 2])
+		if (l > 1) for (n = 1; n <= rows(R); n++) if (R[n, 2] == strofreal(l - 1)) nest = R[n, 1]
+		out = out, _ej_o(("group", "terms", "covariance", "nested_in", "text"), (_ej_s(R[e, 1]), _ej_sa(tl),
+			(cv != "" ? _ej_s(cv) : ""), (nest != "" ? _ej_s(nest) : ""), (R[e, 6] != "" ? _ej_s(R[e, 6]) : "")))
+	}
+	return(_ej_l(out))
+}
+
+// structures.random_effects: one entry per level, with e(N_g) and the group sizes
+string scalar _er_restruct(string matrix R)
+{
+	string rowvector out
+	real scalar e, l
+	out = J(1, 0, "")
+	for (e = 1; e <= rows(R); e++) {
+		if (R[e, 3] != "1") continue
+		l = strtoreal(R[e, 2])
+		out = out, _ej_o(("kind", "group", "levels", "size"), (_ej_s("object"), _ej_s(R[e, 1]), _ej_nx(_er_at("e(N_g)", 1, l)),
+			_ej_o(("min", "mean", "max"), (_ej_nx(_er_at("e(g_min)", 1, l)), _ej_nx(_er_at("e(g_avg)", 1, l)), _ej_nx(_er_at("e(g_max)", 1, l))))))
+	}
+	return(_ej_l(out))
+}
+
+// specification.survival from stset's characteristics
+string scalar _er_stset()
+{
+	string scalar t, d, ev, id, t0, codes
+	real rowvector x
+	t = st_global("_dta[st_bt]")
+	d = st_global("_dta[st_bd]")
+	ev = st_global("_dta[st_ev]")
+	id = st_global("_dta[st_id]")
+	t0 = st_global("_dta[st_bt0]")
+	codes = ""
+	if (ev != "") {
+		x = strtoreal(tokens(ev))
+		codes = missing(x) ? _ej_sa(tokens(ev)) : _ej_na(x)
+	}
+	return(_ej_o(("time", "start", "event", "event_codes", "id", "strata", "time_varying"),
+		(_ej_s(t), (t0 != "" ? _ej_s(t0) : "null"), (d != "" ? _ej_s(d) : ""), codes, (id != "" ? _ej_s(id) : "null"),
+		 (_eg("strata") != "" ? _ej_sa(tokens(_eg("strata"))) : ""), (_eg("tvc") != "" ? _ej_sa(tokens(_eg("tvc"))) : ""))))
+}
+
+// specification.survey_design from what svy posted
+string scalar _er_svyset()
+{
+	string rowvector st, su
+	string scalar fpc, v, vce
+	real scalar i, stages
+	real matrix x
+	stages = _e("stages")
+	if (missing(stages)) stages = 1
+	st = su = J(1, 0, "")
+	for (i = 1; i <= stages; i++) {
+		if (_eg("strata" + strofreal(i)) != "") st = st, _eg("strata" + strofreal(i))
+		if (_eg("su" + strofreal(i)) != "") su = su, _eg("su" + strofreal(i))
+	}
+	// the first stage's fpc; Stata reads values up to 1 as sampling rates, others as population sizes
+	fpc = "null"
+	v = _eg("fpc1")
+	if (v != "") {
+		x = st_data(., v)
+		fpc = _ej_o(("variable", "convention"), (_ej_s(v), _ej_s(max(x) <= 1 ? "sampling_fraction" : "population_size")))
+	}
+	vce = strlower(_eg("vce"))
+	return(_ej_o(("weights", "strata", "psu", "fpc", "variance", "single_psu", "subpopulation", "calibration", "stages"),
+		((_eg("wvar") != "" ? _ej_s(_eg("wvar")) : "null"), _ej_sa(st), _ej_sa(su), fpc,
+		 _ej_s(vce == "linearized" ? "linearization" : vce), _ej_s(_eg("singleunit")),
+		 (_eg("subpop") != "" ? _ej_s(_eg("subpop")) : "null"),
+		 (_eg("poststrata") != "" ? _ej_o(("poststrata", "postweight"), (_ej_s(_eg("poststrata")), _ej_s(_eg("postweight")))) : "null"),
+		 _ej_n(stages))))
+}
+
+// specification.resampling for the bootstrap prefix (and vce(bootstrap))
+string scalar _er_bsspec()
+{
+	string rowvector cl, st
+	string scalar seed
+	real scalar reps
+	reps = _e("N_reps") + (missing(_e("N_misreps")) ? 0 : _e("N_misreps"))
+	// the seed as given in seed(); Stata keeps only the state it left (e(rngstate))
+	seed = "null"
+	if (regexm(_eg("cmdline"), "seed\(([^)]*)\)")) {
+		seed = strtrim(regexs(1))
+		seed = missing(strtoreal(seed)) ? _ej_s(seed) : _ej_n(strtoreal(seed))
+	}
+	cl = tokens(_eg("cluster"))
+	st = tokens(_eg("strata"))
+	return(_ej_o(("method", "reps", "seed", "cluster", "strata", "ci_method", "statistic", "mse"),
+		(_ej_s(length(cl) ? "cluster_bootstrap" : "pairs_bootstrap"), _ej_nx(reps), seed,
+		 (length(cl) ? _ej_sa(cl) : ""), (length(st) ? _ej_sa(st) : ""), _ej_s("normal"), _ej_s("coefficient"),
+		 _ej_b(_eg("mse") != ""))))
+}
+
+// stcox: estat phtest, detail (scaled Schoenfeld residuals against analysis time)
+void _er_phtest(struct ertests scalar T, string rowvector cn, real scalar lv)
+{
+	real matrix M
+	string rowvector rn
+	string scalar s, opt
+	real scalar i
+	s = lv < 4 ? "" : _ej_o(("name", "version", "call"), (_ej_s("stata"), _ej_s(strofreal(c("stata_version"))), _ej_s("estat phtest, detail")))
+	if (_stata("quietly estat phtest, detail", 1)) return
+	opt = _ej_o("transform", _ej_s("identity"))
+	_tae(T, "proportional_hazards", "schoenfeld", _sc("r(chi2)"), "chi2", _sc("r(df)"), ., _sc("r(p)"), "postestimation",
+		"", "global test, against analysis time", s, "options", opt)
+	M = st_matrix("r(phtest)")
+	if (!rows(M)) return
+	rn = st_matrixrowstripe("r(phtest)")[., 2]'
+	for (i = 1; i <= rows(M); i++) {
+		_tae(T, "proportional_hazards", "schoenfeld", M[i, 2], "chi2", M[i, 3], ., M[i, 4], "postestimation",
+			"", "against analysis time", s, ("terms", "options", "rho"), (_ej_sa(rn[i]), opt, _ej_nx(M[i, 1])))
 	}
 }
 

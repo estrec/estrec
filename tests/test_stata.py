@@ -1,12 +1,14 @@
 """estrec for Stata (stata/estrec.ado): every supported command writes a valid record.
 
-Each command runs on Stata's auto data (plus a count and a panel id). The records must
-validate with no warnings at every disclosure level, claim the profiles listed below, and
+Each command runs on data that ship with Stata: auto (plus a count and a panel id), nlsw88
+(clogit, mixed, melogit, svy), cancer (stcox, streg) and auto under mi (mi estimate). The
+records must validate with no warnings at every disclosure level (bar the KNOWN_WARNINGS,
+fields Stata doesn't report that a profile expects), claim the profiles listed below, and
 reproduce Stata's own results table (r(table)) to rounding. reghdfe records must equal the
 worked converter's (converters/reghdfe) apart from the writer's name and the formula text.
 
-Needs Stata (on PATH, or $ESTREC_STATA). Commands from SSC (reghdfe, ivreg2, ivreghdfe)
-are skipped when they aren't installed.
+Needs Stata (on PATH, or $ESTREC_STATA). Commands from SSC (reghdfe, ivreg2, ivreghdfe,
+ppmlhdfe) are skipped when they aren't installed.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ import csv
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -30,8 +33,43 @@ INF = "inference/0.1"
 FE = "linear-fe/0.1"
 IV = "iv/0.1"
 GLM = "glm/0.1"
+PPML = "ppmlhdfe/0.1"
+CLOGIT = "conditional-logit/0.1"
+SURV = "survival/0.1"
+MIXED = "mixed/0.1"
+SURVEY = "survey/0.1"
+RES = "resampling/0.1"
+MI = "mi/0.1"
 
-# name: (command, profiles at level 4, needs)
+SETUPS = {
+    "auto": """
+sysuse auto, clear
+generate cnt = round(price/1000)
+generate id = mod(_n, 15) + 1
+generate t = ceil(_n/15)
+xtset id t
+""",
+    "nlsw": """
+sysuse nlsw88, clear
+egen grp = group(industry)
+generate psu = mod(idcode, 40)
+generate fpc = 0.1
+svyset psu [pw=hours], strata(south) fpc(fpc)
+""",
+    "cancer": """
+sysuse cancer, clear
+stset studytime, failure(died)
+""",
+    "mi": """
+sysuse auto, clear
+mi set mlong
+mi register imputed rep78
+mi impute regress rep78 = price mpg weight, add(5) rseed(12345)
+""",
+}
+SETUP = SETUPS["auto"]
+
+# name: (command, profiles at level 4, needs[, setup[, estrec write options]])
 CASES = {
     "regress_crv": ("regress price mpg weight i.rep78, vce(cluster id)", [INF], None),
     "regress_hc3_aw": ("regress price mpg weight [aw=turn], vce(hc3)", [INF], None),
@@ -66,21 +104,66 @@ CASES = {
     ),
     "glm_irls": ("glm foreign mpg weight, family(binomial) link(logit) irls", [INF], None),
     "tobit": ("tobit price mpg, ll(3500)", None, None),
+    # Tier 2
+    "ppmlhdfe": ("ppmlhdfe cnt mpg weight, absorb(rep78) vce(cluster id)", [INF, GLM, PPML], "ppmlhdfe"),
+    "bootstrap_regress": ("bootstrap, reps(50) seed(1): regress price mpg weight", [INF, RES], None),
+    "bootstrap_logit": ("logit foreign mpg weight, vce(bootstrap, reps(30) seed(3))", [INF, GLM, RES], None),
+    "clogit": ("clogit union wage hours, group(grp)", [INF, CLOGIT], None, "nlsw"),
+    "clogit_robust": ("clogit union wage hours, group(grp) vce(robust)", [INF, CLOGIT], None, "nlsw"),
+    "mixed_reml": (
+        "mixed wage hours ttl_exp || industry: ttl_exp, covariance(unstructured) reml",
+        [MIXED],
+        None,
+        "nlsw",
+    ),
+    "mixed_ml_nested": ("mixed wage ttl_exp || industry: || occupation:", [MIXED], None, "nlsw"),
+    "mixed_kr": ("mixed wage ttl_exp hours || industry:, reml dfmethod(kroger)", [MIXED], None, "nlsw"),
+    "melogit": ("melogit union wage || industry:", [MIXED], None, "nlsw"),
+    "svy_regress": ("svy: regress wage ttl_exp tenure", [INF, SURVEY], None, "nlsw"),
+    "svy_logit_subpop": ("svy, subpop(union): logit married wage", [INF, SURVEY], None, "nlsw"),
+    "stcox": ("stcox drug age", [INF, SURV], None, "cancer"),
+    "stcox_efron_robust": ("stcox drug age, efron vce(robust)", [INF, SURV], None, "cancer"),
+    "streg_weibull": ("streg drug age, distribution(weibull)", [INF, SURV], None, "cancer"),
+    "streg_lognormal": ("streg drug age, distribution(lognormal)", [INF, SURV], None, "cancer"),
+    "mi_regress": (
+        "mi estimate: regress price mpg rep78 weight",
+        [INF, MI],
+        None,
+        "mi",
+        "imputation(regress)",
+    ),
+    "mi_logit_post": ("mi estimate, post: logit foreign mpg rep78", [INF], None, "mi"),
 }
+
+# r(table) to compare with, when it isn't the command's own: mixed's table shows variances,
+# e(b) and the record hold log SDs (its estimation metric)
+REPLAY = {name: "mixed, estmetric" for name in CASES if name.startswith("mixed")}
+
+# Fields a claimed profile expects that Stata doesn't report: warnings until the profiles say
+# "expected when the tool reports it" (proposed to Ted, 2026-11-07)
+KNOWN_WARNINGS = {
+    "metrics.n_groups: [conditional-logit/0.1] expected, missing",
+    "structures.numerics.singular: [mixed/0.1] expected, missing",
+}
+
+# Tests estrec writes that Stata's table doesn't show: nbreg's /lnalpha keeps the z test of
+# Tier 1, because inference/0.1 wants a p-value on every row (an exemption for ancillary and
+# variance-component rows is proposed to Ted, 2026-11-07)
+KNOWN_COMPUTED = {("nbreg", "/lnalpha")}
 
 # Stata's ML commands (not glm)
 ML = {"logit", "logistic", "probit", "poisson", "poisson_fw", "nbreg"}
 # z tests: no e(df_r), so no df_residual and a null df_t (inference/0.1)
 Z_TESTS = ML | {"xtreg_re", "ivregress_2sls", "ivregress_gmm", "ivreg2_robust", "ivreg2_endog"}
+Z_TESTS |= {"ppmlhdfe", "bootstrap_regress", "bootstrap_logit", "clogit", "clogit_robust", "stcox"}
+Z_TESTS |= {"stcox_efron_robust", "streg_weibull", "streg_lognormal", "mixed_reml", "melogit"}
 
-SETUP = """
-set linesize 200
-sysuse auto, clear
-generate cnt = round(price/1000)
-generate id = mod(_n, 15) + 1
-generate t = ceil(_n/15)
-xtset id t
-"""
+
+def _spec(name: str) -> tuple:
+    cmd, profiles, needs, *rest = CASES[name]
+    setup = rest[0] if rest else "auto"
+    opts = rest[1] if len(rest) > 1 else ""
+    return cmd, profiles, needs, setup, opts
 
 
 def _stata() -> str | None:
@@ -113,30 +196,43 @@ def stata() -> str:
 def installed(stata, tmp_path_factory) -> set:
     out = tmp_path_factory.mktemp("probe")
     log = _run(
-        stata, out, "foreach p in reghdfe ivreg2 ivreghdfe {\ncapture which `p'\nif !_rc di \"HAVE `p'\"\n}"
+        stata,
+        out,
+        "foreach p in reghdfe ivreg2 ivreghdfe ppmlhdfe {\ncapture which `p'\nif !_rc di \"HAVE `p'\"\n}",
     )
     return {line.split()[1] for line in log.splitlines() if line.startswith("HAVE ")}
 
 
 @pytest.fixture(scope="module")
 def written(stata, installed, tmp_path_factory) -> Path:
-    """Every case at levels 1-5, plus r(table) as CSV."""
+    """Every case at levels 1-5, plus r(table) as CSV (b, se, statistic, p, ll, ul, eform)."""
     out = tmp_path_factory.mktemp("estrec")
-    lines = [SETUP]
-    for name, (cmd, _, needs) in CASES.items():
+    lines = ["set linesize 200"]
+    current = None
+    for name in CASES:
+        cmd, _, needs, setup, opts = _spec(name)
         if needs and needs not in installed:
             continue
+        if setup != current:
+            lines.append(SETUPS[setup])
+            current = setup
+        lines.append(f"quietly {cmd}")
+        for csvname, replay in ((name, ""), (f"{name}_replay", REPLAY.get(name))):
+            if replay is None:
+                continue
+            lines += [
+                f"quietly {replay}" if replay else "",
+                "capture matrix T = r(table)",
+                "if _rc matrix T = J(9, 0, .)",
+                (
+                    f'mata: _T = st_matrix("T"); _f = fopen("{csvname}.csv", "w"); '
+                    "for (_j = 1; _j <= cols(_T) & rows(_T) >= 9; _j++) "
+                    'fput(_f, invtokens(strofreal(_T[(1, 2, 3, 4, 5, 6, 9), _j]\', "%24.17g"), ",")); fclose(_f)'
+                ),
+            ]
         lines += [
-            f"quietly {cmd}",
-            "capture matrix T = r(table)",
-            "if _rc matrix T = J(6, 0, .)",
-            (
-                f'mata: _T = st_matrix("T"); _f = fopen("{name}.csv", "w"); '
-                "for (_j = 1; _j <= cols(_T) & rows(_T) >= 6; _j++) "
-                'fput(_f, invtokens(strofreal(_T[(1, 2, 3, 4, 5, 6), _j]\', "%24.17g"), ",")); fclose(_f)'
-            ),
+            f'estrec write using "{name}_l{n}.estrec.json", replace level({n}) {opts}' for n in range(1, 6)
         ]
-        lines += [f'estrec write using "{name}_l{n}.estrec.json", replace level({n})' for n in range(1, 6)]
     log = _run(stata, out, "\n".join(lines))
     assert "\nr(" not in log, log[-3000:]
     return out
@@ -149,6 +245,7 @@ def _case(written: Path, installed: set, name: str, level: int = 4) -> dict:
     path = written / f"{name}_l{level}.estrec.json"
     rec = ef.read(path)
     issues = [i for i in ef.validate(rec, base_dir=path.parent) if i.level != "info"]
+    issues = [i for i in issues if not (i.level == "warning" and any(k in str(i) for k in KNOWN_WARNINGS))]
     assert not issues, f"{path.name}: {issues}"
     assert rec["meta"]["disclosure"] == {"level": level}
     assert ef.record_level(rec) <= level
@@ -169,28 +266,36 @@ def test_valid_at_every_level(written, installed, name, level):
 @pytest.mark.parametrize("name", list(CASES))
 def test_matches_stata_results_table(written, installed, name):
     rec = _case(written, installed, name)
-    with open(written / f"{name}.csv") as f:
-        rows = [[None if x.startswith(".") else float(x) for x in r] for r in csv.reader(f)]
+
+    def table(csvname):
+        with open(written / f"{csvname}.csv") as f:
+            # Stata missing is . or .a-.z; a number below 1 is written without its 0 (.448)
+            return [[None if re.fullmatch(r"\.[a-z]?", x) else float(x) for x in r] for r in csv.reader(f)]
+
+    rows = table(name)
     if not rows:
         pytest.skip(f"{name} leaves no r(table)")
+    # mixed's own table shows variances; its variance components are compared in e(b)'s metric
+    random = table(f"{name}_replay") if name in REPLAY else rows
     keys = ("estimate", "std_error", "statistic", "p_value", "conf_low", "conf_high")
-    for p, row in zip(rec["parameters"], rows):
-        if "estimate" not in p or "p_value" not in p:
+    # r(table) may go on past e(b) with derived parameters (nbreg's alpha, streg's p and 1/p)
+    assert len(rows) >= len(rec["parameters"])
+    for j, p in enumerate(rec["parameters"]):
+        *row, eform = random[j] if p.get("component") == "random" else rows[j]
+        if "estimate" not in p:
             continue
-        got = [p[k] for k in keys]
-        if name == "logistic":  # Stata shows odds ratios; the record keeps log-odds (spec 4.4)
+        got = [p.get(k) for k in keys]
+        if eform == 1:  # Stata shows odds or hazard ratios; the record keeps e(b)'s scale (spec 4.4)
             b = math.exp(p["estimate"])
-            got = [
-                b,
-                b * p["std_error"],
-                p["statistic"],
-                p["p_value"],
-                math.exp(p["conf_low"]),
-                math.exp(p["conf_high"]),
-            ]
-        for g, want in zip(got, row):
-            if want is not None:
-                assert g == pytest.approx(want, rel=1e-10, abs=1e-12), (p["term"], g, want)
+            got = [b, b * p["std_error"], p.get("statistic"), p.get("p_value")]
+            got += [math.exp(p[k]) if k in p else None for k in ("conf_low", "conf_high")]
+        for k, g, want in zip(keys, got, row):
+            if want is None:  # Stata shows none, so the record has none
+                assert g is None or (name, p["term"]) in KNOWN_COMPUTED, (p["term"], k, g)
+            elif g is not None:
+                assert g == pytest.approx(want, rel=1e-10, abs=1e-12), (p["term"], k, g, want)
+            else:  # only an unmapped command's ancillary rows go untested
+                assert name == "tobit" and p["term"].startswith("/"), (p["term"], k, want)
 
 
 def _tests(rec: dict) -> dict:
@@ -353,7 +458,7 @@ def test_reghdfe_matches_the_worked_converter(stata, installed, tmp_path):
     [
         ("regress price mpg", 'estrec write using "x.json", level(6)', 198),
         ("ereturn clear", 'estrec write using "x.json"', 301),
-        ("svyset _n\nsvy: regress price mpg", 'estrec write using "x.json"', 198),
+        ("jackknife: regress price mpg", 'estrec write using "x.json"', 198),
         ('regress price mpg\nestrec write using "x.json"', 'estrec write using "x.json"', 602),
         ("", "estrec frobnicate", 199),
     ],
@@ -361,3 +466,180 @@ def test_reghdfe_matches_the_worked_converter(stata, installed, tmp_path):
 def test_errors(stata, tmp_path, setup, call, rc):
     log = _run(stata, tmp_path, f'sysuse auto, clear\n{setup}\ncapture noisily {call}\ndisplay "rc=" _rc')
     assert f"rc={rc}" in log, log[-1500:]
+
+
+# ---- Tier 2 ----------------------------------------------------------------------------
+
+
+def test_ppmlhdfe(written, installed):
+    rec = _case(written, installed, "ppmlhdfe")
+    opts = rec["specification"]["options"]
+    assert opts["separation"] and "ir" not in opts["separation"]
+    assert isinstance(opts["drop_singletons"], bool)
+    m = rec["metrics"]
+    assert {"n_separated", "n_singletons", "deviance", "log_lik_fe_only"} <= set(m)
+    assert "fixef_iterations" in rec["structures"]["numerics"]
+    vc = rec["structures"]["vcov"][0]
+    assert vc["type"] == "CRV1" and vc["ssc"] == {"convention": "ppmlhdfe", "formula": "G/(G-1)"}
+    assert [fe["name"] for fe in rec["structures"]["fixed_effects"]] == ["rep78"]
+
+
+def test_clogit(written, installed):
+    rec = _case(written, installed, "clogit")
+    assert rec["specification"]["groups"] == ["grp"]
+    assert rec["specification"]["options"] == {
+        "likelihood": "exact",
+        "drop_uninformative": True,
+        "optimizer": "nr",
+    }
+    m = rec["metrics"]
+    assert m["n_dropped_uninformative"] == 2 and m["n_groups_dropped"] == 1 and "n_groups" not in m
+    assert rec["structures"]["groups"] == {"kind": "object", "multiple_positive": True}
+    assert _tests(rec)[("model", "likelihood_ratio", "chi2")]["df"] == 2
+    # vce(robust) is clogit's cluster-robust vcov on the groups, as vce(cluster grp) gives it
+    vc = _case(written, installed, "clogit_robust")["structures"]["vcov"]
+    assert vc[0]["type"] == "CRV1" and vc[0]["tool_type"] == "robust" and vc[0]["cluster"] == ["grp"]
+    assert "n_clusters" not in vc[0]  # Stata posts no e(N_clust) for it
+    assert vc[1]["tool_type"] == "V_modelbased" and not vc[1]["default"]
+
+
+def test_survival(written, installed):
+    cox = _case(written, installed, "stcox")
+    assert cox["meta"]["estimator"] == {"family": "survival", "method": "cox"}
+    assert cox["specification"]["survival"] == {
+        "time": "studytime",
+        "start": None,
+        "event": "died",
+        "id": None,
+    }
+    assert cox["specification"]["options"]["ties"] == "breslow"
+    assert cox["metrics"]["n_events"] == 31 and cox["metrics"]["n_subjects"] == 48
+    assert cox["provenance"]["software"][0]["name"] == "stcox"
+    ph = [t for t in cox["tests"] if t["category"] == "proportional_hazards"]
+    assert [t.get("terms") for t in ph] == [None, ["drug"], ["age"]]
+    assert all(t["options"] == {"transform": "identity"} and t["origin"] == "postestimation" for t in ph)
+    efron = _case(written, installed, "stcox_efron_robust")
+    assert efron["specification"]["options"]["ties"] == "efron"
+    vc = efron["structures"]["vcov"][0]
+    assert vc["type"] == "HC0" and vc["ssc"]["formula"] == "N/(N-1)"  # R coxph robust x N/(N-1), checked
+    wb = _case(written, installed, "streg_weibull")
+    assert wb["meta"]["estimator"] == {
+        "family": "survival",
+        "method": "parametric",
+        "distribution": "weibull",
+        "metric": "ph",
+    }
+    assert wb["metrics"]["shape"]["value"] == pytest.approx(1.7577486751, rel=1e-9)
+    assert wb["parameters"][-1]["term"] == "/ln_p" and wb["parameters"][-1]["component"] == "auxiliary"
+    ln = _case(written, installed, "streg_lognormal")
+    assert (
+        ln["meta"]["estimator"]["metric"] == "aft" and ln["meta"]["estimator"]["distribution"] == "lognormal"
+    )
+
+
+def test_mixed(written, installed):
+    rec = _case(written, installed, "mixed_reml")
+    assert rec["meta"]["estimator"] == {"family": "mixed", "method": "reml"}
+    assert rec["specification"]["random_effects"] == [
+        {
+            "group": "industry",
+            "terms": ["ttl_exp", "(Intercept)"],
+            "covariance": "unstructured",
+            "text": "|| industry: ttl_exp",
+        }
+    ]
+    re = {p["term"]: p for p in rec["parameters"] if p.get("component") == "random"}
+    assert re["lns1_1_1:_cons"]["vc"] == {"group": "industry", "terms": ["ttl_exp"], "type": "log_sd"}
+    assert re["atr1_1_1_2:_cons"]["vc"]["terms"] == ["ttl_exp", "(Intercept)"]
+    assert re["lnsig_e:_cons"]["vc"]["group"] == "Residual"
+    # Stata reports no test of a log SD, so the record has none
+    assert "p_value" not in re["lns1_1_1:_cons"] and "p_value" in re["atr1_1_1_2:_cons"]
+    assert rec["structures"]["random_effects"][0]["levels"] == 12
+    assert "REML" in rec["metrics"]["log_lik"]["definition"]
+    assert _tests(rec)[("random_effects", "likelihood_ratio", "chi2")]["df"] == 3
+    nested = _case(written, installed, "mixed_ml_nested")
+    assert nested["meta"]["estimator"]["method"] == "ml"
+    spec = nested["specification"]["random_effects"]
+    assert [(r["group"], r.get("nested_in")) for r in spec] == [
+        ("industry", None),
+        ("occupation", "industry"),
+    ]
+    assert [r["group"] for r in nested["structures"]["random_effects"]] == ["industry", "occupation"]
+    kr = _case(written, installed, "mixed_kr")
+    assert kr["specification"]["options"]["df_method"] == "kenward_roger"
+    fixed = [p for p in kr["parameters"] if "component" not in p]
+    assert all(p["df"] > 0 for p in fixed)
+
+
+def test_melogit(written, installed):
+    rec = _case(written, installed, "melogit")
+    assert (
+        rec["meta"]["estimator"]["method"] == "agq" and rec["specification"]["options"]["n_quadrature"] == 7
+    )
+    assert rec["meta"]["estimator"]["distribution"] == "binomial"
+    var = rec["parameters"][-1]
+    assert var["vc"] == {"group": "industry", "terms": ["(Intercept)"], "type": "var"}
+    assert "p_value" not in var and "conf_low" in var  # Stata's table: an interval, no test
+    lr = _tests(rec)[("random_effects", "likelihood_ratio", "chibar2")]
+    assert lr["df"] == 1
+    assert rec["provenance"]["software"][0]["name"] == "melogit"
+
+
+def test_svy(written, installed):
+    rec = _case(written, installed, "svy_regress")
+    d = rec["specification"]["survey_design"]
+    assert d["weights"] == "hours" and d["strata"] == ["south"] and d["psu"] == ["psu"]
+    assert d["fpc"] == {"variable": "fpc", "convention": "sampling_fraction"}
+    assert d["variance"] == "linearization" and d["single_psu"] == "missing" and d["subpopulation"] is None
+    vc = rec["structures"]["vcov"]
+    assert len(vc) == 1 and vc[0]["type"] == "linearized" and vc[0]["df_t"] == 78
+    assert rec["metrics"]["df_design"] == 78 and rec["metrics"]["n_psu"] == 80
+    f = _tests(rec)[("model", "wald", "F")]
+    assert (f["df1"], f["df2"]) == (2, 77)  # svy's adjusted F(df_m, df_r - df_m + 1)
+    sub = _case(written, installed, "svy_logit_subpop")
+    assert sub["specification"]["survey_design"]["subpopulation"] == "union"
+    assert sub["metrics"]["n_subpop"]["value"] == 461
+
+
+def test_bootstrap(written, installed):
+    rec = _case(written, installed, "bootstrap_regress")
+    assert rec["specification"]["resampling"] == {
+        "method": "pairs_bootstrap",
+        "reps": 50,
+        "seed": 1,
+        "ci_method": "normal",
+        "statistic": "coefficient",
+        "mse": False,
+    }
+    default, model = rec["structures"]["vcov"]
+    assert default["type"] == "bootstrap" and default["default"] and default["df_t"] is None
+    assert model["type"] == "iid" and not model["default"]  # e(V_modelbased), regress's own
+    for p in rec["parameters"]:
+        r = p["resampling"]
+        assert r["std_error"] == pytest.approx(p["std_error"], rel=1e-12)
+        assert set(r["intervals"]) == {"normal", "percentile", "bias_corrected"}
+        assert r["reps"] == 50
+    assert rec["metrics"]["n_reps_failed"] == 0
+    assert _case(written, installed, "bootstrap_logit")["specification"]["resampling"]["reps"] == 30
+
+
+def test_mi(written, installed):
+    rec = _case(written, installed, "mi_regress")
+    assert rec["specification"]["imputation"] == {
+        "m": 5,
+        "method": "regress",
+        "imputed": ["rep78"],
+        "style": "mlong",
+    }
+    assert rec["specification"]["options"]["df_method"] == "barnard_rubin"
+    assert rec["specification"]["options"]["dfcom"] == 70
+    vc = rec["structures"]["vcov"][0]
+    assert vc["type"] == "iid" and vc["df_t"] is None and "Rubin" not in vc["ssc"]["convention"]
+    for p in rec["parameters"]:
+        assert {"ubar", "b", "riv", "fmi", "df", "relative_efficiency"} <= set(p["mi"])
+    assert set(rec["metrics"]) == {"nobs", "conf_level"}
+    assert "sample" not in rec["specification"] or set(rec["specification"]["sample"]) == {"restriction"}
+    post = _case(written, installed, "mi_logit_post")
+    assert post["specification"]["options"]["df_method"] == "rubin_1987"
+    assert [m["code"] for m in post["meta"]["messages"]] == ["profile_not_claimed"]
+    assert post["structures"]["vcov"][0]["type"] == "oim"

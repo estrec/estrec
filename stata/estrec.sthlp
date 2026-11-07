@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 0.1.0  06nov2026}{...}
+{* *! version 0.1.0  07nov2026}{...}
 {title:Title}
 
 {phang}
@@ -19,7 +19,8 @@
 {synopt:{opt noident:ifying}}leave out user, host and the data file's path (written only at level 5){p_end}
 {synopt:{opt nodatasig:nature}}skip the {helpb datasignature} checksum of the data in memory{p_end}
 {synopt:{opt call(string)}}the command as you want it recorded; default {cmd:e(cmdline)}{p_end}
-{synopt:{opt noestat}}don't run {cmd:estat}: {cmd:estat firststage}, {cmd:estat overid} and {cmd:estat endogenous} after {cmd:ivregress}, {cmd:estat gof} after {cmd:poisson}, {cmd:logit}, {cmd:logistic} and {cmd:probit}{p_end}
+{synopt:{opt noestat}}don't run {cmd:estat}: {cmd:estat firststage}, {cmd:estat overid} and {cmd:estat endogenous} after {cmd:ivregress}, {cmd:estat gof} after {cmd:poisson}, {cmd:logit}, {cmd:logistic} and {cmd:probit}, {cmd:estat phtest} after {cmd:stcox}{p_end}
+{synopt:{opt imp:utation(string)}}after {cmd:mi estimate}: how the data were imputed ({cmd:chained}, {cmd:mvn}, {cmd:monotone}, {cmd:regress}, ...), which Stata doesn't keep{p_end}
 {synoptline}
 
 
@@ -44,16 +45,24 @@ The record claims the profiles of the format that fit the command:
 {p2col:{cmd:ivreghdfe}}inference, iv, linear-fe{p_end}
 {p2col:{cmd:logit}, {cmd:logistic}, {cmd:probit}, {cmd:poisson}, {cmd:nbreg}}inference, glm{p_end}
 {p2col:{cmd:glm}}inference, glm ({cmd:glm, irls}: inference only){p_end}
+{p2col:{cmd:ppmlhdfe}}inference, glm, ppmlhdfe{p_end}
+{p2col:{cmd:clogit}}inference, conditional-logit{p_end}
+{p2col:{cmd:stcox}, {cmd:streg}}inference, survival{p_end}
+{p2col:{cmd:mixed}, {cmd:melogit}, {cmd:mepoisson}, ...}mixed{p_end}
 {p2colreset}{...}
 
 {pstd}
-Any other e-class command that posts {cmd:e(b)} and {cmd:e(V)} gets a record with the core
-fields only. Results from prefixes ({cmd:svy:}, {cmd:mi estimate:}, {cmd:bootstrap:}, ...)
-aren't supported yet.
+Prefixes: after {cmd:svy:} the record claims inference and survey; after {cmd:bootstrap:} (or
+{cmd:vce(bootstrap)}) it adds resampling to the command's profiles; after {cmd:mi estimate:} it
+claims inference and, with {opt imputation()}, mi. Other prefixes ({cmd:jackknife:},
+{cmd:permute:}, ...) aren't supported yet. Any other e-class command that posts {cmd:e(b)} and
+{cmd:e(V)} gets a record with the core fields only.
 
 {pstd}
 Estimates are always on the estimation scale, as in {cmd:e(b)}: log-odds after
-{cmd:logistic}, not the odds ratios it displays.
+{cmd:logistic} and log hazards after {cmd:stcox}, not the ratios they display; log standard
+deviations after {cmd:mixed}, as in {cmd:mixed, estmetric}. Tests and intervals are the ones
+Stata's results table shows: a variance component Stata doesn't test gets none.
 
 
 {title:Disclosure levels}

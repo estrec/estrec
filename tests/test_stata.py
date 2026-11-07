@@ -2,8 +2,8 @@
 
 Each command runs on data that ship with Stata: auto (plus a count and a panel id), nlsw88
 (clogit, mixed, melogit, svy), cancer (stcox, streg) and auto under mi (mi estimate). The
-records must validate with no warnings at every disclosure level (bar the KNOWN_WARNINGS,
-fields Stata doesn't report that a profile expects), claim the profiles listed below, and
+records must validate with no warnings at every disclosure level (bar KNOWN_WARNINGS: an
+expected field a case leaves out), claim the profiles listed below, and
 reproduce Stata's own results table (r(table)) to rounding. reghdfe records must equal the
 worked converter's (converters/reghdfe) apart from the writer's name and the formula text.
 
@@ -112,13 +112,13 @@ CASES = {
     "clogit_robust": ("clogit union wage hours, group(grp) vce(robust)", [INF, CLOGIT], None, "nlsw"),
     "mixed_reml": (
         "mixed wage hours ttl_exp || industry: ttl_exp, covariance(unstructured) reml",
-        [MIXED],
+        [INF, MIXED],
         None,
         "nlsw",
     ),
-    "mixed_ml_nested": ("mixed wage ttl_exp || industry: || occupation:", [MIXED], None, "nlsw"),
-    "mixed_kr": ("mixed wage ttl_exp hours || industry:, reml dfmethod(kroger)", [MIXED], None, "nlsw"),
-    "melogit": ("melogit union wage || industry:", [MIXED], None, "nlsw"),
+    "mixed_ml_nested": ("mixed wage ttl_exp || industry: || occupation:", [INF, MIXED], None, "nlsw"),
+    "mixed_kr": ("mixed wage ttl_exp hours || industry:, reml dfmethod(kroger)", [INF, MIXED], None, "nlsw"),
+    "melogit": ("melogit union wage || industry:", [INF, MIXED], None, "nlsw"),
     "svy_regress": ("svy: regress wage ttl_exp tenure", [INF, SURVEY], None, "nlsw"),
     "svy_logit_subpop": ("svy, subpop(union): logit married wage", [INF, SURVEY], None, "nlsw"),
     "stcox": ("stcox drug age", [INF, SURV], None, "cancer"),
@@ -132,24 +132,16 @@ CASES = {
         "mi",
         "imputation(regress)",
     ),
-    "mi_logit_post": ("mi estimate, post: logit foreign mpg rep78", [INF], None, "mi"),
+    "mi_logit_post": ("mi estimate, post: logit foreign mpg rep78", [INF, MI], None, "mi"),
 }
 
 # r(table) to compare with, when it isn't the command's own: mixed's table shows variances,
 # e(b) and the record hold log SDs (its estimation metric)
 REPLAY = {name: "mixed, estmetric" for name in CASES if name.startswith("mixed")}
 
-# Fields a claimed profile expects that Stata doesn't report: warnings until the profiles say
-# "expected when the tool reports it" (proposed to Ted, 2026-11-07)
-KNOWN_WARNINGS = {
-    "metrics.n_groups: [conditional-logit/0.1] expected, missing",
-    "structures.numerics.singular: [mixed/0.1] expected, missing",
-}
-
-# Tests estrec writes that Stata's table doesn't show: nbreg's /lnalpha keeps the z test of
-# Tier 1, because inference/0.1 wants a p-value on every row (an exemption for ancillary and
-# variance-component rows is proposed to Ted, 2026-11-07)
-KNOWN_COMPUTED = {("nbreg", "/lnalpha")}
+# Fields a claimed profile expects that a case doesn't give: Stata's mi estimate doesn't keep
+# how the data were imputed, and mi_logit_post leaves out estrec's imputation()
+KNOWN_WARNINGS = {"mi_logit_post": "specification.imputation.method: [mi/0.1] expected, missing"}
 
 # Stata's ML commands (not glm)
 ML = {"logit", "logistic", "probit", "poisson", "poisson_fw", "nbreg"}
@@ -245,7 +237,9 @@ def _case(written: Path, installed: set, name: str, level: int = 4) -> dict:
     path = written / f"{name}_l{level}.estrec.json"
     rec = ef.read(path)
     issues = [i for i in ef.validate(rec, base_dir=path.parent) if i.level != "info"]
-    issues = [i for i in issues if not (i.level == "warning" and any(k in str(i) for k in KNOWN_WARNINGS))]
+    if name in KNOWN_WARNINGS and level >= 3:
+        assert any(KNOWN_WARNINGS[name] in str(i) for i in issues), issues
+        issues = [i for i in issues if KNOWN_WARNINGS[name] not in str(i)]
     assert not issues, f"{path.name}: {issues}"
     assert rec["meta"]["disclosure"] == {"level": level}
     assert ef.record_level(rec) <= level
@@ -291,7 +285,7 @@ def test_matches_stata_results_table(written, installed, name):
             got += [math.exp(p[k]) if k in p else None for k in ("conf_low", "conf_high")]
         for k, g, want in zip(keys, got, row):
             if want is None:  # Stata shows none, so the record has none
-                assert g is None or (name, p["term"]) in KNOWN_COMPUTED, (p["term"], k, g)
+                assert g is None, (p["term"], k, g)
             elif g is not None:
                 assert g == pytest.approx(want, rel=1e-10, abs=1e-12), (p["term"], k, g, want)
             else:  # only an unmapped command's ancillary rows go untested
@@ -365,6 +359,7 @@ def test_glm_family(written, installed):
     assert nb["meta"]["estimator"]["distribution"] == "negative_binomial"
     aux = [p for p in nb["parameters"] if p["term"] == "/lnalpha"]
     assert aux and aux[0]["component"] == "auxiliary"
+    assert "p_value" not in aux[0] and "conf_low" in aux[0]  # as Stata's table: an interval, no test
     po = _case(written, installed, "poisson")
     assert po["specification"]["offset"] == {"variable": "length", "exposure": True}
     assert po["structures"]["numerics"]["converged"] is True
@@ -637,9 +632,10 @@ def test_mi(written, installed):
     assert vc["type"] == "iid" and vc["df_t"] is None and "Rubin" not in vc["ssc"]["convention"]
     for p in rec["parameters"]:
         assert {"ubar", "b", "riv", "fmi", "df", "relative_efficiency"} <= set(p["mi"])
+        assert p["df"] == p["mi"]["df"]  # the row's t test (inference/0.1 parameters[*].df)
     assert set(rec["metrics"]) == {"nobs", "conf_level"}
     assert "sample" not in rec["specification"] or set(rec["specification"]["sample"]) == {"restriction"}
     post = _case(written, installed, "mi_logit_post")
     assert post["specification"]["options"]["df_method"] == "rubin_1987"
-    assert [m["code"] for m in post["meta"]["messages"]] == ["profile_not_claimed"]
+    assert "method" not in post["specification"]["imputation"] and "messages" not in post["meta"]
     assert post["structures"]["vcov"][0]["type"] == "oim"

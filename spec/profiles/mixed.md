@@ -22,7 +22,8 @@ Bayesian fits were not surveyed.
 - A default vcov of the fixed effects with `type`.
 - `structures.numerics.converged`.
 
-`metrics.log_lik` and `structures.numerics.singular` are **expected**. GLMMs add
+`metrics.log_lik` is **expected**, and `structures.numerics.singular` when the tool reports it
+(Stata doesn't; Ted, 2026-11-07). GLMMs add
 `meta.estimator.distribution` and `link` as in [`glm/0.1`](glm.md).
 
 ## The defaults that make tools disagree

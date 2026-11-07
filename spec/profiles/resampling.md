@@ -10,8 +10,14 @@ called by pyfixest); R ri2 0.5.0 (cran/ri2; `conduct_ri()` defaults to 1,000 sim
 Stata's `bootstrap` prefix from its help file; `jackknife` and `ritest` from documentation.
 
 The record also claims the model's own profile. The core columns (`std_error`, `p_value`,
-`conf_low`, `conf_high`) keep the analytic results; resampled ones go in each row's
-`resampling` object, so both can be compared.
+`conf_low`, `conf_high`) are computed from the default vcov, as everywhere (core 4.4). When the
+resampling is added after the fit (boottest, fwildclusterboot), that is the analytic vcov and
+the resampled results go in each row's `resampling` object, so both can be compared. When the
+estimator's own variance is resampled (Stata's `bootstrap` prefix and `vce(bootstrap)`), the
+tool reports the resampled results, so the default vcov is the resampling one, the analytic
+vcov (Stata's `e(V_modelbased)`) is kept as a non-default vcov, and `resampling` holds the
+resampling details: `mean`, `bias`, `reps` and every interval the tool reports in
+`intervals` (`normal`, `percentile`, `bias_corrected`, `bca`) (Ted, 2026-11-07).
 
 ## Requirements
 
@@ -31,6 +37,7 @@ The record also claims the model's own profile. The core columns (`std_error`, `
 | `p_value_type` | `ptype()` (symmetric) | `p_val_type` (two-tailed) | two-sided | — |
 | `ci_method` | test inversion | test inversion | | normal (`estat bootstrap`: percentile, bc, bca) |
 | `small_sample` | `small` / `nosmall` | `ssc` | `k_adj`, `G_adj` | |
+| `mse` | | | | `mse` (around the full-sample estimate) |
 
 Per row: `statistic`, `p_value`, `conf_low`, `conf_high`, `std_error` (when the method gives
 one) and `null_value`. A resampled p-value of 0 means no replication was as extreme; its

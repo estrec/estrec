@@ -16,11 +16,10 @@
 *   ppmlhdfe                        inference/0.1, glm/0.1, ppmlhdfe/0.1
 *   clogit                          inference/0.1, conditional-logit/0.1
 *   stcox, streg                    inference/0.1, survival/0.1
-*   mixed, me* (meglm)              mixed/0.1
+*   mixed, me* (meglm)              inference/0.1, mixed/0.1
 *
 * Prefixes: svy: claims inference/0.1 and survey/0.1; bootstrap: (and vce(bootstrap)) adds
-* resampling/0.1 to the command's profiles; mi estimate: claims inference/0.1 and, when
-* imputation() says how the data were imputed, mi/0.1.
+* resampling/0.1 to the command's profiles; mi estimate: claims inference/0.1 and mi/0.1.
 * Any other e-class command with e(b) and e(V) gets a core record with no profile claims.
 *
 * Options:
@@ -31,8 +30,8 @@
 *   call(string)     the command as written (default: e(cmdline))
 *   noestat          don't run estat (firststage/overid/endogenous after ivregress, gof after
 *                    poisson, logit, logistic, probit, phtest after stcox)
-*   imputation(str)  after mi estimate: how the data were imputed (chained, mvn, monotone, ...);
-*                    Stata doesn't keep it, so without it the record doesn't claim mi/0.1
+*   imputation(str)  after mi estimate: how the data were imputed (chained, mvn, monotone, ...),
+*                    which Stata doesn't keep (mi/0.1 expects it)
 *
 * The record has no core digest (meta.core_digest is optional): computing it needs RFC 8785
 * canonical JSON. Add it with the reference tool: `estrec digest --write FILE`.
@@ -655,12 +654,17 @@ void _er_write(string scalar fn, real scalar replace, real scalar lv)
 		else if (mixedk & rvc != "") {
 			// no table to read: estimate and standard error only
 		}
+		else if (cmd == "nbreg" & eq == "/") {
+			// nbreg shows an interval for /lnalpha but no test
+			rk = rk, ("conf_low", "conf_high")
+			rx = rx, (_ej_n(b[j] - crit * se), _ej_n(b[j] + crit * se))
+		}
 		else {
 			dfrow = cols(dfv) >= j ? dfv[j] : dft
 			crow = cols(dfv) >= j ? invttail(dfrow, (1 - level / 100) / 2) : crit
 			rk = rk, ("statistic", "p_value", "conf_low", "conf_high", "df")
 			rx = rx, (_ej_n(t), _ej_n(missing(dfrow) ? 2 * normal(-abs(t)) : 2 * ttail(dfrow, abs(t))),
-				_ej_n(b[j] - crow * se), _ej_n(b[j] + crow * se), ((kind == "mixed" & cols(dfv) >= j) ? _ej_nx(dfrow) : ""))
+				_ej_n(b[j] - crow * se), _ej_n(b[j] + crow * se), (cols(dfv) >= j ? _ej_nx(dfrow) : ""))
 		}
 		if (mi) {
 			rk = rk, "mi"
@@ -896,8 +900,7 @@ void _er_write(string scalar fn, real scalar replace, real scalar lv)
 
 	// ---- meta ----
 	// Model profiles describe a fit, not results pooled over imputations or a design-based fit;
-	// svy and mi results claim inference and their own profile. mixed and me* report no test
-	// for most variance components, so they don't claim inference
+	// svy and mi results claim inference and their own profile
 	_er_profiles(profiles, messages, kind, lv, linear, ml, iv, survk, mixedk, svy, bs, mi, conv_ok, mimethod)
 	if (kind == "generic") messages = messages, _ej_o(("level", "code", "source", "message"),
 		(_ej_s("info"), _ej_s("no_profile"), _ej_s("estrec"), _ej_s("estrec has no mapping for " + cmd + ": core fields only, no profiles claimed")))
@@ -1032,7 +1035,7 @@ void _er_profiles(string rowvector profiles, string rowvector messages, string s
 {
 	real scalar inf
 	profiles = J(1, 0, "")
-	inf = linear | ml | kind == "clogit" | survk
+	inf = linear | ml | kind == "clogit" | survk | mixedk
 	if (lv >= 2 & inf) profiles = profiles, "inference/0.1"
 	if (!svy & !mi) {
 		if (lv >= 3 & iv) profiles = profiles, "iv/0.1"
@@ -1045,9 +1048,7 @@ void _er_profiles(string rowvector profiles, string rowvector messages, string s
 	}
 	if (lv >= 3 & svy & inf) profiles = profiles, "survey/0.1"
 	if (lv >= 3 & bs & kind != "generic") profiles = profiles, "resampling/0.1"
-	if (lv >= 3 & mi & inf & mimethod != "") profiles = profiles, "mi/0.1"
-	if (lv >= 2 & mi & inf & mimethod == "") messages = messages, _ej_o(("level", "code", "source", "message"),
-		(_ej_s("info"), _ej_s("profile_not_claimed"), _ej_s("estrec"), _ej_s("mi/0.1 not claimed: Stata doesn't keep how the data were imputed; give it with estrec write's imputation() option")))
+	if (lv >= 3 & mi & inf) profiles = profiles, "mi/0.1"
 }
 
 // Metrics of the linear and GLM-type fits

@@ -3,7 +3,7 @@
   "$id": "https://estrec.org/schema/profiles/resampling-0.1.json",
   "title": "resampling/0.1",
   "x-license": "CC0-1.0",
-  "description": "Profile for inference by resampling: wild (cluster) bootstrap, pairs and cluster bootstrap, jackknife, permutation and randomization inference. Stata boottest, bootstrap/jackknife prefixes, ritest; R fwildclusterboot, ri2; Python wildboottest / pyfixest wildboottest (survey 2026-10-25, spec/profiles/resampling.md). Combines with the model's profile, whose analytic inference stays in the core columns. Requires specification.resampling with the method and replications (plus seed, weights and whether the null was imposed when they apply); and at least one row with a parameters[*].resampling object carrying the resampled p-value or interval.",
+  "description": "Profile for inference by resampling: wild (cluster) bootstrap, pairs and cluster bootstrap, jackknife, permutation and randomization inference. Stata boottest, bootstrap/jackknife prefixes, ritest; R fwildclusterboot, ri2; Python wildboottest / pyfixest wildboottest (survey 2026-10-25, spec/profiles/resampling.md). Combines with the model's profile. The core columns are computed from the default vcov, as everywhere: the analytic one when resampling is added after the fit (boottest), the resampling one when the estimator's own variance is resampled (Stata's bootstrap prefix), with the analytic vcov, when the tool keeps it, as a non-default vcov. Requires specification.resampling with the method and replications (plus seed, weights and whether the null was imposed when they apply); and at least one row with a parameters[*].resampling object carrying the resampled p-value or interval.",
   "x-extends": [],
   "x-deviations": [],
   "allOf": [
@@ -45,7 +45,8 @@
         "ci_method": {"type": "string", "x-vocabulary": ["test_inversion", "percentile", "normal", "bc", "bca"], "x-tools": {"boottest": "test inversion", "fwildclusterboot": "test inversion", "Stata bootstrap": "normal (estat bootstrap: percentile, bc, bca)"}},
         "statistic": {"description": "Bootstrapped statistic.", "type": "string", "x-vocabulary": ["t", "wald", "score", "coefficient"]},
         "small_sample": {"description": "Small-sample factor applied to the bootstrapped statistic (boottest small / fwildclusterboot ssc / wildboottest k_adj, G_adj).", "type": ["string", "object", "null"]},
-        "strata": {"description": "Resampling within strata, or permutation within blocks (ritest strata()).", "$ref": "../estrec-0.1.json#/$defs/strings"}
+        "strata": {"description": "Resampling within strata, or permutation within blocks (ritest strata()).", "$ref": "../estrec-0.1.json#/$defs/strings"},
+        "mse": {"description": "Variance around the full-sample estimate (true) or the replicates' mean (false).", "type": "boolean", "x-tools": {"Stata bootstrap": "mse option"}}
       }
     },
     "row": {
@@ -58,7 +59,11 @@
         "conf_low": {"$ref": "../estrec-0.1.json#/$defs/number_or_null", "x-tools": {"boottest": "r(CI)", "fwildclusterboot": "conf_int"}},
         "conf_high": {"$ref": "../estrec-0.1.json#/$defs/number_or_null"},
         "std_error": {"description": "Bootstrap or jackknife SE, when the method gives one.", "$ref": "../estrec-0.1.json#/$defs/number_or_null"},
-        "null_value": {"description": "Hypothesized value tested (default 0).", "type": ["number", "null"]}
+        "null_value": {"description": "Hypothesized value tested (default 0).", "type": ["number", "null"]},
+        "mean": {"description": "Mean of the replicates' estimates.", "$ref": "../estrec-0.1.json#/$defs/number_or_null", "x-tools": {"Stata bootstrap": "e(b_bs)"}},
+        "bias": {"description": "Mean of the replicates minus the full-sample estimate.", "$ref": "../estrec-0.1.json#/$defs/number_or_null", "x-tools": {"Stata bootstrap": "e(bias)"}},
+        "reps": {"description": "Replications with a value for this parameter.", "type": ["integer", "null"], "x-tools": {"Stata bootstrap": "e(reps)"}},
+        "intervals": {"description": "Every interval the tool reports, by method: {normal, percentile, bias_corrected, bca}: [low, high].", "type": "object", "additionalProperties": {"type": "array", "items": {"$ref": "../estrec-0.1.json#/$defs/number_or_null"}, "minItems": 2, "maxItems": 2}, "x-tools": {"Stata bootstrap": "e(ci_normal), e(ci_percentile), e(ci_bc), e(ci_bca)"}}
       }
     }
   }

@@ -3,7 +3,7 @@
   "$id": "https://estrec.org/schema/profiles/inference-0.1.json",
   "title": "inference/0.1",
   "x-license": "CC0-1.0",
-  "description": "Profile for records with classical inference (R lm/estimatr, statsmodels, Stata regress). Requires, on top of the core: estimate, std_error and p_value on every row that isn't dropped; metrics.nobs; a default vcov (the one marked default, or the only one) with type and ssc.convention; and metrics.df_residual unless that vcov has no df_t (absent or null: normal reference distribution, z tests and intervals).",
+  "description": "Profile for records with classical inference (R lm/estimatr, statsmodels, Stata regress). Requires, on top of the core: estimate and std_error on every row that isn't dropped, and p_value too except on variance-component and ancillary rows (component random or auxiliary); a row's own df, when present, gives its t test; metrics.nobs; a default vcov (the one marked default, or the only one) with type and ssc.convention; and metrics.df_residual unless that vcov has no df_t (absent or null: normal reference distribution, z tests and intervals).",
   "allOf": [
     {"$ref": "../estrec-0.1.json"},
     {"$ref": "#/$defs/rules"}
@@ -15,8 +15,16 @@
       "properties": {
         "parameters": {
           "items": {
+            "properties": {
+              "df": {"description": "The row's own df: when present, its test and interval use a t distribution on this df instead of the default vcov's df_t (Satterthwaite or Kenward-Roger df in mixed models, Rubin's df under multiple imputation); the vcov's df_t is then null.", "$ref": "../estrec-0.1.json#/$defs/number_or_null", "x-tools": {"Stata mixed": "e(df) with dfmethod()", "Stata mi estimate": "e(df_mi)", "lmerTest": "summary()$coefficients df", "mice": "pool() df"}}
+            },
             "if": {"required": ["dropped"], "properties": {"dropped": {"type": "string"}}},
-            "else": {"required": ["estimate", "std_error", "p_value"]}
+            "else": {
+              "required": ["estimate", "std_error"],
+              "description": "p_value too, except on variance-component and ancillary rows (component random or auxiliary), which tools often report without a test (Stata's log SDs and me* variances, nbreg's /lnalpha, lme4).",
+              "if": {"required": ["component"], "properties": {"component": {"enum": ["random", "auxiliary"]}}},
+              "else": {"required": ["p_value"]}
+            }
           }
         },
         "metrics": {"required": ["nobs"]},

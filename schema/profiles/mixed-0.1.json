@@ -3,7 +3,7 @@
   "$id": "https://estrec.org/schema/profiles/mixed-0.1.json",
   "title": "mixed/0.1",
   "x-license": "CC0-1.0",
-  "description": "Profile for linear and generalized linear mixed (multilevel) models: R lme4 (lmer, glmer) with lmerTest, glmmTMB; Stata mixed, melogit/mepoisson/meglm; Python statsmodels MixedLM; Julia MixedModels.jl (survey 2026-10-25, spec/profiles/mixed.md). Requires meta.estimator.method (reml, ml, laplace, agq, ...: the tools' defaults differ, so it is always recorded); specification.random_effects as specified; estimate and std_error on fixed-effect rows; a vc object (group, terms, type, the scale the estimate is on) on every variance-component row (component \"random\"); metrics.nobs; structures.random_effects with each grouping factor's levels; a default vcov of the fixed effects with type; and structures.numerics.converged. p-values are optional (lme4 reports none); when given, parameters[*].df and specification.options.df_method say how. log_lik and structures.numerics.singular are expected. GLMMs add distribution and link as in glm/0.1. Random-effect predictions (BLUPs) are per-level and go in attachments, as the core requires.",
+  "description": "Profile for linear and generalized linear mixed (multilevel) models: R lme4 (lmer, glmer) with lmerTest, glmmTMB; Stata mixed, melogit/mepoisson/meglm; Python statsmodels MixedLM; Julia MixedModels.jl (survey 2026-10-25, spec/profiles/mixed.md). Requires meta.estimator.method (reml, ml, laplace, agq, ...: the tools' defaults differ, so it is always recorded); specification.random_effects as specified; estimate and std_error on fixed-effect rows; a vc object (group, terms, type, the scale the estimate is on) on every variance-component row (component \"random\"); metrics.nobs; structures.random_effects with each grouping factor's levels; a default vcov of the fixed effects with type; and structures.numerics.converged. p-values are optional (lme4 reports none); when given, parameters[*].df and specification.options.df_method say how. log_lik is expected, and structures.numerics.singular when the tool reports it (Stata doesn't). GLMMs add distribution and link as in glm/0.1. Random-effect predictions (BLUPs) are per-level and go in attachments, as the core requires.",
   "x-extends": [],
   "x-deviations": [],
   "allOf": [
@@ -142,13 +142,12 @@
             },
             "numerics": {
               "required": ["converged"],
-              "x-expected": ["singular"],
-              "properties": {
+                            "properties": {
                 "converged": {
                   "description": "The optimizer reported success and the tool raised no convergence warning (gradient or Hessian check).",
                   "x-tools": {"lme4": "optinfo$conv$opt == 0 and no optinfo$conv$lme4$messages other than the singular-fit one", "glmmTMB": "fit$convergence == 0 and sdr$pdHess", "Stata": "e(converged)", "statsmodels": "converged", "MixedModels.jl": "optsum.returnvalue (a success code)"}
                 },
-                "singular": {"description": "Boundary (singular) fit: a variance at zero or a correlation at +/-1.", "type": "boolean", "x-tools": {"lme4": "isSingular() (check.conv.singular message)", "glmmTMB": "no direct flag; check VarCorr", "MixedModels.jl": "issingular()"}},
+                "singular": {"description": "Boundary (singular) fit: a variance at zero or a correlation at +/-1. Expected when the tool reports it (not flagged when missing: Stata posts no such flag).", "type": "boolean", "x-tools": {"lme4": "isSingular() (check.conv.singular message)", "glmmTMB": "no direct flag; check VarCorr", "MixedModels.jl": "issingular()"}},
                 "warnings": {"description": "Convergence messages as the tool wrote them.", "$ref": "../estrec-0.1.json#/$defs/strings", "x-tools": {"lme4": "optinfo$conv$lme4$messages, optinfo$warnings"}},
                 "function_evaluations": {"type": ["integer", "null"], "x-tools": {"lme4": "optinfo$feval", "MixedModels.jl": "optsum.feval"}},
                 "iterations": {"x-tools": {"Stata": "e(ic)"}}

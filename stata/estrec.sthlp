@@ -48,13 +48,13 @@ The record claims the profiles of the format that fit the command:
 {p2col:{cmd:ppmlhdfe}}inference, glm, ppmlhdfe{p_end}
 {p2col:{cmd:clogit}}inference, conditional-logit{p_end}
 {p2col:{cmd:stcox}, {cmd:streg}}inference, survival{p_end}
-{p2col:{cmd:mixed}, {cmd:melogit}, {cmd:mepoisson}, ...}mixed{p_end}
+{p2col:{cmd:mixed}, {cmd:melogit}, {cmd:mepoisson}, ...}inference, mixed{p_end}
 {p2colreset}{...}
 
 {pstd}
 Prefixes: after {cmd:svy:} the record claims inference and survey; after {cmd:bootstrap:} (or
 {cmd:vce(bootstrap)}) it adds resampling to the command's profiles; after {cmd:mi estimate:} it
-claims inference and, with {opt imputation()}, mi. Other prefixes ({cmd:jackknife:},
+claims inference and mi (give the imputation method with {opt imputation()}). Other prefixes ({cmd:jackknife:},
 {cmd:permute:}, ...) aren't supported yet. Any other e-class command that posts {cmd:e(b)} and
 {cmd:e(V)} gets a record with the core fields only.
 

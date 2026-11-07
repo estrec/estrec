@@ -67,7 +67,7 @@
         "parameters": {
           "items": {
             "if": {"required": ["dropped"], "properties": {"dropped": {"type": "string"}}},
-            "else": {"required": ["estimate", "std_error", "p_value"]}
+            "else": {"required": ["estimate", "std_error"], "description": "p_value too, except on ancillary rows (component auxiliary: nbreg's /lnalpha), which tools may report without a test.", "if": {"required": ["component"], "properties": {"component": {"const": "auxiliary"}}}, "else": {"required": ["p_value"]}}
           }
         },
         "metrics": {

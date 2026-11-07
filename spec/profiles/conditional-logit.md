@@ -24,7 +24,8 @@ estimates the group effects and has the incidental-parameters bias: those record
 - `metrics.nobs`.
 - A default vcov with `type` and `ssc.convention`.
 
-`metrics.n_groups`, `metrics.log_lik` and `structures.groups` are **expected**. Convergence
+`metrics.log_lik` and `structures.groups` are **expected**, and `metrics.n_groups` when the
+tool reports one (Stata's `clogit` doesn't; Ted, 2026-11-07). Convergence
 is vocabulary only (below).
 
 ### Two settings that change results without changing the model

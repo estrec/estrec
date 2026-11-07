@@ -3,7 +3,7 @@
   "$id": "https://estrec.org/schema/profiles/mi-0.1.json",
   "title": "mi/0.1",
   "x-license": "CC0-1.0",
-  "description": "Profile for results pooled over multiply imputed data sets (Rubin's rules): R mice (mice, pool), Stata mi impute / mi estimate, Python statsmodels MICE (survey 2026-10-25, spec/profiles/mi.md). Combines with the analysis model's profile (glm/0.1, linear-fe/0.1, ...) where that profile's requirements apply to pooled results. Requires specification.imputation with the number of imputations m and the imputation method; estimate and std_error (the pooled total-variance SE) on every row that isn't dropped; metrics.nobs; and a default vcov with type. Per-row within/between variances, riv, lambda, fmi and df are vocabulary: tools differ in what they store, and statsmodels' FMI is mice's lambda.",
+  "description": "Profile for results pooled over multiply imputed data sets (Rubin's rules): R mice (mice, pool), Stata mi impute / mi estimate, Python statsmodels MICE (survey 2026-10-25, spec/profiles/mi.md). Combines with the analysis model's profile (glm/0.1, linear-fe/0.1, ...) where that profile's requirements apply to pooled results. Requires specification.imputation with the number of imputations m (the imputation method is expected: Stata's mi estimate doesn't keep it); estimate and std_error (the pooled total-variance SE) on every row that isn't dropped; metrics.nobs; and a default vcov with type. Per-row within/between variances, riv, lambda, fmi and df are vocabulary: tools differ in what they store, and statsmodels' FMI is mice's lambda.",
   "x-extends": [],
   "x-deviations": [],
   "allOf": [
@@ -67,10 +67,11 @@
     "imputation": {
       "description": "How the data were imputed.",
       "type": "object",
-      "required": ["m", "method"],
+      "required": ["m"],
+      "x-expected": ["method"],
       "properties": {
         "m": {"description": "Number of imputed data sets.", "type": "integer", "minimum": 2, "x-tools": {"mice": "m (5)", "Stata": "e(M_mi), mi impute add()", "statsmodels": "fit(n_imputations=) (10)"}},
-        "method": {"description": "Overall approach.", "type": "string", "x-vocabulary": ["chained", "mvn", "monotone", "jomo", "amelia"], "x-tools": {"mice": "chained", "Stata": "mi impute chained / mvn / monotone", "statsmodels": "chained (MICEData)"}},
+        "method": {"description": "Overall approach. Expected: Stata's mi estimate doesn't know how the data were imputed (estrec for Stata takes it from its imputation() option).", "type": "string", "x-vocabulary": ["chained", "mvn", "monotone", "jomo", "amelia"], "x-tools": {"mice": "chained", "Stata": "mi impute chained / mvn / monotone", "statsmodels": "chained (MICEData)"}},
         "variable_methods": {
           "description": "Per imputed variable: {variable: method}.",
           "type": "object",

@@ -16,7 +16,9 @@ surveyed.
 ## Requirements
 
 - `meta.estimator.distribution` and `link` (and `family: "glm"`, recommended).
-- `estimate`, `std_error` and `p_value` on every row that isn't dropped.
+- `estimate`, `std_error` and `p_value` on every row that isn't dropped, except that ancillary
+  rows (`component: "auxiliary"`, such as nbreg's `/lnalpha`) need no `p_value`: a writer
+  records no test there that the tool doesn't report (Ted, 2026-11-07).
 - `metrics.nobs`.
 - A default vcov with `type` and `ssc.convention`.
 - `structures.numerics.converged`: every surveyed tool stores it, and an unconverged GLM is a

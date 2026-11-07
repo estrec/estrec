@@ -12,7 +12,8 @@ log-likelihood are not pooled by Rubin's rules and are usually absent.
 
 ## Requirements
 
-- `specification.imputation`: `m` (≥ 2) and `method` (`chained`, `mvn`, `monotone`, ...).
+- `specification.imputation`: `m` (≥ 2). `method` (`chained`, `mvn`, `monotone`, ...) is
+  **expected**: Stata's `mi estimate` doesn't know how the data were imputed (Ted, 2026-11-07).
 - `estimate` and `std_error` (the pooled total-variance SE) on every row that isn't dropped.
 - `metrics.nobs`: rows in each completed data set.
 - A default vcov with `type`: the pooled T = Ū + (1 + 1/m) B, typed by the

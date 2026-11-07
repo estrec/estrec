@@ -3,7 +3,7 @@
   "$id": "https://estrec.org/schema/profiles/conditional-logit-0.1.json",
   "title": "conditional-logit/0.1",
   "x-license": "CC0-1.0",
-  "description": "Profile for conditional (fixed-effects) logit: the likelihood conditional on the number of positive outcomes in each group, so the group effects drop out and are never estimated. Stata clogit and xtlogit, fe; R survival::clogit; Python statsmodels ConditionalLogit (survey 2026-10-25, spec/profiles/conditional-logit.md). Requires specification.groups; specification.options.likelihood (exact, or R's breslow/efron approximations) and drop_uninformative (Stata and statsmodels drop groups whose outcomes are all 0 or all 1, R keeps them, which changes nobs); estimate, std_error and p_value on every row that isn't dropped; metrics.nobs; and a default vcov with type and ssc.convention. metrics.n_groups, log_lik and structures.groups are expected; convergence is vocabulary only, since statsmodels doesn't keep it and R only warns. Not for unconditional FE logit (fixest feglm, pyfixest feglm, bife), which estimates the group effects: those records claim glm/0.1.",
+  "description": "Profile for conditional (fixed-effects) logit: the likelihood conditional on the number of positive outcomes in each group, so the group effects drop out and are never estimated. Stata clogit and xtlogit, fe; R survival::clogit; Python statsmodels ConditionalLogit (survey 2026-10-25, spec/profiles/conditional-logit.md). Requires specification.groups; specification.options.likelihood (exact, or R's breslow/efron approximations) and drop_uninformative (Stata and statsmodels drop groups whose outcomes are all 0 or all 1, R keeps them, which changes nobs); estimate, std_error and p_value on every row that isn't dropped; metrics.nobs; and a default vcov with type and ssc.convention. metrics.log_lik and structures.groups are expected, and n_groups when the tool reports one (Stata clogit doesn't); convergence is vocabulary only, since statsmodels doesn't keep it and R only warns. Not for unconditional FE logit (fixest feglm, pyfixest feglm, bife), which estimates the group effects: those records claim glm/0.1.",
   "x-extends": [],
   "x-deviations": [],
   "allOf": [
@@ -64,13 +64,13 @@
         },
         "metrics": {
           "required": ["nobs"],
-          "x-expected": ["n_groups", "log_lik"],
+          "x-expected": ["log_lik"],
           "properties": {
             "nobs": {
               "description": "Rows used, as the tool counts them: see specification.options.drop_uninformative.",
               "x-tools": {"clogit, xtlogit fe": "e(N)", "survival::clogit": "n", "statsmodels": "nobs"}
             },
-            "n_groups": {"description": "Groups used.", "type": ["integer", "null"], "x-tools": {"xtlogit, fe": "e(N_g)", "statsmodels": "n_groups", "survival::clogit": "number of strata (not stored)"}},
+            "n_groups": {"description": "Groups used. Expected when the tool reports one (not flagged when missing: Stata clogit posts none).", "type": ["integer", "null"], "x-tools": {"xtlogit, fe": "e(N_g)", "statsmodels": "n_groups", "survival::clogit": "number of strata (not stored)"}},
             "n_events": {"description": "Positive outcomes.", "type": ["integer", "null"], "x-tools": {"survival::clogit": "nevent"}},
             "n_dropped_uninformative": {"description": "Rows dropped in all-0 or all-1 groups.", "type": ["integer", "null"], "x-tools": {"clogit, xtlogit fe": "e(N_drop)", "statsmodels": "warning text only"}},
             "n_groups_dropped": {"description": "All-0 or all-1 groups dropped.", "type": ["integer", "null"], "x-tools": {"clogit, xtlogit fe": "e(N_group_drop)", "statsmodels": "warning text only"}},

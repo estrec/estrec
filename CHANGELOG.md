@@ -59,6 +59,16 @@
   record `specification.options.optimizer` (`e(technique)`). The Stata test now compares every
   value of `r(table)`, including those between 0 and 1 that it used to read as missing, and
   checks that a record has no test where Stata shows none.
+- Profiles, from the Stata Tier 2 work (Ted, 2026-11-07): `inference/0.1` and `glm/0.1` need no
+  `p_value` on variance-component and ancillary rows (`component` `random` or `auxiliary`), so
+  Stata `mixed`/`me*` records claim inference and nbreg's `/lnalpha` carries no test Stata
+  doesn't show; `inference/0.1` registers `parameters[*].df`, a row's own t-test df (with the
+  vcov's `df_t` null: mixed `dfmethod()`, mi estimate). `conditional-logit/0.1` `n_groups` and
+  `mixed/0.1` `numerics.singular` are expected only when the tool reports them.
+  `resampling/0.1`: the core columns follow the default vcov, which is the resampling one when
+  the estimator's own variance is resampled (Stata's bootstrap prefix), the analytic vcov kept
+  beside it; rows add `mean`, `bias`, `reps`, `intervals`, the design `mse`. `mi/0.1`:
+  `imputation.method` is expected, not required, since Stata's `mi estimate` doesn't keep it.
 
 - Table specs, `estimation-table/0.1` (`spec/table.md`, `schema/estimation-table-0.1.json`,
   catalog entry `table`; proposal `docs/proposals/table-spec.md`, Ted 2026-11-05): a saved

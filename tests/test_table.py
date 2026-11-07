@@ -417,9 +417,35 @@ def test_great_tables_sparklines():
     assert "<svg" not in et.to_great_table(et.build_table(spec(), base_dir=EXAMPLES)).as_raw_html()
 
 
+def test_sparkline_beside_level_with_the_estimate():
+    """The default: the marks on the estimate's row, the 0 rule alone in the term's other
+    rows (an SVG filling each cell), so the rule still runs down the column."""
+    s = spec()
+    s["uncertainty"] = ["std_error", "[{p_value}]", {"sparkline": {"place": "beside"}}]
+    t = et.build_table(s, base_dir=EXAMPLES)
+    assert all(r["sparkline"]["align"] == "estimate" for r in t["rows"] if "sparkline" in r)
+    h = et.render(t, "html")
+    assert "rowspan" not in h and h.count('class="spark-side"') == 3 * 6  # 2 terms x 3 rows
+    rows = h.split("<tr ")
+    est = next(r for r in rows if r.startswith('class="estimate"><th>Weight'))
+    assert est.count('role="img"') == 3 and est.count('aria-hidden="true"') == 3  # marks + rule
+    se = rows[rows.index(est) + 1]
+    assert 'role="img"' not in se and se.count('aria-hidden="true"') == 3  # rule only
+    assert 'style="display:block;margin:0 auto;position:relative"' in est
+    w = et.render(t, "word")
+    assert "rowspan" not in w and w.count("mso-height-rule:exactly") == 6
+    # Word: the marks at the text's middle, below the 3 pt space above the second term
+    import base64
+    import re
+
+    svgs = [base64.b64decode(x).decode() for x in re.findall(r"base64,([A-Za-z0-9+/=]+)", w)]
+    assert sum('cy="8.0"' in x for x in svgs) == 3 and sum('cy="12.0"' in x for x in svgs) == 2
+    assert sum("circle" not in x for x in svgs) == 3 * 2 + 2 * 2  # the rule-only rows
+
+
 def test_sparkline_beside_the_estimates():
     s = spec()
-    s["uncertainty"] = ["std_error", {"sparkline": {"place": "beside"}}]
+    s["uncertainty"] = ["std_error", {"sparkline": {"place": "beside", "align": "middle"}}]
     t = et.build_table(s, base_dir=EXAMPLES)
     sp = [r for r in t["rows"] if "sparkline" in r]
     assert sp and all(r["sparkline"]["place"] == "beside" for r in sp)
@@ -437,17 +463,22 @@ def test_sparkline_beside_the_estimates():
     # the first term's two rows are 12 + 12 pt (32 px), the second's 15 + 12 pt (36 px)
     assert w.count('height="32"') == 3 and w.count('height="36"') == 2
     # without the estimate, the beside line's label moves to the first row left
-    s.update(uncertainty=[{"sparkline": {"place": "beside"}}, "std_error"], estimate=False)
+    s.update(uncertainty=[{"sparkline": {"place": "beside", "align": "middle"}}, "std_error"], estimate=False)
     h = et.render(et.build_table(s, base_dir=EXAMPLES), "html")
     assert '<tr class="estimate"><th>Weight (1000 lbs)</th><td>(0.754)</td><td class="spark-side" rowspan="1"' in h
     # a term whose only line is the drawing keeps it as a row
     s["uncertainty"] = {"sparkline": {"place": "beside"}}
     h = et.render(et.build_table(s, base_dir=EXAMPLES), "html")
     assert "spark-side" not in h and h.count('<td colspan="2" class="spark"><svg') == 5
-    s["uncertainty"] = [{"sparkline": {"place": "beside"}}, {"sparkline": {"place": "beside"}}, {"sparkline": {"place": "x"}}]
+    s["uncertainty"] = [
+        {"sparkline": {"place": "beside"}},
+        {"sparkline": {"place": "beside"}},
+        {"sparkline": {"place": "x", "align": "top"}},
+    ]
     assert [(i.path, i.message[:3]) for i in et.validate_table(s, schema=None)] == [
         ("uncertainty[1].sparkline.place", "one"),
         ("uncertainty[2].sparkline.place", "'be"),
+        ("uncertainty[2].sparkline.align", "'es"),
     ]
 
 

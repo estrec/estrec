@@ -28,6 +28,7 @@
   const SPARK_COLOR = "#2b5f8e";
   const SPARK_SCALES = ["column", "row", "table"];
   const SPARK_PLACES = ["below", "beside"];
+  const SPARK_ALIGNS = ["estimate", "middle"];
   const SPARK_TEXT = "[{conf_low}, {conf_high}]";
   const isObj = (x) => x !== null && typeof x === "object" && !Array.isArray(x);
 
@@ -37,12 +38,12 @@
     return Array.isArray(unc) ? unc : [unc];
   }
 
-  // names become templates; a sparkline becomes {sparkline: {color, scale, place}} with defaults
+  // names become templates; a sparkline becomes {sparkline: {color, scale, place, align}} with defaults
   function uncertaintyLines(spec) {
     return lineItems(spec).map((x) => {
       if (isObj(x)) {
         const sp = x.sparkline || {};
-        return { sparkline: { color: sp.color !== undefined ? sp.color : SPARK_COLOR, scale: sp.scale !== undefined ? sp.scale : "column", place: sp.place !== undefined ? sp.place : "below" } };
+        return { sparkline: { color: sp.color !== undefined ? sp.color : SPARK_COLOR, scale: sp.scale !== undefined ? sp.scale : "column", place: sp.place !== undefined ? sp.place : "below", align: sp.align !== undefined ? sp.align : "estimate" } };
       }
       return NAMED_LINES[x] || x;
     });
@@ -63,6 +64,7 @@
         if ("scale" in sp && !SPARK_SCALES.includes(sp.scale)) out.push(issue("error", `${path}.sparkline.scale`, "'column', 'row' or 'table'"));
         if ("place" in sp && !SPARK_PLACES.includes(sp.place)) out.push(issue("error", `${path}.sparkline.place`, "'below' or 'beside'"));
         else if (sp.place === "beside" && ++beside > 1) out.push(issue("error", `${path}.sparkline.place`, "one sparkline at most is beside the estimates"));
+        if ("align" in sp && !SPARK_ALIGNS.includes(sp.align)) out.push(issue("error", `${path}.sparkline.align`, "'estimate' or 'middle'"));
       } else if (typeof x !== "string") out.push(issue("error", path, "a name, a template string or a sparkline"));
       else if (x in NAMED_LINES) return;
       else if (!x.includes("{")) out.push(issue("error", path, `'${x}' is neither a name (${Object.keys(NAMED_LINES).join(", ")}) nor a template`));
@@ -597,14 +599,28 @@
       `<circle cx="${xe}" cy="${y}" r="2.9" fill="${sparkDark(color)}" stroke-width="1.1" ${HALO}/>`;
   }
 
-  function sparkSVG(m, color, label, height) {
+  // height: the image's (pixels); the marks sit halfway down, or mid tenths of a pixel down
+  function sparkSVG(m, color, label, height, mid, style) {
     if (!m) return "";
     const H = height === undefined ? SPARK_H : height;
     const [x0, xl, xe, xh] = sparkXs(m).map(tenths);
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${SPARK_W}" height="${H}" viewBox="0 0 ${SPARK_W} ${H}" role="img"` +
-      (label ? ` aria-label="${escHTML(label)}"` : "") + ">" +
+      (label ? ` aria-label="${escHTML(label)}"` : "") + (style ? ` style="${style}"` : "") + ">" +
       `<line x1="${x0}" y1="0" x2="${x0}" y2="${H}" stroke="#555555" stroke-width="1"/>` +
-      sparkMarks(xl, xe, xh, H * 5, color) + "</svg>";
+      sparkMarks(xl, xe, xh, mid === undefined || mid === null ? H * 5 : mid, color) + "</svg>";
+  }
+
+  // only the 0 rule, for a term's other rows: an image height pixels tall, or (none) an SVG
+  // filling its position:relative cell
+  function sparkRule(m, height) {
+    if (!m) return "";
+    const x0 = tenths(sparkXs(m)[0]);
+    if (height === undefined || height === null) {
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="${SPARK_W}" height="100%" aria-hidden="true" style="position:absolute;top:0;left:calc(50% - 40px)">` +
+        `<line x1="${x0}" y1="0" x2="${x0}" y2="100%" stroke="#555555" stroke-width="1"/></svg>`;
+    }
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${SPARK_W}" height="${height}" viewBox="0 0 ${SPARK_W} ${height}">` +
+      `<line x1="${x0}" y1="0" x2="${x0}" y2="${height}" stroke="#555555" stroke-width="1"/></svg>`;
   }
 
   // a sparkline beside the estimates: as tall as its cell (the term's rows), the 0 rule its
@@ -621,10 +637,11 @@
 
   const b64 = (s) => (typeof btoa === "function" ? btoa(s) : Buffer.from(s, "ascii").toString("base64"));
 
-  function sparkImg(m, color, label, height) {
+  function sparkImg(m, color, label, height, mid, ruleOnly) {
     if (!m) return "";
     const H = height === undefined ? SPARK_H : height;
-    return `<img width="${SPARK_W}" height="${H}" style="display:block;margin:0 auto;vertical-align:middle" alt="${escHTML(label)}" src="data:image/svg+xml;base64,${b64(sparkSVG(m, color, "", H))}">`;
+    const svg = ruleOnly ? sparkRule(m, H) : sparkSVG(m, color, "", H, mid);
+    return `<img width="${SPARK_W}" height="${H}" style="display:block;margin:0 auto;vertical-align:middle" alt="${ruleOnly ? "" : escHTML(label)}" src="data:image/svg+xml;base64,${b64(svg)}">`;
   }
 
   function htmlCell(r, j) {
@@ -817,7 +834,8 @@
     const rows = t.rows;
     const isSide = (r) => !!(r.sparkline && r.sparkline.place === "beside");
     if (!rows.some(isSide)) return null;
-    const plan = { start: new Map(), skip: new Set(), inside: new Set(), label: new Map() };
+    const align = rows.find(isSide).sparkline.align || "estimate";
+    const plan = { align, start: new Map(), skip: new Set(), inside: new Map(), label: new Map() };
     let i = 0;
     while (i < rows.length) {
       if (rows[i].kind === "stat") { i++; continue; }
@@ -828,7 +846,7 @@
       if (side.length && rest.length) {
         plan.start.set(rest[0], [side[0], rest.length, j]);
         plan.skip.add(side[0]);
-        rest.slice(1).forEach((k) => plan.inside.add(k));
+        rest.slice(1).forEach((k) => plan.inside.set(k, side[0]));
         if (side[0] === i) plan.label.set(rest[0], rows[i].label);
       }
       i = j;
@@ -837,6 +855,9 @@
   }
   const rowKind = (t, plan, i) => (plan && plan.label.has(i) ? "estimate" : t.rows[i].kind);
   const SIDE_TD = 'style="position:relative;padding:0;width:80px;min-width:80px"';
+  // level with the estimate: the cells keep the rows' vertical padding, so the marks sit on
+  // the numbers' line, and the 0 rule fills the whole cell
+  const SIDE_TD_ROW = 'style="position:relative;padding-left:0;padding-right:0;width:80px;min-width:80px"';
 
   function renderHTML(t) {
     const h = escHTML;
@@ -854,7 +875,12 @@
       const cls = kind + (kind === "stat" && prev !== "stat" ? " first-stat" : "") + (r.sparkline ? " spark-row" : "");
       const label = plan && plan.label.has(i) ? plan.label.get(i) : r.label;
       let cells;
-      if (plan && plan.start.has(i)) {
+      if (plan && plan.align === "estimate" && (plan.start.has(i) || plan.inside.has(i))) {
+        const k = plan.start.has(i) ? plan.start.get(i)[0] : plan.inside.get(i);
+        const sp = rows[k].sparkline;
+        cells = r.cells.map((_, j) => htmlCell(r, j) + `<td class="spark-side" ${SIDE_TD_ROW}>` + sparkRule(sp.marks[j]) +
+          (plan.start.has(i) ? sparkSVG(sp.marks[j], sp.color, rows[k].cells[j], undefined, null, "display:block;margin:0 auto;position:relative") : "") + "</td>").join("");
+      } else if (plan && plan.start.has(i)) {
         const [k, n, end] = plan.start.get(i);
         const sp = rows[k].sparkline;
         const side = "spark-side" + (end === rows.length ? " to-end" : "");
@@ -951,7 +977,12 @@
         const raw = sp && c ? sparkImg(sp.marks[c - 1], sp.color, x) : null;
         const many = plan && c && !plan.start.has(i) && !plan.inside.has(i);
         cells.push(wordCell(x, { left: c === 0, top, bottom, padTop, raw, attrs: many ? ' colspan="2"' : "" }));
-        if (plan && c && plan.start.has(i)) {
+        if (plan && c && plan.align === "estimate" && (plan.start.has(i) || plan.inside.has(i))) {
+          const k = plan.start.has(i) ? plan.start.get(i)[0] : plan.inside.get(i);
+          const ssp = rows[k].sparkline;
+          const px = padTop ? 20 : 16;
+          cells.push(wordCell("", { left: false, top, bottom, raw: sparkImg(ssp.marks[c - 1], ssp.color, rows[k].cells[c - 1], px, (px - 8) * 10, !plan.start.has(i)), styleExtra: ";padding:0;vertical-align:top" }));
+        } else if (plan && c && plan.start.has(i)) {
           const [k, n, end] = plan.start.get(i);
           const ssp = rows[k].sparkline;
           let height = 0;
@@ -1221,7 +1252,7 @@ ${table}</div>
   return {
     TABLE_SCHEMA, DEFAULT_STARS, DEFAULT_HEAD, HEAD_KINDS, TABLE_METRICS, STAT_LABELS,
     twoSidedP, criticalValue, erfc, qnorm,
-    NAMED_LINES, PLACEHOLDERS, publishSpec, SPARK_COLOR, SPARK_SCALES, SPARK_PLACES, sparkSVG, sparkTikz, uncertaintyLines, pValue,
+    NAMED_LINES, PLACEHOLDERS, publishSpec, SPARK_COLOR, SPARK_SCALES, SPARK_PLACES, SPARK_ALIGNS, sparkSVG, sparkTikz, uncertaintyLines, pValue,
     num, vcovs, vcovLabel, pickVcov, tidy, glance, findTest,
     canonicalJSON, sha256Hex, recordSha256,
     indexRecords, validateTable, checkPins, columnResponse, buildTable, render, renderers: RENDERERS,

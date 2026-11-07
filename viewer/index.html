@@ -853,8 +853,8 @@ function renderLines() {
   if (!arr.length) box.append(el("p", { class: "empty", text: "No lines: estimates only." }));
   arr.forEach((x, i) => {
     if (x && typeof x === "object") {
-      const sp = Object.assign({ color: E.SPARK_COLOR, scale: "column", place: "below" }, x.sparkline);
-      const save = () => { arr[i] = { sparkline: Object.assign({ color: sp.color, scale: sp.scale }, sp.place === "beside" ? { place: "beside" } : {}) }; setLines(arr); update({ keepControls: true }); };
+      const sp = Object.assign({ color: E.SPARK_COLOR, scale: "column", place: "below", align: "estimate" }, x.sparkline);
+      const save = () => { arr[i] = { sparkline: Object.assign({ color: sp.color, scale: sp.scale }, sp.place === "beside" ? { place: "beside" } : {}, sp.place === "beside" && sp.align === "middle" ? { align: "middle" } : {}) }; setLines(arr); update({ keepControls: true }); };
       const color = el("input", { type: "color", id: `line-${i}-color`, value: sp.color, "aria-label": "Sparkline colour" });
       color.addEventListener("input", () => { sp.color = color.value; save(); });
       const scale = el("select", { id: `line-${i}-scale`, "aria-label": "Sparklines that share an axis" },
@@ -866,10 +866,12 @@ function renderLines() {
       // beside: a column next to each column of estimates, one drawing per term as tall as its rows
       const place = el("select", { id: `line-${i}-place`, "aria-label": "Where the sparkline goes" },
         el("option", { value: "below", text: "A row under the estimate" }),
-        el("option", { value: "beside", text: "A column beside the estimates" }));
-      place.value = sp.place;
+        el("option", { value: "beside", text: "Beside the estimates, level with the estimate" }),
+        el("option", { value: "beside-middle", text: "Beside the estimates, centred on the term's rows" }));
+      place.value = sp.place === "beside" && sp.align === "middle" ? "beside-middle" : sp.place;
       place.addEventListener("change", () => {
-        sp.place = place.value;
+        sp.place = place.value === "below" ? "below" : "beside";
+        sp.align = place.value === "beside-middle" ? "middle" : "estimate";
         // one sparkline at most goes beside: the others move back under the estimate
         if (sp.place === "beside") arr.forEach((y, k) => { if (k !== i && y && typeof y === "object" && y.sparkline && y.sparkline.place === "beside") { const { place: _, ...rest } = y.sparkline; arr[k] = { sparkline: rest }; } });
         save();

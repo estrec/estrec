@@ -130,7 +130,8 @@
               "properties": {
                 "color": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"},
                 "scale": {"enum": ["column", "row", "table"]},
-                "place": {"enum": ["below", "beside"], "description": "below (default): a row under the estimate; beside: a column next to each column of estimates, one drawing per term spanning its rows (HTML, the viewer and Word; other formats draw it below). One sparkline at most is beside."}
+                "place": {"enum": ["below", "beside"], "description": "below (default): a row under the estimate; beside: a column next to each column of estimates, one drawing per term spanning its rows (HTML, the viewer and Word; other formats draw it below). One sparkline at most is beside."},
+                "align": {"enum": ["estimate", "middle"], "description": "Beside the estimates: the marks level with the estimate's row (default; the term's other rows carry the 0 rule only) or centred on the term's rows (one cell spanning them)."}
               },
               "additionalProperties": false
             }

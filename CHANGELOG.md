@@ -13,6 +13,10 @@
   its web page lay it out (an SVG filling its cell), and Word (rows exactly 12 pt, 15 pt with
   the space above a term, and an image of their height); other formats draw it below. One
   sparkline at most is beside. The viewer's sparkline line has a "Where" choice.
+  `"align"` (Ted 2026-11-07): `"estimate"` (default) puts the marks level with the
+  estimate's row and gives the term's other rows the 0 rule alone, so with a standard
+  error and a p-value the drawing reads with its estimate; `"middle"` keeps one cell
+  spanning the term's rows.
 - Stata: fixed-effect names after reghdfe, ivreghdfe and ppmlhdfe come from
   `e(extended_absvars)` (`rep78`, `foreign#c.mpg`), not `e(dof_table)`'s row names (`1.rep78`);
   the same fix in `converters/reghdfe/`. ppmlhdfe's 8 test cases now run (records

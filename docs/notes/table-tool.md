@@ -99,6 +99,10 @@ Decisions so far:
   get `mso-height-rule:exactly` heights and the image their sum (untested in real Word).
   LaTeX, R, great_tables, text formats draw it below. Preview v10 (same link). Open: a
   missing term leaves its cell empty, so the 0 rule breaks there; LaTeX/R beside later.
+  Then `sparkline.align` (Ted: centred on est/SE/p it read as the SE's): `estimate`
+  (default; per-row cells, the marks in the estimate row's content box so they sit on the
+  numbers' line, a rule-only SVG in the other rows; Word images per row, marks at the text's
+  middle) or `middle` (the rowspan cell). Preview v11.
 
 ## Earlier hand-off: sparklines everywhere and the `show_table` refactor (Ted, 2026-11-07)
 

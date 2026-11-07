@@ -130,10 +130,13 @@ row per line:
   formats that can't draw (text, Markdown, CSV, a renderer without graphics) show
   `[conf_low, conf_high]` instead. `place` is `"below"` (the default: a row under the
   estimate) or `"beside"`: each column of estimates gets a column next to it, and each
-  term's drawing is one cell there spanning the term's rows, its 0 rule their full height,
-  so down a column the rules join into one line alongside the estimates. Headings and
-  statistics rows span both columns. HTML, the viewer, its web page and Word lay it out
-  beside; other formats draw it below. One sparkline at most is beside;
+  term's drawing goes there, its 0 rule the full height of the term's rows, so down a column
+  the rules join into one line alongside the estimates. Headings and
+  statistics rows span both columns. `align` places the marks: `"estimate"` (the default)
+  level with the estimate's row, the term's other rows carrying the 0 rule only; or
+  `"middle"`, one cell spanning the term's rows with the marks at its middle. HTML, the
+  viewer, its web page and Word lay it out beside; other formats draw it below. One
+  sparkline at most is beside;
 - a **list** of names, templates and sparklines, one row each, in order: `["std_error", "[{p_value}]"]`;
 - `null`: no lines.
 

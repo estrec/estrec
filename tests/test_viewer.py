@@ -205,6 +205,7 @@ def specs():
         {"sparkline": {"scale": "table", "color": "#0A7F3F"}},
         ["std_error", {"sparkline": {"place": "beside"}}],
         [{"sparkline": {"place": "beside", "color": "#c0392b"}}, "[{p_value}]"],
+        ["std_error", "[{p_value}]", {"sparkline": {"place": "beside", "align": "middle"}}],
     ):
         s = copy.deepcopy(base)
         s["uncertainty"] = unc
@@ -214,6 +215,9 @@ def specs():
     out.append(s)
     s = copy.deepcopy(base)
     s.update(uncertainty=[{"sparkline": {"place": "beside"}}, "std_error"], estimate=False, stats=[])
+    out.append(s)
+    s = copy.deepcopy(base)
+    s.update(uncertainty=[{"sparkline": {"place": "beside", "align": "middle"}}, "std_error"], estimate=False, stats=[])
     out.append(s)
     out.append(et.read_table(EXAMPLES / "event-study.estrec-table.json"))
     return out
@@ -266,7 +270,7 @@ def test_renderers_match_python(node_result):
         pytest.skip("node not installed")
     all_specs = specs()
     sparks = [s for s in all_specs if "sparkline" in json.dumps(s.get("uncertainty"))]
-    assert len(sparks) == 8
+    assert len(sparks) == 10
     for spec in [all_specs[0]] + [s for s in all_specs if "head" in s] + sparks:
         py = et.build_table(spec, base_dir=EXAMPLES)
         script = (

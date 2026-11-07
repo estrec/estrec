@@ -145,9 +145,10 @@ KNOWN_WARNINGS = {"mi_logit_post": "specification.imputation.method: [mi/0.1] ex
 
 # Stata's ML commands (not glm)
 ML = {"logit", "logistic", "probit", "poisson", "poisson_fw", "nbreg"}
-# z tests: no e(df_r), so no df_residual and a null df_t (inference/0.1)
+# z tests: no e(df_r), so no df_residual and a null df_t (inference/0.1). glm and ppmlhdfe
+# post e(df), recorded as df_residual (their profiles), so they are tested on their own
 Z_TESTS = ML | {"xtreg_re", "ivregress_2sls", "ivregress_gmm", "ivreg2_robust", "ivreg2_endog"}
-Z_TESTS |= {"ppmlhdfe", "bootstrap_regress", "bootstrap_logit", "clogit", "clogit_robust", "stcox"}
+Z_TESTS |= {"bootstrap_regress", "bootstrap_logit", "clogit", "clogit_robust", "stcox"}
 Z_TESTS |= {"stcox_efron_robust", "streg_weibull", "streg_lognormal", "mixed_reml", "melogit"}
 
 
@@ -477,6 +478,9 @@ def test_ppmlhdfe(written, installed):
     vc = rec["structures"]["vcov"][0]
     assert vc["type"] == "CRV1" and vc["ssc"] == {"convention": "ppmlhdfe", "formula": "G/(G-1)"}
     assert [fe["name"] for fe in rec["structures"]["fixed_effects"]] == ["rep78"]
+    assert rec["metrics"]["df_residual"] > 0 and vc["df_t"] is None  # e(df), z tests
+    fe2 = _case(written, installed, "reghdfe")["structures"]["fixed_effects"]
+    assert [fe["name"] for fe in fe2] == ["rep78", "id"]  # e(extended_absvars), not "1.rep78"
 
 
 def test_clogit(written, installed):

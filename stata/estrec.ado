@@ -855,10 +855,13 @@ void _er_write(string scalar fn, real scalar replace, real scalar lv)
 	if (_isin(kind, ("reghdfe", "ivreghdfe", "ppmlhdfe"))) {
 		dof = st_matrix("e(dof_table)")
 		if (rows(dof)) {
+			// names as reghdfe gives them in e(extended_absvars): the row stripe without its "1."
 			rs = st_matrixrowstripe("e(dof_table)")
+			fen = tokens(_eg("extended_absvars"))
+			if (cols(fen) != rows(dof)) fen = subinstr(rs[., 2]', "1.", "")
 			for (i = 1; i <= rows(dof); i++) {
 				fe = fe, _ej_o(("kind", "name", "levels", "redundant", "redundant_method", "nested_in", "constant_reported"),
-					(_ej_s("object"), _ej_s(rs[i, 2]), _ej_n(dof[i, 1]), _ej_n(dof[i, 2]),
+					(_ej_s("object"), _ej_s(fen[i]), _ej_n(dof[i, 1]), _ej_n(dof[i, 2]),
 					 (dof[i, 2] > 0 ? _ej_s(dof[i, 5] == 1 ? "nested" : (dof[i, 4] == 1 ? "pairwise" : "exact")) : ""),
 					 ((dof[i, 5] == 1 & ncl) ? _ej_sa(clusters) : ""), _ej_b(_e("report_constant") == 1)))
 			}

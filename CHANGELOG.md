@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Stata: fixed-effect names after reghdfe, ivreghdfe and ppmlhdfe come from
+  `e(extended_absvars)` (`rep78`, `foreign#c.mpg`), not `e(dof_table)`'s row names (`1.rep78`);
+  the same fix in `converters/reghdfe/`. ppmlhdfe's 8 test cases now run (records
+  `e(df)` as `df_residual`, as glm, with z tests).
 - Fixed-effect rows in tables default to `Y` / `N` (Ted 2026-11-07; were `Yes` / blank):
   `format.fe_yes` and `format.fe_no`, in Python, the viewer and estrec's `render_table`.
   estrec's `glance()` keeps `X`, as fixest's does, so modelsummary gives the same table from

@@ -346,7 +346,9 @@ void _est_write(string scalar fn, real scalar replace, real scalar ident, string
 	dof = st_matrix("e(dof_table)")
 	if (rows(dof)) {
 		rs = st_matrixrowstripe("e(dof_table)")
-		dofrows = rs[., 2]'
+		// names as reghdfe gives them in e(extended_absvars): the row stripe without its "1."
+		dofrows = tokens(st_global("e(extended_absvars)"))
+		if (cols(dofrows) != rows(dof)) dofrows = subinstr(rs[., 2]', "1.", "")
 		for (i = 1; i <= rows(dof); i++) {
 			nested = (dof[i, 5] == 1 & ncl) ? _ej_sa(clusters) : ""
 			fe = fe, _ej_o(("kind", "name", "levels", "redundant", "redundant_method", "nested_in", "constant_reported"),

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Word export: the font size goes on every cell (Word ignored the table's on paste, so cells
+  came in at the document's size and were clipped in fixed columns); `font` (points; the
+  viewer's Font box, 10 by default) sizes the rows (1.2 x font), the column widths and the
+  sparkline images. The space above each term (0.3 x font) is off by default when the
+  table has sparklines, so they run on without gaps (Ted 2026-11-07); `term_space` sets it.
 - Viewer: **Print / PDF** (Ted 2026-11-07) prints the table preview alone, in light colours
   with 1 in margins, shrunk to the Table width (6.5 in by default) if wider; Save as PDF in
   the browser's print dialog gives a PDF (vector, sparklines included).

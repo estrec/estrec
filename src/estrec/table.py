@@ -1161,24 +1161,26 @@ def _word_cell(
     left: bool,
     top: str = "",
     bottom: str = "",
-    pad_top: bool = False,
+    pad_top: str = "",
     raw: str | None = None,
     attrs: str = "",
     style_extra: str = "",
+    font: str = "10",
 ) -> str:
-    style = _WORD_CELL + (";text-align:left" if left else ";text-align:center")
+    # the font size on every cell: Word ignores the table's when pasting
+    style = _WORD_CELL + f";font-size:{font}pt" + (";text-align:left" if left else ";text-align:center")
     if top:
         style += f";border-top:{top} {_WORD_RULE}"
     if bottom:
         style += f";border-bottom:{bottom} {_WORD_RULE}"
     if pad_top:
-        style += ";padding-top:3pt"
+        style += f";padding-top:{pad_top}"
     return f'<td{attrs} style="{style}{style_extra}">{html.escape(text) if raw is None else raw}</td>'
 
 
-def _word_widths(t: dict, plan: dict | None, width: float) -> dict:
+def _word_widths(t: dict, plan: dict | None, width: float, font: float = 10) -> dict:
     """Column widths for a Word table `width` inches wide, in tenths of a point: the label
-    column as wide as its longest label (about 5 pt a character at 10 pt, plus padding),
+    column as wide as its longest label (about half the font size a character, plus padding),
     between 36 pt and 40% of the table; the data columns share the rest equally. Beside the
     estimates, a data column splits into the numbers (as wide as the longest, at least 20 pt)
     and the drawing (the rest, at least 24 pt); the drawings' widths in pixels follow."""
@@ -1186,13 +1188,13 @@ def _word_widths(t: dict, plan: dict | None, width: float) -> dict:
     n = len(t["header"])
     rows = t["rows"]
     lab = max([len(r["label"]) for r in rows] + [0])
-    label = min(max(50 * lab + 108, 360), total * 2 // 5)
+    label = min(max(math.floor(font * 5 + 0.5) * lab + 108, 360), total * 2 // 5)
     col = (total - label) // n
     out = {"total": total, "label": total - col * n, "col": col, "below_px": max((col - 108) * 4 // 30, 1)}
     if plan:
         block = [rows[i] for i in list(plan["start"]) + list(plan["inside"])]
         numc = max([len(c) for r in block for c in r["cells"]] + [0])
-        num = min(max(55 * numc + 108, 200), col - 240) if col >= 440 else col // 2
+        num = min(max(math.floor(font * 5.5 + 0.5) * numc + 108, 200), col - 240) if col >= 440 else col // 2
         out.update(num=num, side=col - num, side_px=max((col - num) * 4 // 30, 1))
     return out
 
@@ -1201,16 +1203,35 @@ def _pt(n: int) -> str:
     return f"{n // 10}.{n % 10}pt"
 
 
-def _render_word(t: dict, width: float | None = None) -> str:
+def _px_pt(px: int) -> str:
+    """Pixels as points (x 0.75), exactly."""
+    n = px * 75
+    return f"{n // 100}.{n % 100:02d}pt"
+
+
+def _js_num(x: float) -> str:
+    """A number as JavaScript's String() writes it (10, 9.5)."""
+    x = float(x)
+    return str(int(x)) if x.is_integer() else repr(x)
+
+
+def _render_word(t: dict, width: float | None = None, font: float = 10, term_space: bool | None = None) -> str:
     """A whole HTML document that Word, Google Docs, LibreOffice and Excel paste or open as a
     formatted table (the viewer's Copy for Word puts it on the clipboard). With a sparkline
     beside the estimates, a term's rows are exactly 12 pt high (15 pt with the space above a
     term) and its drawing is an image of their height, so a column of them joins. `width`
     (inches, e.g. 6.5) fixes the table's and every column's width and draws the sparklines
-    to fit (`_word_widths`); without it the table takes its natural width."""
+    to fit (`_word_widths`); without it the table takes its natural width. `font` (points)
+    is set on every cell and sizes the rows (1.2 x font) and the space above each term
+    (0.3 x font; by default only when the table has no sparklines, so they join)."""
     h = html.escape
     plan = _beside_plan(t)
-    W = _word_widths(t, plan, width) if width else None
+    fs = _js_num(font)
+    line_px = math.floor(font * 1.6 + 0.5)
+    if term_space is None:
+        term_space = not any("sparkline" in r for r in t["rows"])
+    pad_px = math.floor(font * 0.4 + 0.5) if term_space else 0
+    W = _word_widths(t, plan, width, font) if width else None
 
     def wd(n):  # a cell's width, when the table's is fixed
         return f";width:{_pt(n)}" if W else ""
@@ -1225,9 +1246,9 @@ def _render_word(t: dict, width: float | None = None) -> str:
         f"<title>{h(title)}</title></head><body>",
     ]
     if t["title"]:
-        out.append(f'<p style="margin:0 0 6pt 0"><b>{h(t["title"])}</b></p>')
+        out.append(f'<p style="margin:0 0 6pt 0;font-size:{fs}pt"><b>{h(t["title"])}</b></p>')
     fixed = f";width:{_pt(W['total'])};table-layout:fixed" if W else ""
-    out.append(f'<table style="border-collapse:collapse;border:none;font-size:10pt{fixed}">')
+    out.append(f'<table style="border-collapse:collapse;border:none;font-size:{fs}pt{fixed}">')
     nh = len(t["head"])
     for k, hr in enumerate(t["head"]):
         top = "1.5pt" if k == 0 else ""
@@ -1242,6 +1263,7 @@ def _render_word(t: dict, width: float | None = None) -> str:
                     bottom=bottom,
                     attrs=span if i else "",
                     style_extra=wd(W["col"] if i else W["label"]) if W else "",
+                    font=fs,
                 )
                 for i, x in enumerate([""] + hr["cells"])
             )
@@ -1254,7 +1276,10 @@ def _render_word(t: dict, width: float | None = None) -> str:
     first = shown[0] if shown else 0
 
     def pads(i):  # the space above a term; sparkline rows stay unpadded so they join
-        return _row_kind(t, plan, i) == "estimate" and i > first and "sparkline" not in rows[i]
+        return pad_px > 0 and _row_kind(t, plan, i) == "estimate" and i > first and "sparkline" not in rows[i]
+
+    def row_px(i):
+        return line_px + (pad_px if pads(i) else 0)
 
     for i in shown:
         r = rows[i]
@@ -1267,7 +1292,7 @@ def _render_word(t: dict, width: float | None = None) -> str:
         pad = pads(i)
         label = plan["label"].get(i, r["label"]) if plan else r["label"]
         exact = plan and (i in plan["start"] or i in plan["inside"])
-        tr = f'<tr style="height:{15 if pad else 12}pt;mso-height-rule:exactly">' if exact else "<tr>"
+        tr = f'<tr style="height:{_px_pt(row_px(i))};mso-height-rule:exactly">' if exact else "<tr>"
         cells = []
         for c, x in enumerate([label] + r["cells"]):
             raw = _spark_img(sp["marks"][c - 1], sp["color"], x, width=spw) if sp and c else None
@@ -1281,16 +1306,17 @@ def _render_word(t: dict, width: float | None = None) -> str:
                     left=c == 0,
                     top=top,
                     bottom=bottom,
-                    pad_top=pad,
+                    pad_top=_px_pt(pad_px) if pad else "",
                     raw=raw,
                     attrs=' colspan="2"' if many else "",
                     style_extra=cw,
+                    font=fs,
                 )
             )
             if plan and c and plan["align"] == "estimate" and (i in plan["start"] or i in plan["inside"]):
                 k = plan["start"][i][0] if i in plan["start"] else plan["inside"][i]
                 ssp = rows[k]["sparkline"]
-                px = 20 if pad else 16
+                px = row_px(i)
                 cells.append(
                     _word_cell(
                         "",
@@ -1302,17 +1328,18 @@ def _render_word(t: dict, width: float | None = None) -> str:
                             ssp["color"],
                             rows[k]["cells"][c - 1],
                             px,
-                            mid=(px - 8) * 10,
+                            mid=(px - line_px) * 10 + line_px * 5,
                             rule_only=i not in plan["start"],
                             width=sidew,
                         ),
                         style_extra=";padding:0;vertical-align:top" + (wd(W["side"]) if W else ""),
+                        font=fs,
                     )
                 )
             elif plan and c and i in plan["start"]:
                 k, n, end = plan["start"][i]
                 ssp = rows[k]["sparkline"]
-                height = sum(20 if pads(q) else 16 for q in range(i, end) if q not in plan["skip"])
+                height = sum(row_px(q) for q in range(i, end) if q not in plan["skip"])
                 cells.append(
                     _word_cell(
                         "",
@@ -1322,13 +1349,14 @@ def _render_word(t: dict, width: float | None = None) -> str:
                         raw=_spark_img(ssp["marks"][c - 1], ssp["color"], rows[k]["cells"][c - 1], height, width=sidew),
                         attrs=f' rowspan="{n}"',
                         style_extra=";padding:0;vertical-align:top" + (wd(W["side"]) if W else ""),
+                        font=fs,
                     )
                 )
         out.append(tr + "".join(cells) + "</tr>")
         prev = kind
     out.append("</table>")
     for n in t["notes"]:
-        out.append(f'<p style="margin:3pt 0 0 0;font-size:9pt">{h(n)}</p>')
+        out.append(f'<p style="margin:3pt 0 0 0;font-size:{_js_num(font - 1)}pt">{h(n)}</p>')
     out.append("</body></html>")
     return "\n".join(out) + "\n"
 

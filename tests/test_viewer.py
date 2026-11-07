@@ -276,7 +276,8 @@ def test_renderers_match_python(node_result):
         script = (
             "const E=require(process.argv[1]);const t=JSON.parse(require('fs').readFileSync(0,'utf8'));"
             "process.stdout.write(JSON.stringify(Object.assign(Object.fromEntries(['text','markdown','latex','html','csv','word'].map(f=>[f,E.render(t,f)])),"
-            "{'word 6.5':E.render(t,'word',{width:6.5}),'word 4':E.render(t,'word',{width:4})})))"
+            "{'word 6.5':E.render(t,'word',{width:6.5}),'word 4':E.render(t,'word',{width:4}),"
+            "'word f':E.render(t,'word',{width:6.5,font:12,termSpace:true}),'word s':E.render(t,'word',{font:9.5,termSpace:false})})))"
         )
         run = subprocess.run(
             [NODE, "-e", script, str(ROOT / "viewer" / "estrec-table.js")],
@@ -288,7 +289,12 @@ def test_renderers_match_python(node_result):
         assert run.returncode == 0, run.stderr
         for fmt, text in json.loads(run.stdout).items():
             f, _, w = fmt.partition(" ")
-            want = et.render(py, f, width=float(w)) if w else et.render(py, f)
+            if w == "f":
+                want = et.render(py, f, width=6.5, font=12, term_space=True)
+            elif w == "s":
+                want = et.render(py, f, font=9.5, term_space=False)
+            else:
+                want = et.render(py, f, width=float(w)) if w else et.render(py, f)
             assert text == want, (spec.get("head"), fmt)
 
 

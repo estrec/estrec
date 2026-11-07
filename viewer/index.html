@@ -341,6 +341,7 @@ details.raw pre { font: 12px/1.45 var(--font-mono); background: var(--bg); paddi
               <span class="spacer"></span>
               <label class="inline" id="pin-wrap" hidden><input type="checkbox" id="opt-pin"> Pin record versions</label>
               <label class="inline" id="wordw-wrap" hidden title="Fixes every column's width and draws the sparklines to fit; empty for the table's natural width">Table width <input type="number" id="opt-wordw" min="2" max="20" step="0.25" value="6.5" style="width:5em"> in</label>
+              <label class="inline" id="wordf-wrap" hidden title="Set on every cell (Word ignores a pasted table's own size); sizes the rows and columns too">Font <input type="number" id="opt-wordf" min="6" max="16" step="0.5" value="10" style="width:4.5em"> pt</label>
               <label class="inline" id="redact-wrap" hidden><input type="checkbox" id="opt-redact" checked> Leave out identifying details</label>
               <button class="btn small" id="copy" type="button">Copy</button>
               <button class="btn small" id="save" type="button">Save file</button>
@@ -1029,17 +1030,19 @@ async function renderExport() {
   $("pin-wrap").hidden = state.format !== "spec";
   $("redact-wrap").hidden = state.format !== "web";
   $("wordw-wrap").hidden = state.format !== "word";
+  $("wordf-wrap").hidden = state.format !== "word";
   $("web-note").hidden = true;
   const box = $("export-text");
   if (state.format === "spec") box.value = state.spec ? JSON.stringify(await specForExport(), null, 2) + "\n" : "";
   else if (state.format === "web") box.value = lastTable ? webPage() : "";
   else if (state.format === "word") {
     const ww = parseFloat($("opt-wordw").value);
-    box.value = lastTable ? E.render(lastTable, "word", { width: ww >= 2 && ww <= 20 ? ww : null }) : "";
+    const wf = parseFloat($("opt-wordf").value);
+    box.value = lastTable ? E.render(lastTable, "word", { width: ww >= 2 && ww <= 20 ? ww : null, font: wf >= 6 && wf <= 16 ? wf : 10 }) : "";
     const note = $("web-note");
     note.hidden = false;
     note.textContent = "Copy puts the formatted table on the clipboard: paste it into Word (or Google Docs, LibreOffice, Excel) and it arrives as a table with the rules and alignment shown here. "
-      + "In Word, \u201cKeep Source Formatting\u201d keeps the 10 pt size; \u201cMerge Formatting\u201d takes the document\u2019s. Save file gives an .html file that Word opens. Table width fixes every column, and draws the sparklines to fit, for a page of that width (6.5 in: Letter or A4 with 1 in margins); empty it for the natural width. Below is the HTML it pastes.";
+      + "In Word, \u201cKeep Source Formatting\u201d keeps the 10 pt size; \u201cMerge Formatting\u201d takes the document\u2019s. Save file gives an .html file that Word opens. Table width fixes every column, and draws the sparklines to fit, for a page of that width (6.5 in: Letter or A4 with 1 in margins); empty it for the natural width. Font sets the size on every cell and sizes the rows. With sparklines the rows run on without space between terms, so the drawings join. Below is the HTML it pastes.";
   }
   else box.value = lastTable ? E.render(lastTable, state.format) : "";
 }
@@ -1205,6 +1208,7 @@ $("opt-unlisted").addEventListener("change", () => {
 $("opt-pin").addEventListener("change", renderExport);
 $("opt-redact").addEventListener("change", renderExport);
 $("opt-wordw").addEventListener("input", renderExport);
+$("opt-wordf").addEventListener("input", renderExport);
 $("stat-add-btn").addEventListener("click", () => {
   const c = ($("stat-add")._cands || [])[Number($("stat-add").value)];
   if (!c) return;

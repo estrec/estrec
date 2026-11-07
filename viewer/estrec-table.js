@@ -934,58 +934,70 @@
   const WORD_RULE = "solid windowtext";
   const WORD_CELL = "padding:0 5.4pt;border:none;white-space:nowrap";
 
-  function wordCell(text, { left, top = "", bottom = "", padTop = false, raw = null, attrs = "", styleExtra = "" }) {
-    let style = WORD_CELL + (left ? ";text-align:left" : ";text-align:center");
+  // the font size goes on every cell: Word ignores the table's when pasting
+  function wordCell(text, { left, top = "", bottom = "", padTop = "", raw = null, attrs = "", styleExtra = "", font = "10" }) {
+    let style = WORD_CELL + `;font-size:${font}pt` + (left ? ";text-align:left" : ";text-align:center");
     if (top) style += `;border-top:${top} ${WORD_RULE}`;
     if (bottom) style += `;border-bottom:${bottom} ${WORD_RULE}`;
-    if (padTop) style += ";padding-top:3pt";
+    if (padTop) style += `;padding-top:${padTop}`;
     return `<td${attrs} style="${style}${styleExtra}">${raw === null ? escHTML(text) : raw}</td>`;
   }
 
   // A whole HTML document that Word, Google Docs, LibreOffice and Excel paste or open as a
-  // formatted table (the viewer's Copy for Word puts it on the clipboard). With a sparkline
-  // beside the estimates, a term's rows are exactly 12 pt high (15 pt with the space above a
-  // term) and its drawing is an image of their height, so a column of them joins.
+  // formatted table (the viewer's Copy for Word puts it on the clipboard). Options: width
+  // (inches; fixes every column and draws the sparklines to fit), font (points, on every
+  // cell; rows 1.2 x font), termSpace (0.3 x font above each term; by default only without
+  // sparklines). With a sparkline beside the estimates, the rows are of exact height and the
+  // drawings images of that height, so a column of them joins.
   // Column widths for a Word table `width` inches wide, in tenths of a point: the label column
   // as wide as its longest label (about 5 pt a character, plus padding), between 36 pt and 40%
   // of the table; the data columns share the rest. Beside the estimates, a data column splits
   // into the numbers (the longest, at least 20 pt) and the drawing (the rest, at least 24 pt).
-  function wordWidths(t, plan, width) {
+  function wordWidths(t, plan, width, font) {
+    if (font === undefined) font = 10;
     const total = Math.floor(width * 720 + 0.5);
     const n = t.header.length;
     const rows = t.rows;
     const lab = Math.max(0, ...rows.map((r) => r.label.length));
-    const label = Math.min(Math.max(50 * lab + 108, 360), Math.floor((total * 2) / 5));
+    const label = Math.min(Math.max(Math.floor(font * 5 + 0.5) * lab + 108, 360), Math.floor((total * 2) / 5));
     const col = Math.floor((total - label) / n);
     const out = { total, label: total - col * n, col, below_px: Math.max(Math.floor(((col - 108) * 4) / 30), 1) };
     if (plan) {
       const block = [...plan.start.keys(), ...plan.inside.keys()].map((i) => rows[i]);
       const numc = Math.max(0, ...block.flatMap((r) => r.cells.map((c) => c.length)));
-      const num = col >= 440 ? Math.min(Math.max(55 * numc + 108, 200), col - 240) : Math.floor(col / 2);
+      const num = col >= 440 ? Math.min(Math.max(Math.floor(font * 5.5 + 0.5) * numc + 108, 200), col - 240) : Math.floor(col / 2);
       Object.assign(out, { num, side: col - num, side_px: Math.max(Math.floor(((col - num) * 4) / 30), 1) });
     }
     return out;
   }
   const ptOf = (n) => `${Math.floor(n / 10)}.${n % 10}pt`;
+  // pixels as points (x 0.75), exactly
+  const pxPt = (px) => { const n = px * 75; return `${Math.floor(n / 100)}.${String(n % 100).padStart(2, "0")}pt`; };
 
   function renderWord(t, opts) {
     const h = escHTML;
     const plan = besidePlan(t);
     const span = plan ? ' colspan="2"' : "";
     const width = opts && opts.width;
-    const W = width ? wordWidths(t, plan, width) : null;
+    const font = opts && opts.font ? Number(opts.font) : 10;
+    const fs = String(font);
+    // the space above each term: by default none when the table has sparklines, so they join
+    const termSpace = opts && opts.termSpace !== undefined && opts.termSpace !== null ? !!opts.termSpace : !t.rows.some((r) => r.sparkline);
+    const linePx = Math.floor(font * 1.6 + 0.5);
+    const padPx = termSpace ? Math.floor(font * 0.4 + 0.5) : 0;
+    const W = width ? wordWidths(t, plan, width, font) : null;
     const wd = (n) => (W ? `;width:${ptOf(n)}` : "");
     const spw = W ? W.below_px : SPARK_W;
     const sidew = W && plan ? W.side_px : SPARK_W;
     const out = ["<!doctype html>", '<html><head><meta charset="utf-8">', `<title>${h(t.title || "Estimation table")}</title></head><body>`];
-    if (t.title) out.push(`<p style="margin:0 0 6pt 0"><b>${h(t.title)}</b></p>`);
+    if (t.title) out.push(`<p style="margin:0 0 6pt 0;font-size:${fs}pt"><b>${h(t.title)}</b></p>`);
     const fixed = W ? `;width:${ptOf(W.total)};table-layout:fixed` : "";
-    out.push(`<table style="border-collapse:collapse;border:none;font-size:10pt${fixed}">`);
+    out.push(`<table style="border-collapse:collapse;border:none;font-size:${fs}pt${fixed}">`);
     const nh = t.head.length;
     t.head.forEach((hr, k) => {
       const top = k === 0 ? "1.5pt" : "";
       const bottom = k === nh - 1 ? ".75pt" : "";
-      out.push("<tr>" + ["", ...hr.cells].map((x, i) => wordCell(x, { left: i === 0, top, bottom, attrs: i ? span : "", styleExtra: W ? wd(i ? W.col : W.label) : "" })).join("") + "</tr>");
+      out.push("<tr>" + ["", ...hr.cells].map((x, i) => wordCell(x, { left: i === 0, top, bottom, attrs: i ? span : "", styleExtra: W ? wd(i ? W.col : W.label) : "", font: fs })).join("") + "</tr>");
     });
     const rows = t.rows;
     let prev = null;
@@ -993,7 +1005,8 @@
     const shown = rows.map((_, i) => i).filter((i) => !(plan && plan.skip.has(i)));
     const first = shown.length ? shown[0] : 0;
     // the space above a term; sparkline rows stay unpadded so they join
-    const pads = (i) => rowKind(t, plan, i) === "estimate" && i > first && !rows[i].sparkline;
+    const pads = (i) => padPx > 0 && rowKind(t, plan, i) === "estimate" && i > first && !rows[i].sparkline;
+    const rowPx = (i) => linePx + (pads(i) ? padPx : 0);
     for (const i of shown) {
       const r = rows[i];
       const kind = rowKind(t, plan, i);
@@ -1004,31 +1017,31 @@
       const padTop = pads(i);
       const label = plan && plan.label.has(i) ? plan.label.get(i) : r.label;
       const exact = plan && (plan.start.has(i) || plan.inside.has(i));
-      const tr = exact ? `<tr style="height:${padTop ? 15 : 12}pt;mso-height-rule:exactly">` : "<tr>";
+      const tr = exact ? `<tr style="height:${pxPt(rowPx(i))};mso-height-rule:exactly">` : "<tr>";
       const cells = [];
       [label, ...r.cells].forEach((x, c) => {
         const raw = sp && c ? sparkImg(sp.marks[c - 1], sp.color, x, undefined, undefined, false, spw) : null;
         const many = plan && c && !plan.start.has(i) && !plan.inside.has(i);
         const cw = W ? wd(c === 0 ? W.label : plan && !many ? W.num : W.col) : "";
-        cells.push(wordCell(x, { left: c === 0, top, bottom, padTop, raw, attrs: many ? ' colspan="2"' : "", styleExtra: cw }));
+        cells.push(wordCell(x, { left: c === 0, top, bottom, padTop: padTop ? pxPt(padPx) : "", raw, attrs: many ? ' colspan="2"' : "", styleExtra: cw, font: fs }));
         if (plan && c && plan.align === "estimate" && (plan.start.has(i) || plan.inside.has(i))) {
           const k = plan.start.has(i) ? plan.start.get(i)[0] : plan.inside.get(i);
           const ssp = rows[k].sparkline;
-          const px = padTop ? 20 : 16;
-          cells.push(wordCell("", { left: false, top, bottom, raw: sparkImg(ssp.marks[c - 1], ssp.color, rows[k].cells[c - 1], px, (px - 8) * 10, !plan.start.has(i), sidew), styleExtra: ";padding:0;vertical-align:top" + (W ? wd(W.side) : "") }));
+          const px = rowPx(i);
+          cells.push(wordCell("", { left: false, top, bottom, raw: sparkImg(ssp.marks[c - 1], ssp.color, rows[k].cells[c - 1], px, (px - linePx) * 10 + linePx * 5, !plan.start.has(i), sidew), styleExtra: ";padding:0;vertical-align:top" + (W ? wd(W.side) : ""), font: fs }));
         } else if (plan && c && plan.start.has(i)) {
           const [k, n, end] = plan.start.get(i);
           const ssp = rows[k].sparkline;
           let height = 0;
-          for (let q = i; q < end; q++) if (!plan.skip.has(q)) height += pads(q) ? 20 : 16;
-          cells.push(wordCell("", { left: false, top, bottom: end === rows.length ? "1.5pt" : "", raw: sparkImg(ssp.marks[c - 1], ssp.color, rows[k].cells[c - 1], height, undefined, false, sidew), attrs: ` rowspan="${n}"`, styleExtra: ";padding:0;vertical-align:top" + (W ? wd(W.side) : "") }));
+          for (let q = i; q < end; q++) if (!plan.skip.has(q)) height += rowPx(q);
+          cells.push(wordCell("", { left: false, top, bottom: end === rows.length ? "1.5pt" : "", raw: sparkImg(ssp.marks[c - 1], ssp.color, rows[k].cells[c - 1], height, undefined, false, sidew), attrs: ` rowspan="${n}"`, styleExtra: ";padding:0;vertical-align:top" + (W ? wd(W.side) : ""), font: fs }));
         }
       });
       out.push(tr + cells.join("") + "</tr>");
       prev = kind;
     }
     out.push("</table>");
-    for (const n of t.notes) out.push(`<p style="margin:3pt 0 0 0;font-size:9pt">${h(n)}</p>`);
+    for (const n of t.notes) out.push(`<p style="margin:3pt 0 0 0;font-size:${String(font - 1)}pt">${h(n)}</p>`);
     out.push("</body></html>");
     return out.join("\n") + "\n";
   }

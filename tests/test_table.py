@@ -432,7 +432,7 @@ def test_sparkline_beside_level_with_the_estimate():
     se = rows[rows.index(est) + 1]
     assert 'role="img"' not in se and se.count('aria-hidden="true"') == 3  # rule only
     assert 'style="display:block;margin:0 auto;position:relative"' in est
-    w = et.render(t, "word")
+    w = et.render(t, "word", term_space=True)
     assert "rowspan" not in w and w.count("mso-height-rule:exactly") == 6
     # Word: the marks at the text's middle, below the 3 pt space above the second term
     import base64
@@ -458,7 +458,7 @@ def test_sparkline_beside_the_estimates():
     assert f'colspan="{1 + 2 * 3}"' in h  # notes span every column
     # text formats keep the interval as a row
     assert sp[0]["cells"][0] in et.render(t, "text")
-    w = et.render(t, "word")
+    w = et.render(t, "word", term_space=True)
     assert w.count('rowspan="2"') == 6 and w.count("mso-height-rule:exactly") == 4
     # the first term's two rows are 12 + 12 pt (32 px), the second's 15 + 12 pt (36 px)
     assert w.count('height="32"') == 3 and w.count('height="36"') == 2
@@ -505,6 +505,29 @@ def test_word_table_width():
         assert n_w < int(re.search(r'<img width="(\d+)"', w).group(1))
         # the marks keep their size: only the axis narrows
         assert 'r="2.9"' in base64.b64decode(re.search(r"base64,([A-Za-z0-9+/=]+)", narrow).group(1)).decode()
+
+
+def test_word_font_size_and_term_space():
+    """The font size goes on every cell (Word ignores the table's on paste) and sizes the
+    rows; the space above each term is off by default when the table has sparklines."""
+    import base64
+    import re
+
+    s = spec()
+    plain = et.render(et.build_table(s, base_dir=EXAMPLES), "word")
+    assert plain.count("padding-top:3.00pt") > 0  # no sparklines: terms spaced
+    s["uncertainty"] = ["std_error", {"sparkline": {"place": "beside"}}]
+    t = et.build_table(s, base_dir=EXAMPLES)
+    w = et.render(t, "word")
+    assert "padding-top" not in w and w.count('style="height:12.00pt;mso-height-rule:exactly"') == 4
+    assert all("font-size:10pt" in td for td in re.findall(r"<td[^>]*>", w))
+    big = et.render(t, "word", font=12, width=6.5)
+    assert all("font-size:12pt" in td for td in re.findall(r"<td[^>]*>", big))
+    assert 'style="height:14.25pt;mso-height-rule:exactly"' in big  # 19 px = 1.2 x 12 pt, rounded
+    svgs = [base64.b64decode(x).decode() for x in re.findall(r"base64,([A-Za-z0-9+/=]+)", big)]
+    assert all('height="19"' in x for x in svgs)
+    assert 'font-size:11pt">' in big  # notes, a point smaller
+    assert et.render(t, "word", font=9.5).count("font-size:9.5pt") > 0
 
 
 def test_sparkline_validation():

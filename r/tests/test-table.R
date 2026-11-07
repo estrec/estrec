@@ -1,6 +1,7 @@
 # Base-R tests of render_table() (no testthat); they need modelsummary.
 if (!requireNamespace("modelsummary", quietly = TRUE)) quit(save = "no")
 library(estrec)
+options(modelsummary_format_numeric_latex = "plain")
 cells <- function(x, label) unname(unlist(x[x$term == label, setdiff(names(x), c("part", "term", "statistic"))][1, ]))
 
 # the spec's example, as the Python reference and the browser render it
@@ -15,7 +16,7 @@ if (dir.exists(ex)) {
             identical(cells(x, "N"), c("32", "32", "32")),
             identical(cells(x, "RMSE"), c("2.392", "2.241", "2.240")),
             identical(cells(x, "Std. errors"), c("iid", "HC1", "HC1")),
-            identical(cells(x, "Cylinders FE"), c("Yes", "Yes", "Yes")),
+            identical(cells(x, "Cylinders FE"), c("Y", "Y", "Y")),
             identical(cells(x, "Wald p"), c("0.000", "0.000", "0.001")),
             identical(cells(x, "Controls"), c("No", "No", "qsec")),
             !"qsec" %in% x$term)
@@ -62,11 +63,39 @@ if (dir.exists(ex)) {
   stopifnot(!any(grepl("^\\(", unlist(x[x$part == "estimates", 4]))))
 }
 
-# the event-study example: no estimate rows, sparklines shown as intervals
+# the event-study example: no estimate rows; sparklines drawn in HTML (SVG) and LaTeX (TikZ)
+# as the Python reference draws them (tests/test_table.py pins the same first cell), the
+# interval as text elsewhere
 if (dir.exists(ex)) {
-  x <- render_table(file.path(ex, "event-study.estrec-table.json"), output = "data.frame")
+  es <- file.path(ex, "event-study.estrec-table.json")
+  x <- render_table(es, output = "data.frame")
   stopifnot(identical(x$term[1:7], c("t \u2212 3", "t \u2212 2", "t \u2212 1", "t", "t + 1", "t + 2", "t + 3")),
             all(grepl("^\\[", unlist(x[1:7, 4]))))
+  t3_tikz <- paste0(
+    "\\tikz[x=.75pt,y=.75pt,baseline=0pt]{\\useasboundingbox (0,-4.8) rectangle (80,11.2);",
+    "\\draw[line width=.75pt,color={rgb,255:red,85;green,85;blue,85}] (59.9,-4.8) -- (59.9,11.2);",
+    "\\fill[color={rgb,255:red,43;green,95;blue,142},fill opacity=.22] (60.2,3.2) .. controls (65.47,7.2)",
+    " and (70.73,7.2) .. (76.0,3.2) .. controls (70.73,-0.8) and (65.47,-0.8) .. (60.2,3.2) -- cycle;",
+    "\\draw[line width=.975pt,line cap=round,color={rgb,255:red,43;green,95;blue,142}] (60.2,3.2) -- (76.0,3.2);",
+    "\\filldraw[fill={rgb,255:red,43;green,95;blue,142},draw=white,line width=.675pt] (60.2,3.2) circle[radius=1.425pt];",
+    "\\filldraw[fill={rgb,255:red,43;green,95;blue,142},draw=white,line width=.675pt] (76.0,3.2) circle[radius=1.425pt];",
+    "\\filldraw[fill={rgb,255:red,27;green,61;blue,92},draw=white,line width=.825pt] (68.1,3.2) circle[radius=2.175pt];}")
+  t3_svg <- paste0(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="16" viewBox="0 0 80 16" role="img"',
+    ' aria-label="[0.001, 0.060]"><line x1="59.9" y1="0" x2="59.9" y2="16" stroke="#555555" stroke-width="1"/>',
+    '<path d="M60.2 8.0Q68.1 2.0 76.0 8.0Q68.1 14.0 60.2 8.0Z" fill="#2b5f8e" fill-opacity="0.22"/>')
+  shown <- function(output) paste(utils::capture.output(print(render_table(es, output = output), output)), collapse = "\n")
+  h <- shown("html"); l <- shown("latex"); m <- shown("markdown")
+  stopifnot(grepl(t3_svg, h, fixed = TRUE), lengths(regmatches(h, gregexpr("<svg xmlns", h, fixed = TRUE))) == 7L,
+            grepl(t3_tikz, l, fixed = TRUE), lengths(regmatches(l, gregexpr("\\tikz[", l, fixed = TRUE))) == 7L,
+            grepl("[0.001, 0.060]", m, fixed = TRUE), !grepl("tikz|<svg", m))
+  f <- tempfile(fileext = ".html"); render_table(es, output = f)
+  stopifnot(grepl(t3_svg, paste(readLines(f, warn = FALSE), collapse = "\n"), fixed = TRUE))
+  # by row and across the table: the axes of the Python reference (each row's own, one shared)
+  spec <- jsonlite::fromJSON(es, simplifyVector = FALSE)
+  spec$uncertainty <- list(sparkline = list(scale = "row"))
+  l <- paste(utils::capture.output(print(render_table(spec, output = "latex", base_dir = ex), "latex")), collapse = "\n")
+  stopifnot(!grepl(t3_tikz, l, fixed = TRUE), grepl("(4.0,3.2) .. controls", l, fixed = TRUE))
 }
 
 # records in memory: another vcov per column, shared rows, keep/drop, uncertainty, errors
@@ -97,7 +126,7 @@ if (requireNamespace("fixest", quietly = TRUE)) {
             identical(x$term[x$part == "estimates"], c("Treatment", "Treatment", "z", "z")),
             identical(cells(x, "Std. errors"), c("iid", "by: id", "iid", "HC1")),
             identical(cells(x, "Clusters"), c("", "30", "", "")),
-            identical(cells(x, "FE: id"), c("", "X", "X", "")),
+            identical(cells(x, "FE: id"), c("N", "X", "X", "N")),  # fe_yes = "X"; fe_no defaults to "N"
             identical(cells(x, "Sample"), rep("all", 4)),
             identical(cells(x, "N"), rep("300", 4)))
   se <- function(col) as.numeric(gsub("[()]", "", x[2, col]))

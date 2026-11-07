@@ -79,7 +79,19 @@ Decisions so far:
 - The Disclosure levels chat (05fe2fb6) also edits this repo, so commit only your own
   files.
 
-## Next chat: sparklines everywhere and the `show_table` refactor (Ted, 2026-11-07)
+## Table graphics chat (55cd4c58, 2026-11-07): done
+
+- Sparklines drawn in LaTeX (TikZ; `_spark_tikz` / `sparkTikz`, the same x positions as the
+  SVG via `_spark_xs`; 1 px = 0.75 pt, 12 pt rows; a first-line comment names
+  `\usepackage{tikz}`), `to_great_table` (SVG in HTML, TikZ in LaTeX, through great_tables'
+  private `FormatFns`) and estrec's `render_table` (tinytable outputs, per-output
+  `format_tt`; strings equal to Python's, a pinned cell in both test suites). Not compiled:
+  valiant has no TeX. Open: tinytable pads rows, so R's HTML column doesn't join.
+- `show_table` is a wrapper over the table builder (layout as shown to Ted; he set FE rows to `Y`/`N`, and said nothing on the names-on-top question, so names stay on top;
+  FE rows `Y`/`N` are the default everywhere: `format.fe_yes` / `fe_no`; estrec's
+  `glance()` keeps fixest's `X`).
+
+## Earlier hand-off: sparklines everywhere and the `show_table` refactor (Ted, 2026-11-07)
 
 1. **Sparklines in every renderer that can draw.** Today HTML, the web page, the viewer
    and Word draw them; text, Markdown, CSV, LaTeX, great_tables and estrec's

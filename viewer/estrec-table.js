@@ -550,13 +550,42 @@
   const SPARK_W = 80, SPARK_H = 16;
   const HALO = 'style="stroke:var(--bg,#ffffff)"';
 
-  function sparkSVG(m, color, label) {
-    if (!m) return "";
+  // where 0, the low end, the estimate and the high end fall across the 80-pixel width, in
+  // tenths of a pixel, rounded half up with integers so every renderer draws the same
+  function sparkXs(m) {
     const [lo, hi] = m.domain;
     const pad = 4;
-    const x = (v) => { const n = Math.floor((pad + (v - lo) / (hi - lo) * (SPARK_W - 2 * pad)) * 10 + 0.5); return `${Math.floor(n / 10)}.${n % 10}`; };
+    const x = (v) => Math.floor((pad + (v - lo) / (hi - lo) * (SPARK_W - 2 * pad)) * 10 + 0.5);
+    return [x(0), x(m.low), x(m.estimate), x(m.high)];
+  }
+  const tenths = (n) => `${Math.floor(n / 10)}.${n % 10}`;
+  // (a + 2b) / 3 tenths in hundredths, rounded half up: a quadratic's control point as a cubic's
+  const third = (a, b) => { const n = Math.floor((20 * (a + 2 * b) + 3) / 6); return `${Math.floor(n / 100)}.${String(n % 100).padStart(2, "0")}`; };
+  const tikzRGB = (c) => { const [r, g, b] = [1, 3, 5].map((k) => parseInt(c.slice(k, k + 2), 16)); return `{rgb,255:red,${r};green,${g};blue,${b}}`; };
+  const TIKZ_NOTE = "% Sparklines are TikZ pictures (\\usepackage{tikz}), drawn for 12pt rows (10pt type, \\arraystretch 1) so a column of them joins";
+
+  // the SVG's marks in TikZ (1 px = 0.75 pt), y up from the baseline: the 0 rule over a
+  // 12 pt row (-4.8 to 11.2), the interval at 3.2
+  function sparkTikz(m, color) {
+    if (!m) return "";
+    const [n0, nl, ne, nh] = sparkXs(m);
+    const [x0, xl, xe, xh] = [n0, nl, ne, nh].map(tenths);
+    const a = third(nl, ne), b = third(nh, ne), c = tikzRGB(color), d = tikzRGB(sparkDark(color));
+    return "\\tikz[x=.75pt,y=.75pt,baseline=0pt]{\\useasboundingbox (0,-4.8) rectangle (80,11.2);" +
+      `\\draw[line width=.75pt,color=${tikzRGB("#555555")}] (${x0},-4.8) -- (${x0},11.2);` +
+      `\\fill[color=${c},fill opacity=.22] (${xl},3.2) .. controls (${a},7.2) and (${b},7.2) .. (${xh},3.2)` +
+      ` .. controls (${b},-0.8) and (${a},-0.8) .. (${xl},3.2) -- cycle;` +
+      `\\draw[line width=.975pt,line cap=round,color=${c}] (${xl},3.2) -- (${xh},3.2);` +
+      `\\filldraw[fill=${c},draw=white,line width=.675pt] (${xl},3.2) circle[radius=1.425pt];` +
+      `\\filldraw[fill=${c},draw=white,line width=.675pt] (${xh},3.2) circle[radius=1.425pt];` +
+      `\\filldraw[fill=${d},draw=white,line width=.825pt] (${xe},3.2) circle[radius=2.175pt];` +
+      "}";
+  }
+
+  function sparkSVG(m, color, label) {
+    if (!m) return "";
+    const [x0, xl, xe, xh] = sparkXs(m).map(tenths);
     const y = "8.0", top = "2.0", bottom = "14.0";
-    const [x0, xl, xe, xh] = [x(0), x(m.low), x(m.estimate), x(m.high)];
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${SPARK_W}" height="${SPARK_H}" viewBox="0 0 ${SPARK_W} ${SPARK_H}" role="img"` +
       (label ? ` aria-label="${escHTML(label)}"` : "") + ">" +
       `<line x1="${x0}" y1="0" x2="${x0}" y2="${SPARK_H}" stroke="#555555" stroke-width="1"/>` +
@@ -685,7 +714,7 @@
         }
       } else if ("fixed_effect" in s) {
         label = s.label || `FE: ${s.fixed_effect}`;
-        const yes = fmt.fe_yes !== undefined ? fmt.fe_yes : "Yes", no = fmt.fe_no !== undefined ? fmt.fe_no : "";
+        const yes = fmt.fe_yes !== undefined ? fmt.fe_yes : "Y", no = fmt.fe_no !== undefined ? fmt.fe_no : "N";
         for (const c of cols) cells.push(((c.found.record.specification || {}).fixed_effects || []).includes(s.fixed_effect) ? yes : no);
       } else if ("test" in s) {
         label = s.label || s.test;
@@ -740,7 +769,8 @@
   function renderLatex(t, opts) {
     const e = opts && opts.escape === false ? (s) => String(s) : tex;
     const n = t.header.length;
-    const lines = ["\\begin{table}[htbp]", "\\centering"];
+    const lines = t.rows.some((r) => r.sparkline) ? [TIKZ_NOTE] : [];
+    lines.push("\\begin{table}[htbp]", "\\centering");
     if (t.title) lines.push(`\\caption{${e(t.title)}}`);
     lines.push(`\\begin{tabular}{l${"c".repeat(n)}}`, "\\toprule");
     for (const h of t.head) lines.push(" & " + h.cells.map(e).join(" & ") + " \\\\");
@@ -748,7 +778,8 @@
     let prev = null;
     for (const r of t.rows) {
       if (r.kind === "stat" && prev !== "stat") lines.push("\\midrule");
-      lines.push(`${e(r.label)} & ` + r.cells.map(e).join(" & ") + " \\\\");
+      const cells = r.sparkline ? r.sparkline.marks.map((m) => sparkTikz(m, r.sparkline.color)) : r.cells.map(e);
+      lines.push(`${e(r.label)} & ` + cells.join(" & ") + " \\\\");
       prev = r.kind;
     }
     lines.push("\\bottomrule", "\\end{tabular}");
@@ -1067,7 +1098,7 @@ ${table}</div>
   return {
     TABLE_SCHEMA, DEFAULT_STARS, DEFAULT_HEAD, HEAD_KINDS, TABLE_METRICS, STAT_LABELS,
     twoSidedP, criticalValue, erfc, qnorm,
-    NAMED_LINES, PLACEHOLDERS, SPARK_COLOR, SPARK_SCALES, sparkSVG, uncertaintyLines, pValue,
+    NAMED_LINES, PLACEHOLDERS, SPARK_COLOR, SPARK_SCALES, sparkSVG, sparkTikz, uncertaintyLines, pValue,
     num, vcovs, vcovLabel, pickVcov, tidy, glance, findTest,
     canonicalJSON, sha256Hex, recordSha256,
     indexRecords, validateTable, checkPins, columnResponse, buildTable, render, renderers: RENDERERS,

@@ -528,6 +528,67 @@ SPARK_W, SPARK_H = 80, 16
 _HALO = 'style="stroke:var(--bg,#ffffff)"'
 
 
+def _spark_xs(m: dict) -> tuple[int, int, int, int]:
+    """Where 0, the low end, the estimate and the high end fall across the 80-pixel width,
+    in tenths of a pixel, rounded half up with integers so every renderer draws the same."""
+    lo, hi = m["domain"]
+    pad = 4.0
+
+    def x(v):
+        return math.floor((pad + (v - lo) / (hi - lo) * (SPARK_W - 2 * pad)) * 10 + 0.5)
+
+    return x(0.0), x(m["low"]), x(m["estimate"]), x(m["high"])
+
+
+def _tenths(n: int) -> str:
+    return f"{n // 10}.{n % 10}"
+
+
+def _third(a: int, b: int) -> str:
+    """(a + 2b) / 3 tenths, in hundredths rounded half up: a quadratic curve's control point
+    as a cubic's (TikZ has no quadratic curves). All values are positive."""
+    n = (20 * (a + 2 * b) + 3) // 6
+    return f"{n // 100}.{n % 100:02d}"
+
+
+def _tikz_rgb(color: str) -> str:
+    r, g, b = (int(color[k : k + 2], 16) for k in (1, 3, 5))
+    return f"{{rgb,255:red,{r};green,{g};blue,{b}}}"
+
+
+# A sparkline in LaTeX draws the SVG's marks in its units (1 px = 0.75 pt, so 60 x 12 pt), y
+# up from the baseline: the 0 rule from -4.8 to 11.2 (a 12 pt row: 10 pt type, \arraystretch
+# 1, so a column of them joins), the interval at 3.2.
+TIKZ_NOTE = (
+    "% Sparklines are TikZ pictures (\\usepackage{tikz}), drawn for 12pt rows "
+    "(10pt type, \\arraystretch 1) so a column of them joins"
+)
+
+
+def _spark_tikz(m: dict | None, color: str) -> str:
+    """One interval as a TikZ picture with the SVG's marks: the grey 0 rule at full height,
+    the faint band swelling toward the estimate, the round-capped line, the end dots and the
+    darker estimate dot, each dot with a white halo."""
+    if m is None:
+        return ""
+    n0, nl, ne, nh = _spark_xs(m)
+    x0, xl, xe, xh = map(_tenths, (n0, nl, ne, nh))
+    a, b = _third(nl, ne), _third(nh, ne)
+    c, d = _tikz_rgb(color), _tikz_rgb(_spark_dark(color))
+    return (
+        "\\tikz[x=.75pt,y=.75pt,baseline=0pt]{"
+        "\\useasboundingbox (0,-4.8) rectangle (80,11.2);"
+        f"\\draw[line width=.75pt,color={_tikz_rgb('#555555')}] ({x0},-4.8) -- ({x0},11.2);"
+        f"\\fill[color={c},fill opacity=.22] ({xl},3.2) .. controls ({a},7.2) and ({b},7.2) .. ({xh},3.2)"
+        f" .. controls ({b},-0.8) and ({a},-0.8) .. ({xl},3.2) -- cycle;"
+        f"\\draw[line width=.975pt,line cap=round,color={c}] ({xl},3.2) -- ({xh},3.2);"
+        f"\\filldraw[fill={c},draw=white,line width=.675pt] ({xl},3.2) circle[radius=1.425pt];"
+        f"\\filldraw[fill={c},draw=white,line width=.675pt] ({xh},3.2) circle[radius=1.425pt];"
+        f"\\filldraw[fill={d},draw=white,line width=.825pt] ({xe},3.2) circle[radius=2.175pt];"
+        "}"
+    )
+
+
 def _spark_svg(m: dict | None, color: str, label: str = "") -> str:
     """One interval as a small SVG of fixed size, on its axis: a grey rule at 0 running the
     full height (so stacked rows join), the interval as a thin line in `color` inside a
@@ -535,16 +596,8 @@ def _spark_svg(m: dict | None, color: str, label: str = "") -> str:
     estimate, each with a thin halo of the background so the line is scalloped there."""
     if m is None:
         return ""
-    lo, hi = m["domain"]
-    pad = 4.0
-
-    def x(v):
-        # tenths of a pixel, rounded half up with integers so the browser draws the same
-        n = math.floor((pad + (v - lo) / (hi - lo) * (SPARK_W - 2 * pad)) * 10 + 0.5)
-        return f"{n // 10}.{n % 10}"
-
+    x0, xl, xe, xh = map(_tenths, _spark_xs(m))
     y, top, bottom = "8.0", "2.0", "14.0"
-    x0, xl, xe, xh = x(0.0), x(m["low"]), x(m["estimate"]), x(m["high"])
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{SPARK_W}" height="{SPARK_H}" '
         f'viewBox="0 0 {SPARK_W} {SPARK_H}" role="img"'
@@ -727,7 +780,7 @@ def build_table(spec: dict, *, base_dir: str | os.PathLike | None = None, record
         elif "fixed_effect" in s:
             fe = s["fixed_effect"]
             label = s.get("label") or f"FE: {fe}"
-            yes, no = fmt.get("fe_yes", "Yes"), fmt.get("fe_no", "")
+            yes, no = fmt.get("fe_yes", "Y"), fmt.get("fe_no", "N")
             for c in cols:
                 has = fe in ((c["found"].record.get("specification") or {}).get("fixed_effects") or [])
                 cells.append(yes if has else no)
@@ -803,10 +856,18 @@ def _render_markdown(t: dict) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def _latex_cells(r: dict, e) -> list[str]:
+    sp = r.get("sparkline")
+    if sp is None:
+        return [e(x) for x in r["cells"]]
+    return [_spark_tikz(m, sp["color"]) for m in sp["marks"]]
+
+
 def _render_latex(t: dict, escape: bool = True) -> str:
     e = _tex if escape else (lambda s: s)
     n = len(t["header"])
-    lines = ["\\begin{table}[htbp]", "\\centering"]
+    lines = [TIKZ_NOTE] if any("sparkline" in r for r in t["rows"]) else []
+    lines += ["\\begin{table}[htbp]", "\\centering"]
     if t["title"]:
         lines.append(f"\\caption{{{e(t['title'])}}}")
     lines += [f"\\begin{{tabular}}{{l{'c' * n}}}", "\\toprule"]
@@ -817,7 +878,7 @@ def _render_latex(t: dict, escape: bool = True) -> str:
     for r in t["rows"]:
         if r["kind"] == "stat" and prev != "stat":
             lines.append("\\midrule")
-        lines.append(f"{e(r['label'])} & " + " & ".join(map(e, r["cells"])) + " \\\\")
+        lines.append(f"{e(r['label'])} & " + " & ".join(_latex_cells(r, e)) + " \\\\")
         prev = r["kind"]
     lines.append("\\bottomrule")
     lines.append("\\end{tabular}")
@@ -1068,7 +1129,34 @@ def to_great_table(table: dict):
         g = g.tab_header(title=table["title"])
     for n in table["notes"]:
         g = g.tab_source_note(n)
-    return g
+    return _great_sparklines(g, table, gt)
+
+
+def _great_sparklines(g, table: dict, gt):
+    """Sparkline cells drawn as in `render`: the SVG in HTML, TikZ in LaTeX, the interval as
+    text elsewhere; their rows unpadded and the body without hairlines, so a column joins."""
+    rows = [i for i, r in enumerate(table["rows"]) if "sparkline" in r]
+    if not rows:
+        return g
+    try:
+        from great_tables._formats import FormatFns
+    except ImportError:  # pragma: no cover - older great_tables: HTML only
+        FormatFns = None
+    for i in rows:
+        sp = table["rows"][i]["sparkline"]
+        for j, h in enumerate(table["header"]):
+            m, text = sp["marks"][j], table["rows"][i]["cells"][j]
+            svg = _spark_svg(m, sp["color"], text)
+            if FormatFns is None:
+                fns = lambda _, s=svg: s  # noqa: E731
+            else:
+                tikz = _spark_tikz(m, sp["color"])
+                fns = FormatFns(html=lambda _, s=svg: s, latex=lambda _, s=tikz: s, default=lambda _, s=text: s)
+            g = g.fmt(fns, columns=h, rows=[i])
+    g = g.tab_style(
+        style=gt.style.css("padding-top:0;padding-bottom:0;line-height:16px"), locations=gt.loc.body(rows=rows)
+    )
+    return g.tab_options(table_body_hlines_style="none")
 
 
 # ---------------------------------------------------------------- command line

@@ -125,9 +125,10 @@ row per line:
   default `#2b5f8e`), the estimate as a darker dot (each channel × 0.65), and 0 as a dark
   grey rule. `scale` sets which sparklines share an axis: `"column"` (the default; down a
   column, so an event study's leads and lags read as a coefficient plot), `"row"` (along a
-  row) or `"table"`. An axis spans the intervals it holds and always 0. Formats that can't
-  draw (text, Markdown, CSV, LaTeX, a renderer without graphics) show `[conf_low,
-  conf_high]` instead;
+  row) or `"table"`. An axis spans the intervals it holds and always 0. HTML draws an SVG
+  and LaTeX a TikZ picture with the same marks (the document needs `\usepackage{tikz}`);
+  formats that can't draw (text, Markdown, CSV, a renderer without graphics) show
+  `[conf_low, conf_high]` instead;
 - a **list** of names, templates and sparklines, one row each, in order: `["std_error", "[{p_value}]"]`;
 - `null`: no lines.
 
@@ -157,7 +158,7 @@ Each entry of `stats` is one row, of one of these kinds:
 |---|---|---|
 | metric | `metric` (the record's name: `nobs`, `r2`, `r2_within`, `aic`, ...; `rmse` is `sqrt(rss / nobs)` when the record has no `rmse`) | the value; blank when the record hasn't got it |
 | vcov | `vcov`: `"type"` or `"n_clusters"` | the column's vcov as `by: firm` or its type; or its cluster counts |
-| fixed effect | `fixed_effect` (a name in `specification.fixed_effects`) | `format.fe_yes` (default `"Yes"`) when the record has it, else `format.fe_no` (default `""`) |
+| fixed effect | `fixed_effect` (a name in `specification.fixed_effects`) | `format.fe_yes` (default `"Y"`) when the record has it, else `format.fe_no` (default `"N"`) |
 | test | `test` (a `tests[*].label`, else `name`), `value`: `"statistic"` (default) or `"p_value"` | the test's value |
 | literal | `values` (one string per column) | the text, for what records don't hold |
 

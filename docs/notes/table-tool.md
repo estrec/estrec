@@ -96,7 +96,7 @@ Decisions so far:
   only for now): spec `sparkline.place` `below` / `beside`; `_beside_plan` / `besidePlan`
   lay it out in HTML and Word (Python = JS byte for byte, 3 parity specs); the HTML cell is
   `position:relative` with an SVG of height 100% (marks in a nested SVG at y=50%); Word rows
-  get `mso-height-rule:exactly` heights and the image their sum (untested in real Word).
+  get `mso-height-rule:exactly` heights and the image their sum (Ted 2026-11-08: works in real Word, both aligns, with a Reference / omitted row).
   LaTeX, R, great_tables, text formats draw it below. Preview v10 (same link). Open: a
   missing term leaves its cell empty, so the 0 rule breaks there (fixed 2026-11-08, below); LaTeX/R beside later (LaTeX done 2026-11-08; R dropped).
   Then `sparkline.align` (Ted: centred on est/SE/p it read as the SE's): `estimate`
@@ -107,7 +107,7 @@ Decisions so far:
 - Word export width (Ted: fit a 6.5 in Word table; sparklines can't be scaled in Word):
   `render(t, "word", width=in)`, the viewer's Table width box; each sparkline drawn at its
   column's width. Then **Print / PDF** in the viewer (print CSS + zoom to the Table width in
-  `beforeprint`; untested in a browser; likely blocked inside the artifact preview).
+  `beforeprint`; Ted 2026-11-08: works in a browser).
   Then font size on every Word cell and no space between terms with sparklines; Ted
   2026-11-08: the paste has no gaps.
 

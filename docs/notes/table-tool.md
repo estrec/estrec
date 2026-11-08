@@ -98,7 +98,7 @@ Decisions so far:
   `position:relative` with an SVG of height 100% (marks in a nested SVG at y=50%); Word rows
   get `mso-height-rule:exactly` heights and the image their sum (untested in real Word).
   LaTeX, R, great_tables, text formats draw it below. Preview v10 (same link). Open: a
-  missing term leaves its cell empty, so the 0 rule breaks there; LaTeX/R beside later.
+  missing term leaves its cell empty, so the 0 rule breaks there (fixed 2026-11-08, below); LaTeX/R beside later (LaTeX done 2026-11-08; R dropped).
   Then `sparkline.align` (Ted: centred on est/SE/p it read as the SE's): `estimate`
   (default; per-row cells, the marks in the estimate row's content box so they sit on the
   numbers' line, a rule-only SVG in the other rows; Word images per row, marks at the text's
@@ -108,6 +108,20 @@ Decisions so far:
   `render(t, "word", width=in)`, the viewer's Table width box; each sparkline drawn at its
   column's width. Then **Print / PDF** in the viewer (print CSS + zoom to the Table width in
   `beforeprint`; untested in a browser; likely blocked inside the artifact preview).
+  Then font size on every Word cell and no space between terms with sparklines; Ted
+  2026-11-08: the paste has no gaps.
+
+- LaTeX beside and reference rows (Ted 2026-11-08: LaTeX yes; R "not worth it", leave it,
+  if ever; the 0 rule wanted for an event study's reference period, usually a dash or
+  "(omitted)"): `_latex_beside` / `latexBeside`. Centred uses no `multirow`: the first row's
+  picture keeps its 12 pt bounding box and draws the rule down through the term's rows
+  (`_spark_tikz(rows=n)`), the other rows empty there. Row option `reference` (true → `—`,
+  or text): the text where a column lacks the term, other lines blank, a hollow dot at 0
+  (`_spark_ring`); no "no column has" warning. Any missing sparkline cell now draws the
+  rule alone (mark `{domain}` only; None if its axis has no interval). Viewer: Reference
+  box per term, **+ Reference row** (term `ref`, `ref2`, ...). Python = JS (6 more parity
+  specs). Test document `tmp/tikz-test2.tex` for Ted (not compiled here). R ignores
+  `reference`.
 
 ## Earlier hand-off: sparklines everywhere and the `show_table` refactor (Ted, 2026-11-07)
 

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Table reference rows (Ted 2026-11-08, for an event study's omitted period): a row's
+  `"reference": true` (or the text to show, `"(omitted)"`) shows `—` where a column lacks the
+  term, blanks its other lines, and draws a hollow dot at 0 on its sparkline's 0 rule. The
+  term needn't be in any record (no "no column has" warning). Viewer: a Reference box on each
+  term and **+ Reference row**. estrec's R `render_table` doesn't show them.
+- Sparkline cells where a column lacks the term now draw the 0 rule alone, so the rule runs
+  unbroken down a column (built tables give such cells a mark with only `domain`; an axis
+  with no interval at all stays blank).
+- LaTeX lays out a sparkline beside the estimates (Ted 2026-11-08): a second column per
+  model, headings and statistics in `\multicolumn{2}`; level with the estimate, the term's
+  other rows carry the rule; centred, the first row's picture draws down through the
+  term's rows (no `multirow`). Python = JS.
 - Word export: the font size goes on every cell (Word ignored the table's on paste, so cells
   came in at the document's size and were clipped in fixed columns); `font` (points; the
   viewer's Font box, 10 by default) sizes the rows (1.2 x font), the column widths and the

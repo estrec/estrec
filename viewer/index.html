@@ -695,14 +695,14 @@ function termRows(idx) {
   for (const row of s.rows || []) {
     const names = row.terms || [row.term];
     names.forEach((n) => taken.add(n));
-    out.push({ names, label: row.label || "", on: true, listed: true });
+    out.push({ names, label: row.label || "", on: true, listed: true, ref: row.reference || null });
   }
   const keep = (s.keep || []).map((p) => { try { return new RegExp(p); } catch { return null; } }).filter(Boolean);
   const drop = (s.drop || []).map((p) => { try { return new RegExp(p); } catch { return null; } }).filter(Boolean);
   for (const t of all) {
     if (taken.has(t)) continue;
     const shown = s.keep_unlisted !== false && (!keep.length || keep.some((k) => k.test(t))) && !drop.some((d) => d.test(t));
-    out.push({ names: [t], label: "", on: shown, listed: false });
+    out.push({ names: [t], label: "", on: shown, listed: false, ref: null });
   }
   return out;
 }
@@ -712,6 +712,7 @@ function materializeRows(view) {
   s.rows = view.filter((r) => r.on).map((r) => {
     const row = r.names.length > 1 ? { terms: r.names } : { term: r.names[0] };
     if (r.label && r.label !== r.names[0]) row.label = r.label;
+    if (r.ref) row.reference = r.ref;
     return row;
   });
   s.keep_unlisted = false;
@@ -732,12 +733,30 @@ function renderRows(idx) {
     const lab = el("input", { type: "text", id: `row-label-${i}`, value: r.label, placeholder: r.names[0], "aria-label": `Label for ${r.names.join(", ")}` });
     lab.addEventListener("change", () => { r.label = lab.value; after(); });
     lab.addEventListener("input", () => { r.label = lab.value; materializeRows(view); update({ keepControls: true }); });
+    // the omitted reference category: its text where a column lacks the term, a hollow dot at 0
+    const refOn = el("input", { type: "checkbox", id: `row-ref-${i}`, checked: !!r.ref, "aria-label": `${r.names.join(", ")} is the reference category` });
+    const refText = el("input", { type: "text", id: `row-reftext-${i}`, value: r.ref === true || !r.ref ? E.REFERENCE_TEXT : r.ref, hidden: !r.ref, style: "width:7em", "aria-label": `Text shown for ${r.names.join(", ")} where a column lacks it` });
+    const setRef = () => { r.ref = !refOn.checked ? null : refText.value && refText.value !== E.REFERENCE_TEXT ? refText.value : true; };
+    refOn.addEventListener("change", () => { setRef(); refText.hidden = !refOn.checked; after(); });
+    refText.addEventListener("input", () => { setRef(); materializeRows(view); update({ keepControls: true }); });
+    refText.addEventListener("change", () => { setRef(); after(); });
     box.append(el("div", { class: "item" + (r.on ? "" : " off") },
       el("div", { class: "fields" },
         el("label", { class: "inline" }, on, el("span", { class: "mono", text: r.names.join(" | ") })),
-        lab),
+        lab,
+        el("label", { class: "inline", title: "The omitted reference category (an event study's reference period): shows this text where a column lacks the term, and a hollow dot at 0 on sparklines" }, refOn, el("span", { text: "Reference" }), refText)),
       toolButtons(view, i, after, el("span"))));
   });
+  // a reference row for a term no record has (fixest's omitted period, say)
+  box.append(el("button", { class: "btn small", type: "button", id: "row-ref-add", text: "+ Reference row",
+    title: "A row for the omitted reference category: — in every column, a hollow dot at 0 on sparklines; move it into place with the arrows",
+    onclick: () => {
+      const used = new Set(view.flatMap((r) => r.names));
+      let name = "ref", k = 1;
+      while (used.has(name)) name = `ref${++k}`;
+      view.push({ names: [name], label: "Reference", on: true, listed: true, ref: true });
+      after();
+    } }));
 }
 
 function statLabel(s) {

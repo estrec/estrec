@@ -220,6 +220,27 @@ def specs():
     s.update(uncertainty=[{"sparkline": {"place": "beside", "align": "middle"}}, "std_error"], estimate=False, stats=[])
     out.append(s)
     out.append(et.read_table(EXAMPLES / "event-study.estrec-table.json"))
+    # reference rows: hp shows "(omitted)" where a column lacks it; "base" is in no record
+    for unc, est in (
+        (["std_error", {"sparkline": {}}], True),
+        (["std_error", {"sparkline": {"place": "beside"}}], True),
+        (["std_error", "[{p_value}]", {"sparkline": {"place": "beside", "align": "middle"}}], True),
+        ({"sparkline": {"scale": "row"}}, False),
+        ("std_error", True),
+    ):
+        s = copy.deepcopy(base)
+        s["rows"] = [
+            {"term": "wt", "label": "Weight"},
+            {"term": "base", "label": "Base period", "reference": True},
+            {"term": "hp", "label": "Horsepower", "reference": "(omitted)"},
+        ]
+        s.update(uncertainty=unc, estimate=est)
+        out.append(s)
+    s = et.read_table(EXAMPLES / "event-study.estrec-table.json")
+    s["rows"].insert(2, {"term": "Tm1.5", "label": "ref.", "reference": True})
+    s["uncertainty"] = {"sparkline": {"place": "beside", "align": "middle"}}
+    s["estimate"] = True
+    out.append(s)
     return out
 
 
@@ -270,7 +291,7 @@ def test_renderers_match_python(node_result):
         pytest.skip("node not installed")
     all_specs = specs()
     sparks = [s for s in all_specs if "sparkline" in json.dumps(s.get("uncertainty"))]
-    assert len(sparks) == 10
+    assert len(sparks) == 15
     for spec in [all_specs[0]] + [s for s in all_specs if "head" in s] + sparks:
         py = et.build_table(spec, base_dir=EXAMPLES)
         script = (

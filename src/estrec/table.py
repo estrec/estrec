@@ -422,7 +422,7 @@ def validate_table(
     terms = {p.get("term") for r in have for p in r.get("parameters") or []}
     for j, row in enumerate(spec.get("rows") or []):
         names = row.get("terms") or [row.get("term")]
-        if not any(n in terms for n in names):
+        if not row.get("reference") and not any(n in terms for n in names):
             issues.append(Issue("warning", f"rows[{j}]", f"no column has {', '.join(map(str, names))}"))
     for j, s in enumerate(spec.get("stats") or []):
         if "metric" in s:
@@ -516,7 +516,9 @@ def _spark_mark(r: dict) -> dict | None:
 def _spark_domains(rows: list[dict]) -> None:
     """Give each sparkline mark the axis it is drawn on, [lo, hi], always holding 0: shared
     down a column, along a row or across the table (the line's `scale`), among the marks of
-    sparkline lines with the same scale."""
+    sparkline lines with the same scale. A cell without an interval (a term the column lacks,
+    or a reference row's) takes its group's axis, for its 0 rule; in a group with no
+    intervals it is left blank (None)."""
     groups: dict = {}
     for i, r in enumerate(rows):
         sp = r.get("sparkline")
@@ -526,13 +528,18 @@ def _spark_domains(rows: list[dict]) -> None:
             if m is None:
                 continue
             key = {"column": j, "row": i, "table": 0}[sp["scale"]]
-            groups.setdefault((sp["scale"], key), []).append(m)
+            groups.setdefault((sp["scale"], key), []).append((i, j, m))
     for ms in groups.values():
-        lo = min([0.0] + [m["low"] for m in ms])
-        hi = max([0.0] + [m["high"] for m in ms])
+        real = [m for _, _, m in ms if "estimate" in m]
+        if not real:
+            for i, j, _ in ms:
+                rows[i]["sparkline"]["marks"][j] = None
+            continue
+        lo = min([0.0] + [m["low"] for m in real])
+        hi = max([0.0] + [m["high"] for m in real])
         if lo == hi:
             lo, hi = -1.0, 1.0
-        for m in ms:
+        for _, _, m in ms:
             m["domain"] = [lo, hi]
 
 
@@ -550,13 +557,18 @@ def _spark_xs(m: dict, width: int = 80) -> tuple[int, int, int, int]:
     """Where 0, the low end, the estimate and the high end fall across the drawing's width
     (80 pixels unless a Word table's width sets it), in tenths of a pixel, rounded half up
     with integers so every renderer draws the same."""
+    return tuple(_spark_x(m, v, width) for v in (0.0, m["low"], m["estimate"], m["high"]))
+
+
+def _spark_x0(m: dict, width: int = SPARK_W) -> int:
+    """Where 0 falls, as in `_spark_xs` (all a cell without an interval needs)."""
+    return _spark_x(m, 0.0, width)
+
+
+def _spark_x(m: dict, v: float, width: int = SPARK_W) -> int:
     lo, hi = m["domain"]
     pad = 4.0
-
-    def x(v):
-        return math.floor((pad + (v - lo) / (hi - lo) * (width - 2 * pad)) * 10 + 0.5)
-
-    return x(0.0), x(m["low"]), x(m["estimate"]), x(m["high"])
+    return math.floor((pad + (v - lo) / (hi - lo) * (width - 2 * pad)) * 10 + 0.5)
 
 
 def _tenths(n: int) -> str:
@@ -584,28 +596,43 @@ TIKZ_NOTE = (
 )
 
 
-def _spark_tikz(m: dict | None, color: str) -> str:
+def _spark_tikz(m: dict | None, color: str, rows: int = 1, rule_only: bool = False) -> str:
     """One interval as a TikZ picture with the SVG's marks: the grey 0 rule at full height,
     the faint band swelling toward the estimate, the round-capped line, the end dots and the
-    darker estimate dot, each dot with a white halo."""
+    darker estimate dot, each dot with a white halo. A cell without an interval has the rule
+    alone, and a reference row's a hollow dot at 0. `rows` > 1 (a sparkline beside the
+    estimates, centred on the term's rows) keeps the picture's size to its own row but draws
+    the rule down through the rows below and the marks at their middle; `rule_only` draws
+    only the rule (the term's other rows)."""
     if m is None:
         return ""
-    n0, nl, ne, nh = _spark_xs(m)
-    x0, xl, xe, xh = map(_tenths, (n0, nl, ne, nh))
-    a, b = _third(nl, ne), _third(nh, ne)
+    top, bottom, mid = 112, 112 - 160 * rows, 112 - 80 * rows
+    x0 = _tenths(_spark_x0(m))
     c, d = _tikz_rgb(color), _tikz_rgb(_spark_dark(color))
-    return (
+    y = _spark_y(mid)
+    out = (
         "\\tikz[x=.75pt,y=.75pt,baseline=0pt]{"
         "\\useasboundingbox (0,-4.8) rectangle (80,11.2);"
-        f"\\draw[line width=.75pt,color={_tikz_rgb('#555555')}] ({x0},-4.8) -- ({x0},11.2);"
-        f"\\fill[color={c},fill opacity=.22] ({xl},3.2) .. controls ({a},7.2) and ({b},7.2) .. ({xh},3.2)"
-        f" .. controls ({b},-0.8) and ({a},-0.8) .. ({xl},3.2) -- cycle;"
-        f"\\draw[line width=.975pt,line cap=round,color={c}] ({xl},3.2) -- ({xh},3.2);"
-        f"\\filldraw[fill={c},draw=white,line width=.675pt] ({xl},3.2) circle[radius=1.425pt];"
-        f"\\filldraw[fill={c},draw=white,line width=.675pt] ({xh},3.2) circle[radius=1.425pt];"
-        f"\\filldraw[fill={d},draw=white,line width=.825pt] ({xe},3.2) circle[radius=2.175pt];"
-        "}"
+        f"\\draw[line width=.75pt,color={_tikz_rgb('#555555')}] ({x0},{_spark_y(bottom)}) -- ({x0},{_spark_y(top)});"
     )
+    if rule_only:
+        pass
+    elif "estimate" in m:
+        _, nl, ne, nh = _spark_xs(m)
+        xl, xe, xh = map(_tenths, (nl, ne, nh))
+        a, b = _third(nl, ne), _third(nh, ne)
+        up, down = _spark_y(mid + 40), _spark_y(mid - 40)
+        out += (
+            f"\\fill[color={c},fill opacity=.22] ({xl},{y}) .. controls ({a},{up}) and ({b},{up}) .. ({xh},{y})"
+            f" .. controls ({b},{down}) and ({a},{down}) .. ({xl},{y}) -- cycle;"
+            f"\\draw[line width=.975pt,line cap=round,color={c}] ({xl},{y}) -- ({xh},{y});"
+            f"\\filldraw[fill={c},draw=white,line width=.675pt] ({xl},{y}) circle[radius=1.425pt];"
+            f"\\filldraw[fill={c},draw=white,line width=.675pt] ({xh},{y}) circle[radius=1.425pt];"
+            f"\\filldraw[fill={d},draw=white,line width=.825pt] ({xe},{y}) circle[radius=2.175pt];"
+        )
+    elif m.get("reference"):
+        out += f"\\filldraw[fill=white,draw={d},line width=.9pt] ({x0},{y}) circle[radius=1.95pt];"
+    return out + "}"
 
 
 def _spark_y(n: int) -> str:
@@ -625,6 +652,19 @@ def _spark_marks(xl: str, xe: str, xh: str, yt: int, color: str) -> str:
     )
 
 
+def _spark_ring(x0: str, yt: int, color: str) -> str:
+    """A reference row's mark: a hollow dot at 0 in the estimate dot's colour."""
+    return (
+        f'<circle cx="{x0}" cy="{_spark_y(yt)}" r="2.6" stroke="{_spark_dark(color)}" '
+        'stroke-width="1.2" style="fill:var(--bg,#ffffff)"/>'
+    )
+
+
+def _spark_label(m: dict, label: str) -> str:
+    """The drawing's text: the interval's, or 'reference' for a reference row's dot."""
+    return label or ("reference" if m.get("reference") else "")
+
+
 def _spark_svg(
     m: dict | None,
     color: str,
@@ -642,15 +682,23 @@ def _spark_svg(
     down; `style` goes on the <svg>; `width` (pixels) narrows the axis, not the marks."""
     if m is None:
         return ""
-    x0, xl, xe, xh = map(_tenths, _spark_xs(m, width))
+    yt = height * 5 if mid is None else mid
+    label = _spark_label(m, label)
+    if "estimate" in m:
+        x0, xl, xe, xh = map(_tenths, _spark_xs(m, width))
+        marks = _spark_marks(xl, xe, xh, yt, color)
+    else:
+        x0 = _tenths(_spark_x0(m, width))
+        marks = _spark_ring(x0, yt, color) if m.get("reference") else ""
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
-        f'viewBox="0 0 {width} {height}" role="img"'
-        + (f' aria-label="{html.escape(label)}"' if label else "")
+        f'viewBox="0 0 {width} {height}" '
+        + ('role="img"' if marks else 'aria-hidden="true"')
+        + (f' aria-label="{html.escape(label)}"' if label and marks else "")
         + (f' style="{style}"' if style else "")
         + ">"
         f'<line x1="{x0}" y1="0" x2="{x0}" y2="{height}" stroke="#555555" stroke-width="1"/>'
-        + _spark_marks(xl, xe, xh, height * 5 if mid is None else mid, color)
+        + marks
         + "</svg>"
     )
 
@@ -660,7 +708,7 @@ def _spark_rule(m: dict | None, height: int | None = None, width: int = SPARK_W)
     image `height` pixels tall, or (None) an SVG filling its `position:relative` cell."""
     if m is None:
         return ""
-    x0 = _tenths(_spark_xs(m, width)[0])
+    x0 = _tenths(_spark_x0(m, width))
     if height is None:
         return (
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{SPARK_W}" height="100%" aria-hidden="true"'
@@ -679,15 +727,21 @@ def _spark_svg_tall(m: dict | None, color: str, label: str = "") -> str:
     The cell is `position:relative`; the SVG fills it."""
     if m is None:
         return ""
-    x0, xl, xe, xh = map(_tenths, _spark_xs(m))
+    label = _spark_label(m, label)
+    if "estimate" in m:
+        x0, xl, xe, xh = map(_tenths, _spark_xs(m))
+        marks = _spark_marks(xl, xe, xh, 0, color)
+    else:
+        x0 = _tenths(_spark_x0(m))
+        marks = _spark_ring(x0, 0, color) if m.get("reference") else ""
     return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{SPARK_W}" height="100%" role="img"'
-        + (f' aria-label="{html.escape(label)}"' if label else "")
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{SPARK_W}" height="100%" '
+        + ('role="img"' if marks else 'aria-hidden="true"')
+        + (f' aria-label="{html.escape(label)}"' if label and marks else "")
         + ' style="position:absolute;top:0;left:calc(50% - 40px);overflow:visible">'
         f'<line x1="{x0}" y1="0" x2="{x0}" y2="100%" stroke="#555555" stroke-width="1"/>'
-        '<svg y="50%" overflow="visible">'
-        + _spark_marks(xl, xe, xh, 0, color)
-        + "</svg></svg>"
+        + ('<svg y="50%" overflow="visible">' + marks + "</svg>" if marks else "")
+        + "</svg>"
     )
 
 
@@ -702,6 +756,7 @@ def _stars(p: float, thresholds: list[float], symbols: list[str]) -> str:
 
 
 HEAD_KINDS = ("number", "response", "label")
+REFERENCE_TEXT = "—"  # a reference row's text with `"reference": true`
 DEFAULT_HEAD = ["number", "response"]
 
 
@@ -778,7 +833,8 @@ def build_table(spec: dict, *, base_dir: str | os.PathLike | None = None, record
     taken = set()
     for row in spec.get("rows") or []:
         names = row.get("terms") or [row["term"]]
-        listed.append((row.get("label") or names[0], names))
+        ref = row.get("reference")
+        listed.append((row.get("label") or names[0], names, REFERENCE_TEXT if ref is True else ref or None))
         taken.update(names)
     if spec.get("keep_unlisted", True):
         keep = [re.compile(p) for p in spec.get("keep") or []]
@@ -793,20 +849,24 @@ def build_table(spec: dict, *, base_dir: str | os.PathLike | None = None, record
                 if any(d.search(t) for d in drop):
                     continue
                 seen.append(t)
-        listed += [(t, [t]) for t in seen]
+        listed += [(t, [t], None) for t in seen]
 
     out_rows = []
-    for label, names in listed:
+    for label, names, ref in listed:
         est = []
         below: list[list[str]] = [[] for _ in lines]
         marks: list[list] = [[] for _ in lines]
-        for c in cols:
+        refs = []  # the columns showing the reference text
+        for j, c in enumerate(cols):
             r = next((c["tidy"][n] for n in names if n in c["tidy"]), None)
             if r is None:
-                est.append(missing)
-                for b, m in zip(below, marks):
-                    b.append(missing)
-                    m.append(None)
+                # a sparkline keeps its 0 rule (and a reference row's, a hollow dot at 0)
+                est.append(missing if ref is None else ref)
+                if ref is not None:
+                    refs.append(j)
+                for b, m, t in zip(below, marks, lines):
+                    b.append(missing if ref is None else "")
+                    m.append(({"reference": True} if ref is not None else {}) if isinstance(t, dict) else None)
                 continue
             est.append(_fixed(r["estimate"], digits) + _stars(r["p_value"], stars, symbols))
             for b, m, t in zip(below, marks, lines):
@@ -825,6 +885,8 @@ def build_table(spec: dict, *, base_dir: str | os.PathLike | None = None, record
             block.append(row)
         # without the estimate, a term's first line opens its block and carries its label
         block[0].update(label=label, kind="estimate")
+        for j in refs:
+            block[0]["cells"][j] = ref
         out_rows += block
     _spark_domains(out_rows)
 
@@ -941,23 +1003,51 @@ def _latex_cells(r: dict, e) -> list[str]:
     return [_spark_tikz(m, sp["color"]) for m in sp["marks"]]
 
 
+def _latex_beside(t: dict, plan: dict, i: int, e) -> list[str]:
+    """Row i's cells with a sparkline beside the estimates (`_beside_plan`): each column's
+    own cell, then its drawing. Level with the estimate, the term's first row has the marks
+    and its other rows the 0 rule; centred, the first row's picture draws the rule down
+    through the term's rows and the marks at their middle, and the other rows are empty
+    there. Rows outside a term's block (statistics) span both columns."""
+    rows = t["rows"]
+    own = _latex_cells(rows[i], e)
+    if i in plan["start"] or i in plan["inside"]:
+        k = plan["start"][i][0] if i in plan["start"] else plan["inside"][i]
+        sp = rows[k]["sparkline"]
+        if plan["align"] == "estimate":
+            side = [_spark_tikz(m, sp["color"], rule_only=i not in plan["start"]) for m in sp["marks"]]
+        elif i in plan["start"]:
+            side = [_spark_tikz(m, sp["color"], rows=plan["start"][i][1]) for m in sp["marks"]]
+        else:
+            side = [""] * len(own)
+        return [f"{a} & {b}" for a, b in zip(own, side)]
+    return [f"\\multicolumn{{2}}{{c}}{{{x}}}" for x in own]
+
+
 def _render_latex(t: dict, escape: bool = True) -> str:
     e = _tex if escape else (lambda s: s)
     n = len(t["header"])
+    plan = _beside_plan(t)
     lines = [TIKZ_NOTE] if any("sparkline" in r for r in t["rows"]) else []
     lines += ["\\begin{table}[htbp]", "\\centering"]
     if t["title"]:
         lines.append(f"\\caption{{{e(t['title'])}}}")
-    lines += [f"\\begin{{tabular}}{{l{'c' * n}}}", "\\toprule"]
+    lines += [f"\\begin{{tabular}}{{l{('cc' if plan else 'c') * n}}}", "\\toprule"]
     for h in t["head"]:
-        lines.append(" & " + " & ".join(map(e, h["cells"])) + " \\\\")
+        cells = [f"\\multicolumn{{2}}{{c}}{{{e(x)}}}" if plan else e(x) for x in h["cells"]]
+        lines.append(" & " + " & ".join(cells) + " \\\\")
     lines.append("\\midrule")
     prev = None
-    for r in t["rows"]:
-        if r["kind"] == "stat" and prev != "stat":
+    for i, r in enumerate(t["rows"]):
+        if plan and i in plan["skip"]:
+            continue
+        kind = _row_kind(t, plan, i)
+        if kind == "stat" and prev != "stat":
             lines.append("\\midrule")
-        lines.append(f"{e(r['label'])} & " + " & ".join(_latex_cells(r, e)) + " \\\\")
-        prev = r["kind"]
+        label = plan["label"].get(i, r["label"]) if plan else r["label"]
+        cells = _latex_beside(t, plan, i, e) if plan else _latex_cells(r, e)
+        lines.append(f"{e(label)} & " + " & ".join(cells) + " \\\\")
+        prev = kind
     lines.append("\\bottomrule")
     lines.append("\\end{tabular}")
     if t["notes"]:
@@ -986,17 +1076,19 @@ def _spark_img(
     draws only its 0 rule."""
     if m is None:
         return ""
+    if "estimate" not in m and not m.get("reference"):
+        rule_only = True
     svg = _spark_rule(m, height, width) if rule_only else _spark_svg(m, color, height=height, mid=mid, width=width)
     data = base64.b64encode(svg.encode("ascii")).decode("ascii")
     return (
         f'<img width="{width}" height="{height}" style="display:block;margin:0 auto;vertical-align:middle" '
-        f'alt="{"" if rule_only else html.escape(label)}" '
+        f'alt="{"" if rule_only else html.escape(_spark_label(m, label))}" '
         f'src="data:image/svg+xml;base64,{data}">'
     )
 
 
 def _beside_plan(t: dict) -> dict | None:
-    """How a table with a sparkline beside the estimates is laid out (HTML, Word): each data
+    """How a table with a sparkline beside the estimates is laid out (HTML, Word, LaTeX): each data
     column gets a second column. Aligned "middle", each term's drawing is one cell there
     spanning the term's other rows; aligned "estimate", the term's first row has the drawing
     and its other rows a cell with the 0 rule only. None without such a line. Keys: "align";

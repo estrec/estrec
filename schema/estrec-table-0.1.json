@@ -62,7 +62,11 @@
         "properties": {
           "term": {"type": "string"},
           "terms": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-          "label": {"type": "string"}
+          "label": {"type": "string"},
+          "reference": {
+            "description": "The omitted reference category (an event study's reference period): true, or the text shown where a column lacks the term (true shows an em dash). Its sparkline cells draw a hollow dot at 0.",
+            "type": ["boolean", "string"]
+          }
         },
         "oneOf": [{"required": ["term"]}, {"required": ["terms"]}],
         "additionalProperties": false

@@ -466,7 +466,7 @@
     const terms = new Set(recs.flatMap((r) => (r.parameters || []).map((p) => p.term)));
     (spec.rows || []).forEach((row, j) => {
       const names = row.terms || [row.term];
-      if (!names.some((n) => terms.has(n))) out.push(issue("warning", `rows[${j}]`, `no column has ${names.join(", ")}`));
+      if (!row.reference && !names.some((n) => terms.has(n))) out.push(issue("warning", `rows[${j}]`, `no column has ${names.join(", ")}`));
     });
     (spec.stats || []).forEach((s, j) => {
       if ("metric" in s) {
@@ -495,6 +495,7 @@
   }
 
   const HEAD_KINDS = ["number", "response", "label"];
+  const REFERENCE_TEXT = "—"; // a reference row's text with "reference": true
   const DEFAULT_HEAD = ["number", "response"];
 
   // A column's dependent variable: its `response`, else the one response its rows share (a
@@ -528,7 +529,9 @@
   }
 
   // each mark's axis [lo, hi], holding 0: shared down a column, along a row or across the
-  // table (the line's scale), among sparkline lines with the same scale
+  // table (the line's scale), among sparkline lines with the same scale. A cell without an
+  // interval (a term the column lacks, or a reference row's) takes its group's axis, for its
+  // 0 rule; in a group with no intervals it is left blank (null)
   function sparkDomains(rows) {
     const groups = new Map();
     rows.forEach((r, i) => {
@@ -538,14 +541,16 @@
         if (!m) return;
         const key = sp.scale + "/" + { column: j, row: i, table: 0 }[sp.scale];
         if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push(m);
+        groups.get(key).push([i, j, m]);
       });
     });
     for (const ms of groups.values()) {
-      let lo = Math.min(0, ...ms.map((m) => m.low));
-      let hi = Math.max(0, ...ms.map((m) => m.high));
+      const real = ms.map((x) => x[2]).filter((m) => "estimate" in m);
+      if (!real.length) { for (const [i, j] of ms) rows[i].sparkline.marks[j] = null; continue; }
+      let lo = Math.min(0, ...real.map((m) => m.low));
+      let hi = Math.max(0, ...real.map((m) => m.high));
       if (lo === hi) { lo = -1; hi = 1; }
-      for (const m of ms) m.domain = [lo, hi];
+      for (const [, , m] of ms) m.domain = [lo, hi];
     }
   }
 
@@ -559,13 +564,17 @@
   // where 0, the low end, the estimate and the high end fall across the 80-pixel width, in
   // tenths of a pixel, rounded half up with integers so every renderer draws the same
   // across the drawing's width: 80 pixels unless a Word table's width sets it
-  function sparkXs(m, width) {
+  function sparkX(m, v, width) {
     const w = width === undefined ? SPARK_W : width;
     const [lo, hi] = m.domain;
     const pad = 4;
-    const x = (v) => Math.floor((pad + (v - lo) / (hi - lo) * (w - 2 * pad)) * 10 + 0.5);
-    return [x(0), x(m.low), x(m.estimate), x(m.high)];
+    return Math.floor((pad + (v - lo) / (hi - lo) * (w - 2 * pad)) * 10 + 0.5);
   }
+  function sparkXs(m, width) {
+    return [0, m.low, m.estimate, m.high].map((v) => sparkX(m, v, width));
+  }
+  // where 0 falls: all a cell without an interval needs
+  const sparkX0 = (m, width) => sparkX(m, 0, width);
   const tenths = (n) => `${Math.floor(n / 10)}.${n % 10}`;
   // (a + 2b) / 3 tenths in hundredths, rounded half up: a quadratic's control point as a cubic's
   const third = (a, b) => { const n = Math.floor((20 * (a + 2 * b) + 3) / 6); return `${Math.floor(n / 100)}.${String(n % 100).padStart(2, "0")}`; };
@@ -573,21 +582,36 @@
   const TIKZ_NOTE = "% Sparklines are TikZ pictures (\\usepackage{tikz}), drawn for 12pt rows (10pt type, \\arraystretch 1) so a column of them joins";
 
   // the SVG's marks in TikZ (1 px = 0.75 pt), y up from the baseline: the 0 rule over a
-  // 12 pt row (-4.8 to 11.2), the interval at 3.2
-  function sparkTikz(m, color) {
+  // 12 pt row (-4.8 to 11.2), the interval at 3.2. A cell without an interval has the rule
+  // alone, a reference row's a hollow dot at 0. rows > 1 (beside, centred on the term's rows)
+  // keeps the picture's size to its row but draws the rule down through the rows below and
+  // the marks at their middle; ruleOnly draws only the rule
+  function sparkTikz(m, color, rows, ruleOnly) {
     if (!m) return "";
-    const [n0, nl, ne, nh] = sparkXs(m);
-    const [x0, xl, xe, xh] = [n0, nl, ne, nh].map(tenths);
-    const a = third(nl, ne), b = third(nh, ne), c = tikzRGB(color), d = tikzRGB(sparkDark(color));
-    return "\\tikz[x=.75pt,y=.75pt,baseline=0pt]{\\useasboundingbox (0,-4.8) rectangle (80,11.2);" +
-      `\\draw[line width=.75pt,color=${tikzRGB("#555555")}] (${x0},-4.8) -- (${x0},11.2);` +
-      `\\fill[color=${c},fill opacity=.22] (${xl},3.2) .. controls (${a},7.2) and (${b},7.2) .. (${xh},3.2)` +
-      ` .. controls (${b},-0.8) and (${a},-0.8) .. (${xl},3.2) -- cycle;` +
-      `\\draw[line width=.975pt,line cap=round,color=${c}] (${xl},3.2) -- (${xh},3.2);` +
-      `\\filldraw[fill=${c},draw=white,line width=.675pt] (${xl},3.2) circle[radius=1.425pt];` +
-      `\\filldraw[fill=${c},draw=white,line width=.675pt] (${xh},3.2) circle[radius=1.425pt];` +
-      `\\filldraw[fill=${d},draw=white,line width=.825pt] (${xe},3.2) circle[radius=2.175pt];` +
-      "}";
+    const n = rows === undefined ? 1 : rows;
+    const top = 112, bottom = 112 - 160 * n, mid = 112 - 80 * n;
+    const x0 = tenths(sparkX0(m));
+    const c = tikzRGB(color), d = tikzRGB(sparkDark(color));
+    const y = sparkY(mid);
+    let out = "\\tikz[x=.75pt,y=.75pt,baseline=0pt]{\\useasboundingbox (0,-4.8) rectangle (80,11.2);" +
+      `\\draw[line width=.75pt,color=${tikzRGB("#555555")}] (${x0},${sparkY(bottom)}) -- (${x0},${sparkY(top)});`;
+    if (ruleOnly) {
+      // the rule only
+    } else if ("estimate" in m) {
+      const [, nl, ne, nh] = sparkXs(m);
+      const [xl, xe, xh] = [nl, ne, nh].map(tenths);
+      const a = third(nl, ne), b = third(nh, ne);
+      const up = sparkY(mid + 40), down = sparkY(mid - 40);
+      out += `\\fill[color=${c},fill opacity=.22] (${xl},${y}) .. controls (${a},${up}) and (${b},${up}) .. (${xh},${y})` +
+        ` .. controls (${b},${down}) and (${a},${down}) .. (${xl},${y}) -- cycle;` +
+        `\\draw[line width=.975pt,line cap=round,color=${c}] (${xl},${y}) -- (${xh},${y});` +
+        `\\filldraw[fill=${c},draw=white,line width=.675pt] (${xl},${y}) circle[radius=1.425pt];` +
+        `\\filldraw[fill=${c},draw=white,line width=.675pt] (${xh},${y}) circle[radius=1.425pt];` +
+        `\\filldraw[fill=${d},draw=white,line width=.825pt] (${xe},${y}) circle[radius=2.175pt];`;
+    } else if (m.reference) {
+      out += `\\filldraw[fill=white,draw=${d},line width=.9pt] (${x0},${y}) circle[radius=1.95pt];`;
+    }
+    return out + "}";
   }
 
   const sparkY = (n) => (n < 0 ? "-" : "") + tenths(Math.abs(n));
@@ -601,16 +625,32 @@
       `<circle cx="${xe}" cy="${y}" r="2.9" fill="${sparkDark(color)}" stroke-width="1.1" ${HALO}/>`;
   }
 
+  // a reference row's mark: a hollow dot at 0 in the estimate dot's colour
+  const sparkRing = (x0, yt, color) =>
+    `<circle cx="${x0}" cy="${sparkY(yt)}" r="2.6" stroke="${sparkDark(color)}" stroke-width="1.2" style="fill:var(--bg,#ffffff)"/>`;
+  const sparkLabel = (m, label) => label || (m.reference ? "reference" : "");
+  // a cell's drawing: the interval's marks, a reference row's dot, or nothing (the rule alone)
+  function sparkCell(m, width, yt, color) {
+    if ("estimate" in m) {
+      const [x0, xl, xe, xh] = sparkXs(m, width).map(tenths);
+      return [x0, sparkMarks(xl, xe, xh, yt, color)];
+    }
+    const x0 = tenths(sparkX0(m, width));
+    return [x0, m.reference ? sparkRing(x0, yt, color) : ""];
+  }
+
   // height: the image's (pixels); the marks sit halfway down, or mid tenths of a pixel down
   function sparkSVG(m, color, label, height, mid, style, width) {
     if (!m) return "";
     const H = height === undefined ? SPARK_H : height;
     const Wd = width === undefined ? SPARK_W : width;
-    const [x0, xl, xe, xh] = sparkXs(m, Wd).map(tenths);
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${Wd}" height="${H}" viewBox="0 0 ${Wd} ${H}" role="img"` +
-      (label ? ` aria-label="${escHTML(label)}"` : "") + (style ? ` style="${style}"` : "") + ">" +
+    const lab = sparkLabel(m, label);
+    const [x0, marks] = sparkCell(m, Wd, mid === undefined || mid === null ? H * 5 : mid, color);
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${Wd}" height="${H}" viewBox="0 0 ${Wd} ${H}" ` +
+      (marks ? 'role="img"' : 'aria-hidden="true"') +
+      (lab && marks ? ` aria-label="${escHTML(lab)}"` : "") + (style ? ` style="${style}"` : "") + ">" +
       `<line x1="${x0}" y1="0" x2="${x0}" y2="${H}" stroke="#555555" stroke-width="1"/>` +
-      sparkMarks(xl, xe, xh, mid === undefined || mid === null ? H * 5 : mid, color) + "</svg>";
+      marks + "</svg>";
   }
 
   // only the 0 rule, for a term's other rows: an image height pixels tall, or (none) an SVG
@@ -618,7 +658,7 @@
   function sparkRule(m, height, width) {
     if (!m) return "";
     const Wd = width === undefined ? SPARK_W : width;
-    const x0 = tenths(sparkXs(m, Wd)[0]);
+    const x0 = tenths(sparkX0(m, Wd));
     if (height === undefined || height === null) {
       return `<svg xmlns="http://www.w3.org/2000/svg" width="${SPARK_W}" height="100%" aria-hidden="true" style="position:absolute;top:0;left:calc(50% - 40px)">` +
         `<line x1="${x0}" y1="0" x2="${x0}" y2="100%" stroke="#555555" stroke-width="1"/></svg>`;
@@ -631,12 +671,14 @@
   // full height and the marks halfway down, so a column of them joins into one axis
   function sparkSVGTall(m, color, label) {
     if (!m) return "";
-    const [x0, xl, xe, xh] = sparkXs(m).map(tenths);
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${SPARK_W}" height="100%" role="img"` +
-      (label ? ` aria-label="${escHTML(label)}"` : "") +
+    const lab = sparkLabel(m, label);
+    const [x0, marks] = sparkCell(m, SPARK_W, 0, color);
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${SPARK_W}" height="100%" ` +
+      (marks ? 'role="img"' : 'aria-hidden="true"') +
+      (lab && marks ? ` aria-label="${escHTML(lab)}"` : "") +
       ' style="position:absolute;top:0;left:calc(50% - 40px);overflow:visible">' +
       `<line x1="${x0}" y1="0" x2="${x0}" y2="100%" stroke="#555555" stroke-width="1"/>` +
-      '<svg y="50%" overflow="visible">' + sparkMarks(xl, xe, xh, 0, color) + "</svg></svg>";
+      (marks ? '<svg y="50%" overflow="visible">' + marks + "</svg>" : "") + "</svg>";
   }
 
   const b64 = (s) => (typeof btoa === "function" ? btoa(s) : Buffer.from(s, "ascii").toString("base64"));
@@ -645,8 +687,9 @@
     if (!m) return "";
     const H = height === undefined ? SPARK_H : height;
     const Wd = width === undefined ? SPARK_W : width;
-    const svg = ruleOnly ? sparkRule(m, H, Wd) : sparkSVG(m, color, "", H, mid, undefined, Wd);
-    return `<img width="${Wd}" height="${H}" style="display:block;margin:0 auto;vertical-align:middle" alt="${ruleOnly ? "" : escHTML(label)}" src="data:image/svg+xml;base64,${b64(svg)}">`;
+    const rule = ruleOnly || (!("estimate" in m) && !m.reference);
+    const svg = rule ? sparkRule(m, H, Wd) : sparkSVG(m, color, "", H, mid, undefined, Wd);
+    return `<img width="${Wd}" height="${H}" style="display:block;margin:0 auto;vertical-align:middle" alt="${rule ? "" : escHTML(sparkLabel(m, label))}" src="data:image/svg+xml;base64,${b64(svg)}">`;
   }
 
   function htmlCell(r, j) {
@@ -685,7 +728,8 @@
     const taken = new Set();
     for (const row of spec.rows || []) {
       const names = row.terms || [row.term];
-      listed.push([row.label || names[0], names]);
+      const ref = row.reference === true ? REFERENCE_TEXT : row.reference || null;
+      listed.push([row.label || names[0], names, ref]);
       names.forEach((n) => taken.add(n));
     }
     if (spec.keep_unlisted !== false) {
@@ -700,24 +744,34 @@
           seen.push(t);
         }
       }
-      for (const t of seen) listed.push([t, [t]]);
+      for (const t of seen) listed.push([t, [t], null]);
     }
 
     const rows = [];
-    for (const [label, names] of listed) {
+    for (const [label, names, ref] of listed) {
       const est = [];
       const below = lines.map(() => []);
       const marks = lines.map(() => []);
-      for (const c of cols) {
+      const refs = []; // the columns showing the reference text
+      cols.forEach((c, j) => {
         const n = names.find((x) => c.tidy.has(x));
         const r = n === undefined ? null : c.tidy.get(n);
-        if (!r) { est.push(missing); below.forEach((b) => b.push(missing)); marks.forEach((m) => m.push(null)); continue; }
+        if (!r) {
+          // a sparkline keeps its 0 rule (and a reference row's, a hollow dot at 0)
+          est.push(ref === null ? missing : ref);
+          if (ref !== null) refs.push(j);
+          lines.forEach((t, k) => {
+            below[k].push(ref === null ? missing : "");
+            marks[k].push(isObj(t) ? (ref !== null ? { reference: true } : {}) : null);
+          });
+          return;
+        }
         est.push(fixed(r.estimate, digits) + starsFor(r.p_value, stars, symbols));
         lines.forEach((t, k) => {
           if (isObj(t)) { below[k].push(fill(SPARK_TEXT, r, digits, pDigits, pStyle, missing)); marks[k].push(sparkMark(r)); }
           else below[k].push(fill(t, r, digits, pDigits, pStyle, missing));
         });
-      }
+      });
       const block = [];
       if (showEst) block.push({ label, cells: est, kind: "estimate" });
       lines.forEach((t, k) => {
@@ -727,6 +781,7 @@
       });
       // without the estimate, a term's first line opens its block and carries its label
       Object.assign(block[0], { label, kind: "estimate" });
+      for (const j of refs) block[0].cells[j] = ref;
       rows.push(...block);
     }
     sparkDomains(rows);
@@ -811,29 +866,54 @@
     return lines.join("\n").replace(/\s+$/, "") + "\n";
   }
 
+  const latexCells = (r, e) => (r.sparkline ? r.sparkline.marks.map((m) => sparkTikz(m, r.sparkline.color)) : r.cells.map(e));
+
+  // row i's cells with a sparkline beside the estimates: each column's own cell, then its
+  // drawing (level with the estimate: marks in the first row, the 0 rule in the others;
+  // centred: the first row's picture draws down through the term's rows, the others empty
+  // there); rows outside a term's block span both columns
+  function latexBeside(t, plan, i, e) {
+    const rows = t.rows;
+    const own = latexCells(rows[i], e);
+    if (plan.start.has(i) || plan.inside.has(i)) {
+      const k = plan.start.has(i) ? plan.start.get(i)[0] : plan.inside.get(i);
+      const sp = rows[k].sparkline;
+      let side;
+      if (plan.align === "estimate") side = sp.marks.map((m) => sparkTikz(m, sp.color, 1, !plan.start.has(i)));
+      else if (plan.start.has(i)) side = sp.marks.map((m) => sparkTikz(m, sp.color, plan.start.get(i)[1]));
+      else side = own.map(() => "");
+      return own.map((a, j) => `${a} & ${side[j]}`);
+    }
+    return own.map((x) => `\\multicolumn{2}{c}{${x}}`);
+  }
+
   function renderLatex(t, opts) {
     const e = opts && opts.escape === false ? (s) => String(s) : tex;
     const n = t.header.length;
+    const plan = besidePlan(t);
     const lines = t.rows.some((r) => r.sparkline) ? [TIKZ_NOTE] : [];
     lines.push("\\begin{table}[htbp]", "\\centering");
     if (t.title) lines.push(`\\caption{${e(t.title)}}`);
-    lines.push(`\\begin{tabular}{l${"c".repeat(n)}}`, "\\toprule");
-    for (const h of t.head) lines.push(" & " + h.cells.map(e).join(" & ") + " \\\\");
+    lines.push(`\\begin{tabular}{l${(plan ? "cc" : "c").repeat(n)}}`, "\\toprule");
+    for (const h of t.head) lines.push(" & " + h.cells.map((x) => (plan ? `\\multicolumn{2}{c}{${e(x)}}` : e(x))).join(" & ") + " \\\\");
     lines.push("\\midrule");
     let prev = null;
-    for (const r of t.rows) {
-      if (r.kind === "stat" && prev !== "stat") lines.push("\\midrule");
-      const cells = r.sparkline ? r.sparkline.marks.map((m) => sparkTikz(m, r.sparkline.color)) : r.cells.map(e);
-      lines.push(`${e(r.label)} & ` + cells.join(" & ") + " \\\\");
-      prev = r.kind;
-    }
+    t.rows.forEach((r, i) => {
+      if (plan && plan.skip.has(i)) return;
+      const kind = rowKind(t, plan, i);
+      if (kind === "stat" && prev !== "stat") lines.push("\\midrule");
+      const label = plan && plan.label.has(i) ? plan.label.get(i) : r.label;
+      const cells = plan ? latexBeside(t, plan, i, e) : latexCells(r, e);
+      lines.push(`${e(label)} & ` + cells.join(" & ") + " \\\\");
+      prev = kind;
+    });
     lines.push("\\bottomrule", "\\end{tabular}");
     if (t.notes.length) lines.push("\\par\\smallskip{\\footnotesize " + t.notes.map(e).join(" ") + "}");
     lines.push("\\end{table}");
     return lines.join("\n") + "\n";
   }
 
-  // a table with a sparkline beside the estimates (HTML, Word): each data column gets a
+  // a table with a sparkline beside the estimates (HTML, Word, LaTeX): each data column gets a
   // second column, and each term's drawing is one cell there spanning its other rows
   function besidePlan(t) {
     const rows = t.rows;
@@ -1299,7 +1379,7 @@ ${table}</div>
   return {
     TABLE_SCHEMA, DEFAULT_STARS, DEFAULT_HEAD, HEAD_KINDS, TABLE_METRICS, STAT_LABELS,
     twoSidedP, criticalValue, erfc, qnorm,
-    NAMED_LINES, PLACEHOLDERS, publishSpec, SPARK_COLOR, SPARK_SCALES, SPARK_PLACES, SPARK_ALIGNS, sparkSVG, sparkTikz, uncertaintyLines, pValue,
+    NAMED_LINES, PLACEHOLDERS, publishSpec, REFERENCE_TEXT, SPARK_COLOR, SPARK_SCALES, SPARK_PLACES, SPARK_ALIGNS, sparkSVG, sparkTikz, uncertaintyLines, pValue,
     num, vcovs, vcovLabel, pickVcov, tidy, glance, findTest,
     canonicalJSON, sha256Hex, recordSha256,
     indexRecords, validateTable, checkPins, columnResponse, buildTable, render, renderers: RENDERERS,

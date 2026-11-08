@@ -1,5 +1,6 @@
 """Table specs (spec/table.md): building, validating and rendering."""
 
+import importlib.util
 import copy
 import html
 import json
@@ -359,9 +360,11 @@ def test_sparkline_scales():
 def test_sparkline_html_and_word():
     t = sparkline_table("column")
     h = et.render(t, "html")
-    assert h.count('<td class="spark"><svg') == 5 and 'stroke="#555555"' in h and 'fill="#7c251b"' in h
+    # five intervals, and the 0 rule alone where a column lacks the term, so the axis joins
+    assert h.count('<td class="spark"><svg') == 6 and 'stroke="#555555"' in h and 'fill="#7c251b"' in h
+    assert h.count('aria-hidden="true"') == 1
     w = et.render(t, "word")
-    assert w.count('src="data:image/svg+xml;base64,') == 5 and "<svg" not in w
+    assert w.count('src="data:image/svg+xml;base64,') == 6 and "<svg" not in w and w.count('alt=""') == 1
 
 
 # The event study's first sparkline, pinned: r/tests/test-table.R checks R draws the same
@@ -386,10 +389,10 @@ def test_sparkline_latex_is_tikz_with_the_svg_marks():
     t = sparkline_table("column")
     tex = et.render(t, "latex")
     assert tex.startswith("% Sparklines are TikZ pictures (\\usepackage{tikz})")
-    assert tex.count("\\tikz[") == 5 and tex.count("circle[radius=2.175pt]") == 5
+    assert tex.count("\\tikz[") == 6 and tex.count("circle[radius=2.175pt]") == 5  # + a missing cell's rule
     for r in t["rows"]:
         for m in (r.get("sparkline") or {}).get("marks", []):
-            if m:  # the same x positions as the SVG
+            if m and "estimate" in m:  # the same x positions as the SVG
                 x0, xl, xe, xh = map(et._tenths, et._spark_xs(m))
                 assert f'x1="{x0}"' in et._spark_svg(m, "#c0392b") and f"({xe},3.2) circle" in et._spark_tikz(m, "#c0392b")
     assert "tikz" not in et.render(et.build_table(spec(), base_dir=EXAMPLES), "latex")
@@ -407,13 +410,13 @@ def test_great_tables_sparklines():
     h = g.as_raw_html()
     svgs = [et._spark_svg(m, r["sparkline"]["color"], c) for r in t["rows"] if "sparkline" in r
             for m, c in zip(r["sparkline"]["marks"], r["cells"]) if m]
-    assert len(svgs) == 5 and all(s in h for s in svgs) and "padding-top:0" in h
+    assert len(svgs) == 6 and all(s in h for s in svgs) and "padding-top:0" in h  # + a missing cell's rule
     import warnings
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")  # great_tables: styles aren't supported in LaTeX
         tex = g.as_latex()
-    assert tex.count("\\tikz[") == 5 and "<svg" not in tex
+    assert tex.count("\\tikz[") == 6 and "<svg" not in tex
     assert "<svg" not in et.to_great_table(et.build_table(spec(), base_dir=EXAMPLES)).as_raw_html()
 
 
@@ -440,7 +443,7 @@ def test_sparkline_beside_level_with_the_estimate():
 
     svgs = [base64.b64decode(x).decode() for x in re.findall(r"base64,([A-Za-z0-9+/=]+)", w)]
     assert sum('cy="8.0"' in x for x in svgs) == 3 and sum('cy="12.0"' in x for x in svgs) == 2
-    assert sum("circle" not in x for x in svgs) == 3 * 2 + 2 * 2  # the rule-only rows
+    assert sum("circle" not in x for x in svgs) == 3 * 2 + 2 * 2 + 3  # the rule-only rows; a missing cell's
 
 
 def test_sparkline_beside_the_estimates():
@@ -451,17 +454,17 @@ def test_sparkline_beside_the_estimates():
     assert sp and all(r["sparkline"]["place"] == "beside" for r in sp)
     h = et.render(t, "html")
     assert h.count('<th colspan="2">') == 3 * len(t["head"])
-    # one drawing per column per term (hp is missing in (1): an empty cell), spanning the
+    # one drawing per column per term (hp is missing in (1): the 0 rule alone), spanning the
     # estimate and its standard error; the sparkline rows themselves are gone
     assert h.count('class="spark-side" rowspan="2"') == 6 and "spark-row" not in h
-    assert h.count('height="100%"') == 5 and '<td colspan="2">32</td>' in h
+    assert h.count('height="100%"') == 6 and '<td colspan="2">32</td>' in h
     assert f'colspan="{1 + 2 * 3}"' in h  # notes span every column
     # text formats keep the interval as a row
     assert sp[0]["cells"][0] in et.render(t, "text")
     w = et.render(t, "word", term_space=True)
     assert w.count('rowspan="2"') == 6 and w.count("mso-height-rule:exactly") == 4
     # the first term's two rows are 12 + 12 pt (32 px), the second's 15 + 12 pt (36 px)
-    assert w.count('height="32"') == 3 and w.count('height="36"') == 2
+    assert w.count('height="32"') == 3 and w.count('height="36"') == 3
     # without the estimate, the beside line's label moves to the first row left
     s.update(uncertainty=[{"sparkline": {"place": "beside", "align": "middle"}}, "std_error"], estimate=False)
     h = et.render(et.build_table(s, base_dir=EXAMPLES), "html")
@@ -469,7 +472,7 @@ def test_sparkline_beside_the_estimates():
     # a term whose only line is the drawing keeps it as a row
     s["uncertainty"] = {"sparkline": {"place": "beside"}}
     h = et.render(et.build_table(s, base_dir=EXAMPLES), "html")
-    assert "spark-side" not in h and h.count('<td colspan="2" class="spark"><svg') == 5
+    assert "spark-side" not in h and h.count('<td colspan="2" class="spark"><svg') == 6
     s["uncertainty"] = [
         {"sparkline": {"place": "beside"}},
         {"sparkline": {"place": "beside"}},
@@ -574,3 +577,60 @@ def test_event_study_example_is_a_column_of_sparklines():
             et.validate_table(et.read_table(EXAMPLES / "event-study.estrec-table.json"), base_dir=EXAMPLES)
             == []
         )
+
+
+def reference_spec(**kw):
+    s = spec()
+    s["rows"] = [
+        {"term": "wt", "label": "Weight"},
+        {"term": "base", "label": "Base period", "reference": True},
+        {"term": "hp", "label": "Horsepower", "reference": "(omitted)"},
+    ]
+    s.update(kw)
+    return s
+
+
+def test_reference_rows():
+    s = reference_spec(uncertainty=["std_error", {"sparkline": {}}])
+    assert et.validate_table(s, base_dir=EXAMPLES, schema=None) == []  # no "no column has base"
+    if importlib.util.find_spec("jsonschema"):
+        assert et.validate_table(s, base_dir=EXAMPLES) == []
+    t = et.build_table(s, base_dir=EXAMPLES)
+    assert cells(t, "Base period") == ["—", "—", "—"]
+    assert cells(t, "Horsepower") == ["(omitted)", "-0.023**", "-0.021*"]
+    i = [r["label"] for r in t["rows"]].index("Horsepower")
+    assert t["rows"][i + 1]["cells"][0] == ""  # its standard error: blank, not format.missing
+    marks = t["rows"][i + 2]["sparkline"]["marks"]
+    assert marks[0]["reference"] and "estimate" not in marks[0] and marks[0]["domain"] == marks[0]["domain"]
+    h = et.render(t, "html")
+    assert h.count('stroke="#1b3d5c" stroke-width="1.2"') == 4  # the hollow dots: 3 base + 1 hp
+    assert 'aria-label="reference"' in h
+    tex = et.render(t, "latex")
+    assert tex.count("circle[radius=1.95pt]") == 4
+    # without the estimate the text goes in the first line
+    t = et.build_table(reference_spec(uncertainty={"sparkline": {}}, estimate=False), base_dir=EXAMPLES)
+    assert cells(t, "Base period") == ["—", "—", "—"] and cells(t, "Horsepower")[0] == "(omitted)"
+    # a plain missing cell keeps the rule; an axis with no interval at all is blank
+    t = et.build_table(dict(spec(), uncertainty={"sparkline": {"scale": "row"}}, estimate=False), base_dir=EXAMPLES)
+    hp = next(r for r in t["rows"] if r["label"] == "Horsepower")["sparkline"]["marks"]
+    assert hp[0] == {"domain": hp[1]["domain"]}
+    rows = [{"label": "a", "kind": "estimate", "cells": [""], "sparkline": {"scale": "column", "marks": [{}]}}]
+    et._spark_domains(rows)
+    assert rows[0]["sparkline"]["marks"] == [None]
+
+
+def test_latex_beside():
+    for align in ("estimate", "middle"):
+        s = reference_spec(uncertainty=["std_error", {"sparkline": {"place": "beside", "align": align}}])
+        tex = et.render(et.build_table(s, base_dir=EXAMPLES), "latex")
+        body = tex.split("\\midrule")[1]
+        assert "\\begin{tabular}{lcccccc}" in tex and tex.count("\\multicolumn{2}{c}{(1)}") == 1
+        assert "\\multicolumn{2}{c}{32}" in tex  # statistics span both columns
+        weight = next(l for l in body.split("\n") if l.startswith("Weight"))
+        assert weight.count("\\tikz[") == 3 and weight.count("circle[radius=2.175pt]") == 3
+        se = next(l for l in body.split("\n") if l.startswith(" & (0.754)"))
+        if align == "estimate":  # the standard error's row: the rule alone
+            assert se.count("\\tikz[") == 3 and "circle" not in se and "(76.0,-4.8) -- (76.0,11.2)" in se
+        else:  # one picture per term, its rule down through both rows, the marks between
+            assert "\\tikz" not in se and se.endswith("&  \\\\")
+            assert "(76.0,-20.8) -- (76.0,11.2)" in weight and "(27.4,-4.8) circle[radius=2.175pt]" in weight

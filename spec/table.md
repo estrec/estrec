@@ -104,6 +104,14 @@ stub (the row labels' column) is blank in heading rows. Formats with one heading
 several terms on one row (the first one a column has), for an OLS and an IV column side by
 side. `label` defaults to the term.
 
+`reference` marks a row as the omitted reference category, such as an event study's
+reference period: `true` or the text to show (`"(omitted)"`, `"0"`); `true` shows `—`. In a
+column without the term, the row shows that text in place of the estimate (or, with
+`"estimate": false`, in its first line), its other lines are blank, and a sparkline line
+draws a hollow dot at 0 on its 0 rule. Columns that have the term show it as usual. A
+reference row needs no record to have the term, so its `term` can be any name none of the
+columns uses (`"ref"`); naming the real term shows it where it was estimated.
+
 Terms not in `rows` follow in the order they first appear across the columns, unless
 `keep_unlisted` is `false`. `keep` and `drop` are lists of regular expressions (ECMAScript
 syntax, searched anywhere in `term`) that filter these unlisted terms: with `keep`, only terms
@@ -135,8 +143,11 @@ row per line:
   statistics rows span both columns. `align` places the marks: `"estimate"` (the default)
   level with the estimate's row, the term's other rows carrying the 0 rule only; or
   `"middle"`, one cell spanning the term's rows with the marks at its middle. HTML, the
-  viewer, its web page and Word lay it out beside; other formats draw it below. One
-  sparkline at most is beside;
+  viewer, its web page, Word and LaTeX lay it out beside (LaTeX centred: the first row's
+  picture draws the rule and marks down through the term's rows, so no `multirow`); other
+  formats draw it below. One sparkline at most is beside. Where a column lacks a term, its
+  sparkline cell draws the 0 rule alone, so the rule runs unbroken down the column (unless
+  no cell sharing that axis has an interval);
 - a **list** of names, templates and sparklines, one row each, in order: `["std_error", "[{p_value}]"]`;
 - `null`: no lines.
 

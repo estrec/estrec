@@ -64,7 +64,7 @@
           "terms": {"type": "array", "items": {"type": "string"}, "minItems": 1},
           "label": {"type": "string"},
           "reference": {
-            "description": "The omitted reference category (an event study's reference period): true, or the text shown where a column lacks the term (true shows an em dash). Its sparkline cells draw a hollow dot at 0.",
+            "description": "A reference category or a term left out of a model (an event study's reference period): true, or the text shown where a column lacks the term (true shows an em dash). Its sparkline cells draw a hollow dot at 0.",
             "type": ["boolean", "string"]
           }
         },

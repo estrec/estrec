@@ -2,11 +2,14 @@
 
 ## Unreleased
 
-- Table reference rows (Ted 2026-11-08, for an event study's omitted period): a row's
-  `"reference": true` (or the text to show, `"(omitted)"`) shows `—` where a column lacks the
-  term, blanks its other lines, and draws a hollow dot at 0 on its sparkline's 0 rule. The
-  term needn't be in any record (no "no column has" warning). Viewer: a Reference box on each
-  term and **+ Reference row**. estrec's R `render_table` doesn't show them.
+- Table reference / omitted rows (Ted 2026-11-08, for an event study's reference period or a
+  term a model leaves out): a row's `"reference": true` (or the text to show, `"(omitted)"`)
+  shows `—` where a column lacks the term, blanks its other lines, and draws a hollow dot at
+  0 on its sparkline's 0 rule. The term needn't be in any record (no "no column has"
+  warning). Viewer: a Reference / omitted box on each term and **+ Reference / omitted
+  row**. estrec's R `render_table` doesn't show them.
+- Viewer: moving or removing a column carries the statistics rows' typed values (such as
+  Controls) with it; they stayed in place, so the values landed in the wrong columns.
 - Sparkline cells where a column lacks the term now draw the 0 rule alone, so the rule runs
   unbroken down a column (built tables give such cells a mark with only `domain`; an axis
   with no interval at all stays blank).

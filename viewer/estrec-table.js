@@ -628,7 +628,7 @@
   // a reference row's mark: a hollow dot at 0 in the estimate dot's colour
   const sparkRing = (x0, yt, color) =>
     `<circle cx="${x0}" cy="${sparkY(yt)}" r="2.6" stroke="${sparkDark(color)}" stroke-width="1.2" style="fill:var(--bg,#ffffff)"/>`;
-  const sparkLabel = (m, label) => label || (m.reference ? "reference" : "");
+  const sparkLabel = (m, label) => label || (m.reference ? "reference or omitted" : "");
   // a cell's drawing: the interval's marks, a reference row's dot, or nothing (the rule alone)
   function sparkCell(m, width, yt, color) {
     if ("estimate" in m) {

@@ -661,8 +661,8 @@ def _spark_ring(x0: str, yt: int, color: str) -> str:
 
 
 def _spark_label(m: dict, label: str) -> str:
-    """The drawing's text: the interval's, or 'reference' for a reference row's dot."""
-    return label or ("reference" if m.get("reference") else "")
+    """The drawing's text: the interval's, or 'reference or omitted' for a reference row's dot."""
+    return label or ("reference or omitted" if m.get("reference") else "")
 
 
 def _spark_svg(

@@ -673,9 +673,16 @@ function renderColumns(idx) {
     const head = el("input", { type: "text", id: `col-head-${i}`, value: c.header || "", placeholder: auto || "Label", "aria-label": `Label for column ${i + 1}` });
     head.addEventListener("input", () => { if (head.value) c.header = head.value; else delete c.header; update({ keepControls: true }); });
     const name = f ? recordName(state.items.find((x) => (x.record.meta || {}).id === c.record) || { record: rec, member: f.member, file: "" }) : `missing: ${c.record}`;
+    // moving or removing a column carries the statistics rows' typed values with it
+    const values = () => (state.spec.stats || []).filter((st) => Array.isArray(st.values));
+    const shift = (d) => { const j = i + d; if (j < 0 || j >= cols.length) return; move(cols, i, d); for (const st of values()) move(st.values, i, d); update(); };
     box.append(el("div", { class: "item" + (rec ? "" : " off") },
       el("div", { class: "fields" }, head, el("span", { class: "hint", text: name }), vs.length > 1 ? sel : null),
-      toolButtons(cols, i, update)));
+      el("div", { class: "tools" },
+        el("button", { class: "btn icon", type: "button", "aria-label": "Move left", title: "Move left", text: "↑", disabled: i === 0, onclick: () => shift(-1) }),
+        el("button", { class: "btn icon", type: "button", "aria-label": "Move right", title: "Move right", text: "↓", disabled: i === cols.length - 1, onclick: () => shift(1) }),
+        el("button", { class: "btn icon", type: "button", "aria-label": `Remove column ${i + 1}`, title: "Remove this column", text: "×",
+          onclick: () => { cols.splice(i, 1); for (const st of values()) st.values.splice(i, 1); update(); } }))));
   });
 }
 
@@ -734,7 +741,7 @@ function renderRows(idx) {
     lab.addEventListener("change", () => { r.label = lab.value; after(); });
     lab.addEventListener("input", () => { r.label = lab.value; materializeRows(view); update({ keepControls: true }); });
     // the omitted reference category: its text where a column lacks the term, a hollow dot at 0
-    const refOn = el("input", { type: "checkbox", id: `row-ref-${i}`, checked: !!r.ref, "aria-label": `${r.names.join(", ")} is the reference category` });
+    const refOn = el("input", { type: "checkbox", id: `row-ref-${i}`, checked: !!r.ref, "aria-label": `${r.names.join(", ")} is a reference or omitted term` });
     const refText = el("input", { type: "text", id: `row-reftext-${i}`, value: r.ref === true || !r.ref ? E.REFERENCE_TEXT : r.ref, hidden: !r.ref, style: "width:7em", "aria-label": `Text shown for ${r.names.join(", ")} where a column lacks it` });
     const setRef = () => { r.ref = !refOn.checked ? null : refText.value && refText.value !== E.REFERENCE_TEXT ? refText.value : true; };
     refOn.addEventListener("change", () => { setRef(); refText.hidden = !refOn.checked; after(); });
@@ -744,17 +751,17 @@ function renderRows(idx) {
       el("div", { class: "fields" },
         el("label", { class: "inline" }, on, el("span", { class: "mono", text: r.names.join(" | ") })),
         lab,
-        el("label", { class: "inline", title: "The omitted reference category (an event study's reference period): shows this text where a column lacks the term, and a hollow dot at 0 on sparklines" }, refOn, el("span", { text: "Reference" }), refText)),
+        el("label", { class: "inline", title: "A reference category or a term left out of a model (an event study's reference period, say): shows this text where a column lacks the term, and a hollow dot at 0 on sparklines" }, refOn, el("span", { text: "Reference / omitted" }), refText)),
       toolButtons(view, i, after, el("span"))));
   });
   // a reference row for a term no record has (fixest's omitted period, say)
-  box.append(el("button", { class: "btn small", type: "button", id: "row-ref-add", text: "+ Reference row",
-    title: "A row for the omitted reference category: — in every column, a hollow dot at 0 on sparklines; move it into place with the arrows",
+  box.append(el("button", { class: "btn small", type: "button", id: "row-ref-add", text: "+ Reference / omitted row",
+    title: "A row for a reference category or a term no model has: — in every column, a hollow dot at 0 on sparklines; move it into place with the arrows",
     onclick: () => {
       const used = new Set(view.flatMap((r) => r.names));
       let name = "ref", k = 1;
       while (used.has(name)) name = `ref${++k}`;
-      view.push({ names: [name], label: "Reference", on: true, listed: true, ref: true });
+      view.push({ names: [name], label: "Omitted", on: true, listed: true, ref: true });
       after();
     } }));
 }

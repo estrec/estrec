@@ -104,8 +104,8 @@ stub (the row labels' column) is blank in heading rows. Formats with one heading
 several terms on one row (the first one a column has), for an OLS and an IV column side by
 side. `label` defaults to the term.
 
-`reference` marks a row as the omitted reference category, such as an event study's
-reference period: `true` or the text to show (`"(omitted)"`, `"0"`); `true` shows `—`. In a
+`reference` marks a row as a reference category or a term left out of a model (an event
+study's reference period, say): `true` or the text to show (`"(omitted)"`, `"0"`); `true` shows `—`. In a
 column without the term, the row shows that text in place of the estimate (or, with
 `"estimate": false`, in its first line), its other lines are blank, and a sparkline line
 draws a hollow dot at 0 on its 0 rule. Columns that have the term show it as usual. A

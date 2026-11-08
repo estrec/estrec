@@ -604,7 +604,7 @@ def test_reference_rows():
     assert marks[0]["reference"] and "estimate" not in marks[0] and marks[0]["domain"] == marks[0]["domain"]
     h = et.render(t, "html")
     assert h.count('stroke="#1b3d5c" stroke-width="1.2"') == 4  # the hollow dots: 3 base + 1 hp
-    assert 'aria-label="reference"' in h
+    assert 'aria-label="reference or omitted"' in h
     tex = et.render(t, "latex")
     assert tex.count("circle[radius=1.95pt]") == 4
     # without the estimate the text goes in the first line

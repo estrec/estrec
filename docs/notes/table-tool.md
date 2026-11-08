@@ -118,10 +118,12 @@ Decisions so far:
   (`_spark_tikz(rows=n)`), the other rows empty there. Row option `reference` (true → `—`,
   or text): the text where a column lacks the term, other lines blank, a hollow dot at 0
   (`_spark_ring`); no "no column has" warning. Any missing sparkline cell now draws the
-  rule alone (mark `{domain}` only; None if its axis has no interval). Viewer: Reference
-  box per term, **+ Reference row** (term `ref`, `ref2`, ...). Python = JS (6 more parity
-  specs). Test document `tmp/tikz-test2.tex` for Ted (not compiled here). R ignores
-  `reference`.
+  rule alone (mark `{domain}` only; None if its axis has no interval). Viewer: Reference /
+  omitted box per term, **+ Reference / omitted row** (term `ref`, `ref2`, ...; Ted: label
+  it "reference/omitted", not always a reference category; no standard mark, so keep the
+  text changeable). Python = JS (6 more parity specs). `tmp/tikz-test2.tex`: Ted compiled
+  it, "looks very nice". R ignores `reference`. Column move/remove now carries
+  `stats[].values` along.
 
 ## Earlier hand-off: sparklines everywhere and the `show_table` refactor (Ted, 2026-11-07)
 

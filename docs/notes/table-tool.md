@@ -85,8 +85,8 @@ Decisions so far:
   SVG via `_spark_xs`; 1 px = 0.75 pt, 12 pt rows; a first-line comment names
   `\usepackage{tikz}`), `to_great_table` (SVG in HTML, TikZ in LaTeX, through great_tables'
   private `FormatFns`) and estrec's `render_table` (tinytable outputs, per-output
-  `format_tt`; strings equal to Python's, a pinned cell in both test suites). Not compiled:
-  valiant has no TeX. Open: tinytable pads rows, so R's HTML column doesn't join.
+  `format_tt`; strings equal to Python's, a pinned cell in both test suites). Ted compiled
+  the event-study example with pdflatex (2026-11-08): it looks right. Open: tinytable pads rows, so R's HTML column doesn't join.
 - `show_table` is a wrapper over the table builder (layout as shown to Ted; he set FE rows to `Y`/`N`, and said nothing on the names-on-top question, so names stay on top;
   FE rows `Y`/`N` are the default everywhere: `format.fe_yes` / `fe_no`; estrec's
   `glance()` keeps fixest's `X`).

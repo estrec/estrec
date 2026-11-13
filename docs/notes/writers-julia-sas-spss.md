@@ -10,10 +10,10 @@ kind of model.
 |---|---|---|---|
 | Julia | `julia/` (EstRec.jl): `write_estimation(model, path)` | FixedEffectModels `reg` (OLS, IV, FE, clusters); GLM.jl `lm`, `glm` | fixed-effects GLMs (GLFixedEffectModels), MixedModels.jl |
 | SAS | `sas/estrec.sas`: `%estrec_write(path=, ...)` after a procedure, from its ODS OUTPUT tables, written with PROC JSON | REG, GLM (incl. ABSORB), SURVEYREG, LOGISTIC, SURVEYLOGISTIC, GENMOD (incl. GEE) | PANEL, SYSLIN 2SLS, MIXED, GLIMMIX |
-| SPSS | `spss/` extension command `ESTREC WRITE`, Python (SPSS's own) reading the procedure's OMS output | REGRESSION, UNIANOVA (incl. /ROBUST), LOGISTIC REGRESSION, GENLIN (incl. GEE), CSGLM, CSLOGISTIC | MIXED, GENLINMIXED |
+| SPSS | `spss/` extension commands `ESTREC BEGIN` / `ESTREC END OUTFILE=` (Ted 2026-11-13), Python (SPSS's own) reading the procedures' OMS output | REGRESSION, UNIANOVA (incl. /ROBUST), LOGISTIC REGRESSION, GENLIN (incl. GEE) | MIXED, GENLINMIXED. Complex Samples (CSGLM, CSLOGISTIC) dropped: Ted's licence lacks the module |
 
 Profiles: `inference` everywhere; `linear-fe` for absorbed / fixed-effects fits; `glm`;
-`iv`; `survey` for SURVEY*/CS* procedures; `mixed` for MIXED, GLIMMIX, GENLINMIXED and
+`iv`; `survey` for SAS's SURVEY* procedures; `mixed` for MIXED, GLIMMIX, GENLINMIXED and
 MixedModels.jl.
 
 ## Testing

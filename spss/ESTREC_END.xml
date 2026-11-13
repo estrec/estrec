@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Command xmlns="http://xml.spss.com/spss/extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:schemaLocation="http://xml.spss.com/spss/extension https://raw.githubusercontent.com/IBMPredictiveAnalytics/IBMPredictiveAnalytics.github.io/master/Extension.xsd"
-  Name="ESTREC END" Language="Python3">
+  Name="ESTREC END" Language="Python" LanguageVersion="3">
   <Subcommand Name="" IsArbitrary="False" Occurrence="Required">
     <Parameter Name="OUTFILE" ParameterType="OutputFile"/>
     <Parameter Name="TITLE" ParameterType="QuotedString"/>

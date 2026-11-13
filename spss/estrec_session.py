@@ -34,6 +34,13 @@ def _show(setting: str):
 
 
 def _version():
+    """SPSS's version, e.g. 32.0 (the plug-in reports 'spss320')."""
+    v = _raw_version()
+    m = re.fullmatch(r"spss(\d+)(\d)", v or "")
+    return f"{m[1]}.{m[2]}" if m else v
+
+
+def _raw_version():
     spss = _spss()
     for f in ("GetSPSSVersion", "GetDefaultPlugInVersion"):
         try:

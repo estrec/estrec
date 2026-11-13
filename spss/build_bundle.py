@@ -3,7 +3,6 @@ modules they use). Install in SPSS with Extensions > Install Local Extension Bun
 Run: python spss/build_bundle.py  ->  spss/dist/estrec.spe"""
 
 import zipfile
-from datetime import date
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -11,26 +10,37 @@ VERSION = "0.1.0"
 SPECS = ["ESTREC_BEGIN.xml", "ESTREC_END.xml"]
 CODE = ["ESTREC_BEGIN.py", "ESTREC_END.py", "estrec_session.py", "estrec_oxml.py",
         "estrec_procedures.py", "estrec_record.py"]
-MISC = ["README.md"]
+MISC: list = []  # SPSS's own bundles carry no Misc-Files
 
-MANIFEST = f"""Name: ESTREC
-Summary: Write estrec estimation records (JSON) from SPSS procedures
-Description: ESTREC BEGIN starts capturing output (with OMS); ESTREC END OUTFILE='fit.estrec.json'
- writes one estrec record per supported procedure run in between: REGRESSION, UNIANOVA,
- LOGISTIC REGRESSION, GENLIN, MIXED, GENLINMIXED. See https://estrec.org
-Author: Ted Matherly
-Version: {VERSION}
-Date: {date.today().strftime("%m/%d/%Y")}
-Categories: output, python
-Plugins: Python
-Python-Version: 3
-Command-Specs: {", ".join(SPECS)}
-Code-Files: {", ".join(CODE)}
-Misc-Files: {", ".join(MISC)}
-Product-Version: 27
-Product-Version-Maximum: 99
-Website: https://estrec.org
-"""
+FIELDS = [
+    ("Name", "ESTREC"),
+    ("Display-Name", "estrec"),
+    ("Command-Specs", ",".join(SPECS)),
+    ("Code-Files", ",".join(CODE)),
+    ("Summary", "Write estrec estimation records (JSON) from SPSS procedures"),
+    ("Description", "ESTREC BEGIN starts capturing output (with OMS); ESTREC END OUTFILE= writes one "
+                    "estrec record per REGRESSION, UNIANOVA, LOGISTIC REGRESSION, GENLIN, MIXED or "
+                    "GENLINMIXED run in between. See https://estrec.org"),
+    ("Author", "Ted Matherly"),
+    ("Version", VERSION),
+    ("Product-Version", "27"),
+    ("Translation-Catalogues", ""),
+]
+
+
+def manifest_line(key: str, value: str) -> str:
+    """A Java manifest header: lines of at most 72 bytes, continuations start with a space
+    (the form SPSS's own Create Extension Bundle writes)."""
+    raw = f"{key}: {value}".encode("utf-8")
+    out = [raw[:72]]
+    raw = raw[72:]
+    while raw:
+        out.append(b" " + raw[:71])
+        raw = raw[71:]
+    return "\n".join(b.decode("utf-8") for b in out) + "\n"
+
+
+MANIFEST = "".join(manifest_line(k, v) for k, v in FIELDS)
 
 
 def main():
@@ -38,7 +48,7 @@ def main():
     out.parent.mkdir(exist_ok=True)
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("META-INF/MANIFEST.MF", MANIFEST)
-        for f in SPECS + CODE + MISC:
+        for f in SPECS + CODE:
             z.write(HERE / f, f)
     print(out)
 

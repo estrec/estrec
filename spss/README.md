@@ -41,5 +41,5 @@ Complex Samples procedures (CSGLM, CSLOGISTIC) aren't covered yet.
 
 `estrec_oxml.py` reads OMS OXML, `estrec_procedures.py` builds the records (no SPSS needed:
 `tests/test_spss.py` runs on saved OXML in `tests/data/spss/`), `estrec_session.py` is the
-SPSS side. `python spss/build_bundle.py` makes `spss/dist/estrec.spe`. `dev/` holds the
+SPSS side. `python spss/build_bundle.py` makes `spss/dist/estrec.spe` (manifest in the form SPSS's Create Extension Bundle writes). `dev/` holds the
 probes that captured the fixtures.

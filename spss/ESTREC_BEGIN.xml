@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Command xmlns="http://xml.spss.com/spss/extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:schemaLocation="http://xml.spss.com/spss/extension https://raw.githubusercontent.com/IBMPredictiveAnalytics/IBMPredictiveAnalytics.github.io/master/Extension.xsd"
-  Name="ESTREC BEGIN" Language="Python3" LanguageVersion="3" Mode="Program">
+  Name="ESTREC BEGIN" Language="Python3" LanguageVersion="3">
+  <Subcommand Name="" IsArbitrary="False" Occurrence="Optional">
+    <Parameter Name="LABEL" ParameterType="QuotedString"/>
+  </Subcommand>
 </Command>

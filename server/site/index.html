@@ -31,6 +31,8 @@
   <p>Python, the reference validator, writer and redactor:</p>
   <pre>pip install "estrec[jsonschema] @ git+https://github.com/estrec/estrec"
 estrec validate model.estrec.json</pre>
+  <p>Without git (the command above needs it on your PATH):</p>
+  <pre>pip install "estrec[jsonschema] @ https://github.com/estrec/estrec/archive/refs/heads/main.zip"</pre>
   <p>R, from fixest fits:</p>
   <pre>remotes::install_github("estrec/estrec", subdir = "r")
 estrec::write_estimation(fit, "fit.estrec.json")</pre>

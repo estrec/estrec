@@ -43,3 +43,43 @@ MixedModels.jl.
   (REGRESSION BCOV, GENLIN COVB, MIXED COVB); whether GENLINMIXED gives pivot tables at all;
   what the Notes table holds (filter, weight, split, syntax) for `specification.state`; and
   that the bundled Python 3 runs (for the extension command).
+
+## SPSS probe findings (2026-11-13, SPSS on Ted's Mac; `raw/estrec_probe_spss/`)
+
+The probe ran everything except Complex Samples (not licensed: dropped). GENLINMIXED needs the
+subject variable's measurement level nominal (`probe2.sps`); it then gives pivot tables.
+
+- **Precision**: OXML `number` attributes carry ~14 significant digits. REGRESSION's
+  intercept and SE match R's lm to all 14.
+- **Labels are display text in the output language** ("Std. Error", "Sig."), so ESTREC BEGIN
+  sets `OLANG=ENGLISH` and END restores it. Variable categories also carry `varName`.
+- **Notes table** (every procedure): the syntax as run, active dataset, filter, weight, split
+  file, missing-value rule, N of rows, and the data file's path (identifying: user name).
+- **REGRESSION**: Coefficients (B, SE, t, Sig., CI with CI(95)); Model Summary (R², adj. R²,
+  SE of estimate); ANOVA (SS, df, F); BCOV gives a "Coefficient Correlations" table whose
+  Covariances block covers the **slopes only, not the constant**: the record's vcov labels
+  the slopes it has.
+- **UNIANOVA**: Parameter Estimates rows `Intercept`, `[cat=1]`...; the last level is the
+  reference (B = 0, other cells "."; footnote "redundant") -> `dropped: "reference"`. /ROBUST
+  adds "Parameter Estimates with Robust Standard Errors" (footnote "HC1 method"). No
+  covariance matrix. R² in a footnote of Tests of Between-Subjects Effects.
+- **LOGISTIC REGRESSION**: "Variables in the Equation" appears twice (Step 0, then Step 1:
+  use the last step); factor levels are positional (`cat(1)`, `cat(2)`), mapped to values by
+  "Categorical Variables Codings"; Wald chi-square per row (record z = B/SE, same p); no
+  covariance, but `/PRINT=CORR` gives a Correlation Matrix (labels padded with spaces):
+  cov = corr * se_i * se_j. Model Summary: -2LL, Cox & Snell, Nagelkerke; iterations in a
+  footnote. Dependent Variable Encoding gives the modelled category.
+- **GENLIN**: ModelInformation (dependent, distribution, link; footnote says which category is
+  modelled); Goodness of Fit (deviance, Pearson, full log likelihood, AIC, BIC); Parameter
+  Estimates (B, SE, Wald CI, Wald chi-square, df, Sig.; reference level B = 0 with "."); COVB
+  gives "Covariances of Parameter Estimates" (full, robust when COVB=ROBUST); /REPEATED gives
+  a Correlated Data Summary (number of subjects = clusters).
+- **MIXED**: Estimates of Fixed Effects with a per-row `df` (Satterthwaite) -> parameter `df`;
+  Covariance Matrix for Estimates of Fixed Effects; Estimates of Covariance Parameters
+  (Residual; `Intercept [subject = id]` Variance); Information Criteria (-2 REML LL, AIC,
+  BIC); Model Dimension.
+- **GENLINMIXED**: Fixed Coefficients (t tests), Covariances of Fixed Coefficients,
+  Covariance Parameters (Var(Intercept)), Model Summary (target, distribution, link, AICC,
+  BIC). With TARGET_CATEGORY_ORDER=ASCENDING its signs are the opposite of LOGISTIC
+  REGRESSION's: it models the other category, so the writer must record the modelled
+  category (from the target's reference setting).

@@ -5,7 +5,7 @@ estimation run, saying what was estimated, what came out, and how it ran.
 
 ## Install
 
-Download `estrec.spe` and install it with **Extensions > Install Local Extension Bundle**
+Download [`estrec.spe`](https://github.com/estrec/estrec/raw/main/spss/estrec.spe) and install it with **Extensions > Install Local Extension Bundle**
 (SPSS Statistics 27 or later; it uses the Python 3 that comes with SPSS).
 
 ## Use
@@ -41,5 +41,5 @@ Complex Samples procedures (CSGLM, CSLOGISTIC) aren't covered yet.
 
 `estrec_oxml.py` reads OMS OXML, `estrec_procedures.py` builds the records (no SPSS needed:
 `tests/test_spss.py` runs on saved OXML in `tests/data/spss/`), `estrec_session.py` is the
-SPSS side. `python spss/build_bundle.py` makes `spss/dist/estrec.spe` (manifest in the form SPSS's Create Extension Bundle writes). `dev/` holds the
+SPSS side. `python spss/build_bundle.py` makes `spss/estrec.spe`, which is committed (rebuild it after changing anything here; a test checks) (manifest in the form SPSS's Create Extension Bundle writes). `dev/` holds the
 probes that captured the fixtures.

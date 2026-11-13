@@ -148,10 +148,13 @@ def test_numbered_files():
     assert estrec_record.numbered("fit.estrec.json", 1) == ["fit.estrec.json"]
 
 
-def test_bundle_builds(tmp_path):
+def test_committed_bundle_is_current():
+    """spss/estrec.spe (what the front page links to) holds the current files: rebuild with
+    `python spss/build_bundle.py` and commit it after changing anything in spss/."""
     import zipfile
-    import runpy
-    runpy.run_path(str(ROOT / "spss" / "build_bundle.py"), run_name="__main__")
-    with zipfile.ZipFile(ROOT / "spss" / "dist" / "estrec.spe") as z:
+    with zipfile.ZipFile(ROOT / "spss" / "estrec.spe") as z:
         names = set(z.namelist())
-    assert {"META-INF/MANIFEST.MF", "ESTREC_BEGIN.xml", "ESTREC_END.py", "estrec_procedures.py"} <= names
+        assert {"META-INF/MANIFEST.MF", "ESTREC_BEGIN.xml", "ESTREC_END.py", "estrec_procedures.py"} <= names
+        for n in names - {"META-INF/MANIFEST.MF"}:
+            assert z.read(n) == (ROOT / "spss" / n).read_bytes(), f"{n} is out of date in estrec.spe"
+        assert b"Plugins:" not in z.read("META-INF/MANIFEST.MF")

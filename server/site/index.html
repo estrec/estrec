@@ -32,6 +32,7 @@
     <button type="button" role="tab" id="tab-python" aria-controls="pane-python" aria-selected="true">Python</button>
     <button type="button" role="tab" id="tab-r" aria-controls="pane-r" aria-selected="false" tabindex="-1">R</button>
     <button type="button" role="tab" id="tab-stata" aria-controls="pane-stata" aria-selected="false" tabindex="-1">Stata</button>
+    <button type="button" role="tab" id="tab-spss" aria-controls="pane-spss" aria-selected="false" tabindex="-1">SPSS</button>
     <button type="button" role="tab" id="tab-sas" aria-controls="pane-sas" aria-selected="false" tabindex="-1">SAS</button>
     <button type="button" role="tab" id="tab-julia" aria-controls="pane-julia" aria-selected="false" tabindex="-1">Julia</button>
     <button type="button" role="tab" id="tab-other" aria-controls="pane-other" aria-selected="false" tabindex="-1">Other tools</button>
@@ -56,6 +57,16 @@ estrec::write_estimation(fit, "fit.estrec.json")</pre>
 regress price mpg weight, vce(cluster rep78)
 estrec write using "price.estrec.json", replace</pre>
   </section>
+  <section class="pane" role="tabpanel" id="pane-spss" aria-labelledby="tab-spss">
+    <p>SPSS Statistics 27 or later. Download
+    <a href="https://github.com/estrec/estrec/raw/main/spss/estrec.spe">estrec.spe</a> and install it
+    with <b>Extensions &gt; Install Local Extension Bundle</b>. Then bracket the procedures
+    (<code>REGRESSION</code>, <code>UNIANOVA</code>, <code>LOGISTIC REGRESSION</code>,
+    <code>GENLIN</code>, <code>MIXED</code>, <code>GENLINMIXED</code>), as with OMS:</p>
+    <pre>ESTREC BEGIN.
+REGRESSION /STATISTICS COEFF OUTS R ANOVA BCOV /DEPENDENT y /METHOD=ENTER x1 x2.
+ESTREC END OUTFILE='fit.estrec.json'.</pre>
+  </section>
   <section class="pane" role="tabpanel" id="pane-sas" aria-labelledby="tab-sas">
     <p>SAS 9.4. Bracket the procedures (<code>REG</code>, <code>GLM</code>, <code>LOGISTIC</code>,
     <code>GENMOD</code>, <code>SURVEYREG</code>, <code>SURVEYLOGISTIC</code>) with:</p>
@@ -72,7 +83,7 @@ using EstRec
 write_estimation(m, "fit.estrec.json"; data = df)</pre>
   </section>
   <section class="pane" role="tabpanel" id="pane-other" aria-labelledby="tab-other">
-    <p>A writer for SPSS is in testing. Other tools don't have one yet. A record is plain JSON, so any
+    <p>Other tools don't have a writer yet. A record is plain JSON, so any
     tool can write one by following the
     <a href="https://github.com/estrec/estrec/blob/main/spec/estrec.md">specification</a>; the
     <a href="https://github.com/estrec/estrec/tree/main/converters">converters</a> are short

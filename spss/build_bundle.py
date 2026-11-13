@@ -1,6 +1,7 @@
 """Builds estrec.spe, the SPSS extension bundle: ESTREC BEGIN and ESTREC END (and the
 modules they use). Install in SPSS with Extensions > Install Local Extension Bundle.
-Run: python spss/build_bundle.py  ->  spss/dist/estrec.spe"""
+Run: python spss/build_bundle.py  ->  spss/estrec.spe (committed: the front page links to it;
+tests/test_spss.py fails when it is out of date with the files here)."""
 
 import zipfile
 from pathlib import Path
@@ -44,12 +45,17 @@ MANIFEST = "".join(manifest_line(k, v) for k, v in FIELDS)
 
 
 def main():
-    out = HERE / "dist" / "estrec.spe"
-    out.parent.mkdir(exist_ok=True)
-    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr("META-INF/MANIFEST.MF", MANIFEST)
+    out = HERE / "estrec.spe"
+    # fixed timestamps, so the bundle only changes when its files do
+    def add(z, name, data):
+        info = zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
+        info.compress_type = zipfile.ZIP_DEFLATED
+        info.external_attr = 0o644 << 16
+        z.writestr(info, data)
+    with zipfile.ZipFile(out, "w") as z:
+        add(z, "META-INF/MANIFEST.MF", MANIFEST)
         for f in SPECS + CODE:
-            z.write(HERE / f, f)
+            add(z, f, (HERE / f).read_bytes())
     print(out)
 
 

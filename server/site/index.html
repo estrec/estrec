@@ -32,6 +32,7 @@
     <button type="button" role="tab" id="tab-python" aria-controls="pane-python" aria-selected="true">Python</button>
     <button type="button" role="tab" id="tab-r" aria-controls="pane-r" aria-selected="false" tabindex="-1">R</button>
     <button type="button" role="tab" id="tab-stata" aria-controls="pane-stata" aria-selected="false" tabindex="-1">Stata</button>
+    <button type="button" role="tab" id="tab-sas" aria-controls="pane-sas" aria-selected="false" tabindex="-1">SAS</button>
     <button type="button" role="tab" id="tab-julia" aria-controls="pane-julia" aria-selected="false" tabindex="-1">Julia</button>
     <button type="button" role="tab" id="tab-other" aria-controls="pane-other" aria-selected="false" tabindex="-1">Other tools</button>
   </div>
@@ -55,6 +56,15 @@ estrec::write_estimation(fit, "fit.estrec.json")</pre>
 regress price mpg weight, vce(cluster rep78)
 estrec write using "price.estrec.json", replace</pre>
   </section>
+  <section class="pane" role="tabpanel" id="pane-sas" aria-labelledby="tab-sas">
+    <p>SAS 9.4. Bracket the procedures (<code>REG</code>, <code>GLM</code>, <code>LOGISTIC</code>,
+    <code>GENMOD</code>, <code>SURVEYREG</code>, <code>SURVEYLOGISTIC</code>) with:</p>
+    <pre>filename estrec url "https://raw.githubusercontent.com/estrec/estrec/main/sas/estrec.sas";
+%include estrec;
+%estrec_begin;
+proc reg data=mydata; model y = x1 x2 / covb; run; quit;
+%estrec_end(out=fit.estrec.json);</pre>
+  </section>
   <section class="pane" role="tabpanel" id="pane-julia" aria-labelledby="tab-julia">
     <p>From FixedEffectModels.jl (<code>reg</code>) and GLM.jl (<code>lm</code>, <code>glm</code>) fits:</p>
     <pre>using Pkg; Pkg.add(url = "https://github.com/estrec/estrec", subdir = "julia")
@@ -62,7 +72,7 @@ using EstRec
 write_estimation(m, "fit.estrec.json"; data = df)</pre>
   </section>
   <section class="pane" role="tabpanel" id="pane-other" aria-labelledby="tab-other">
-    <p>Writers for SAS and SPSS are in progress. Other tools don't have one yet. A record is plain JSON, so any
+    <p>A writer for SPSS is in testing. Other tools don't have one yet. A record is plain JSON, so any
     tool can write one by following the
     <a href="https://github.com/estrec/estrec/blob/main/spec/estrec.md">specification</a>; the
     <a href="https://github.com/estrec/estrec/tree/main/converters">converters</a> are short

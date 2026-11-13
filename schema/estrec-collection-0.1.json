@@ -41,10 +41,8 @@
     "replication": ["events", "publication"]
   },
   "x-size-limits": {
-    "warn_bytes": 1000000,
-    "warn_elements": 10000,
-    "fail_bytes": 16000000,
-    "description": "fail_bytes applies to the collection file; the warnings to the collection without its embedded records; each member record is checked against the record limits as if alone. A members file has no overall limit."
+    "members_file_bytes": 16000000,
+    "description": "A collection has no size limits of its own; each member record is checked against the record limits as if alone. Writers keep the records in a members file when the collection would pass members_file_bytes with them embedded."
   },
   "$defs": {
     "meta": {

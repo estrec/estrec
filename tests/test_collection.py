@@ -286,8 +286,9 @@ def test_size_limits_leave_out_the_records(monkeypatch):
         for i in issues
         if i.path.startswith("members") and "elements" in i.message and ".record" not in i.path
     ]
+    # a collection has no size limit of its own, only its records do
     monkeypatch.setattr(col, "FAIL_BYTES", 1_000)
-    assert any("byte limit" in m for m in messages(ef.validate_collection(c, schema=None), "error"))
+    assert not any("byte" in m for m in messages(ef.validate_collection(c, schema=None), "error"))
 
 
 # ---------------------------------------------------------------- redaction

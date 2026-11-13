@@ -123,8 +123,6 @@ write_collection <- function(x, path, kind = c("paper", "session", "replication"
     json <- .est_json(embedded, pretty = TRUE)
     paths <- c(path, file)
   }
-  if (nchar(json, type = "bytes") > 16e6)
-    stop("the collection is above the 16 MB limit even without its records", call. = FALSE)
   con <- file(path, open = "wb")
   writeLines(enc2utf8(json), con, useBytes = TRUE)
   close(con)

@@ -45,7 +45,6 @@ from .records import (
     _prune,
     _reject_constant,
     _sha256_file,
-    _size_issues,
     canonical_json,
     decode_nonfinite,
     identifying_paths,
@@ -537,11 +536,6 @@ def write_collection(
     if members == "jsonl" or (members == "auto" and len(text.encode()) > FAIL_BYTES):
         coll = _to_members_file(coll, path)
         text = _dumps(_ordered(coll), indent)
-    size = len(text.encode())
-    if size > FAIL_BYTES:
-        raise EstimationError(f"{path}: collection is {size:,} bytes, above the {FAIL_BYTES:,} byte limit")
-    for issue in _size_issues(_without_records(coll), len(_dumps(_without_records(coll)).encode())):
-        warnings.warn(f"{path}: {issue}")
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(text + "\n", encoding="utf-8")
     os.replace(tmp, path)
@@ -768,12 +762,7 @@ def validate_collection(
     else:
         issues += _structure(coll)
 
-    # sizes: the file as a whole, and the collection without its records
-    size = len(_dumps(coll).encode())
-    if size > FAIL_BYTES:
-        err("", f"{size:,} bytes, above the {FAIL_BYTES:,} byte limit; keep the records in a members file")
-    view = _without_records(coll)
-    issues += [i for i in _size_issues(view, len(_dumps(view).encode())) if i.level != "error"]
+    # no size limits on the collection itself (spec 11.7); its records are checked one by one
 
     meta = coll.get("meta") if isinstance(coll.get("meta"), dict) else {}
     kind = meta.get("kind")

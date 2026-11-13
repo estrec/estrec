@@ -843,7 +843,7 @@ Each member is an object:
   SHOULD list them in the order run. A record that appears in several places is **one**
   member with `locators`, not several members.
 - **Storage.** Each member has exactly one of `record` and `attachment`. Writers SHOULD embed
-  the records. A collection that would pass the 16 MB limit (11.7) keeps its records in a
+  the records. A collection that would pass 16 MB with its records embedded (11.7) keeps them in a
   **members file** instead: a [JSON Lines] file of one record per line, named
   `<name>.members.jsonl`, next to the collection and listed in `attachments` with
   `role: "members"` and `media_type: "application/jsonl"`. Writers SHOULD switch to a members
@@ -937,10 +937,10 @@ member's issues under `members[<i>]`. In addition:
 
 ### 11.7 Size, redaction and disclosure levels
 
-- **Size.** A collection file above 16 MB is an error, as for a record. The 1 MB and
-  10,000-element warnings (8.2) apply to the collection *without* its embedded records, and
-  each member record is checked against the record limits as if it stood alone. A members
-  file has no overall limit.
+- **Size.** The size limits (8.2) are for records: each member record is checked against
+  them as if it stood alone. A collection has no size limits of its own, however many members
+  it has. Above 16 MB, writers keep the records in a members file (11.3) so the collection
+  stays quick to open as an index; that is a storage choice, not a limit.
 - **Attachments.** A member record's attachment paths are relative to the folder of the
   collection (or of its members file, which sits beside it), so a collection and its
   members' side files move together.

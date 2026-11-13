@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Collections have no size limits of their own (Ted 2026-11-13): the 16 MB error and the
+  1 MB / 10,000-element warnings applied to a collection's index are gone from the spec
+  (11.7), the collection schema's `x-size-limits`, the Python writer and validator, and the R
+  writer. Each member record still has the record limits. Writers still move the records to a
+  members file above 16 MB. A collection of 12,000 records no longer warns that `members` is
+  "above 10,000; use an attachment".
+- Front page: install tabs for Python, R, Stata and other tools.
 - R: models fixest couldn't estimate (NA models, kept in `split`/multiple-outcome fits, e.g. a
   logit subsample whose outcome is all 0) are skipped with a warning, and fail clearly on
   their own. A variance matrix without fixest's `vcov_type` label now stops with a message

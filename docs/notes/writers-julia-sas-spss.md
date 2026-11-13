@@ -111,3 +111,16 @@ ODS trace).
   prints all 17 digits: E32 gives 14, fixed w.d about 15 (10,000 random doubles: worst
   relative error 1.5e-13 with one fixed rule). The writer picks, per number, the candidate
   text (BEST32, E32, fixed w.d) that reads back closest to the double.
+
+## SPSS bundle: what SPSS 32 needs (2026-11-13, Ted's Mac)
+
+- Installs and works from `spss/dist/estrec.spe` built by `spss/build_bundle.py` (804ab49):
+  Extension Hub lists it, ESTREC BEGIN/END run, `spss/dev/test_bundle.sps` passes all five
+  checks (records in `raw/estrec_test/`).
+- The manifest must look like SPSS's own Create Extension Bundle output: no `Plugins:` or
+  `Python-Version:` headers (with them SPSS 32 abandoned the install, leaving nothing),
+  72-byte Java manifest lines, comma lists without spaces.
+- Command specs: `Language="Python" LanguageVersion="3"`. `Language="Python3"` ran the code
+  as `BEGIN PROGRAM PYTHON2` with warning 8502.
+- Hand-copied commands must sit directly in the EXTPATHS EXTENSIONS folder, not a subfolder.
+- `spss.GetDefaultPlugInVersion()` gives `spss320`; the writer records it as 32.0.

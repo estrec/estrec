@@ -8,8 +8,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 VERSION = "0.1.0"
-SPECS = ["ESTREC_BEGIN.xml", "ESTREC_END.xml"]
-CODE = ["ESTREC_BEGIN.py", "ESTREC_END.py", "estrec_session.py", "estrec_oxml.py",
+SPECS = ["ESTREC_BEGIN.xml", "ESTREC_END.xml", "ESTREC_WRITE.xml"]
+CODE = ["ESTREC_BEGIN.py", "ESTREC_END.py", "ESTREC_WRITE.py", "estrec_session.py", "estrec_oxml.py",
         "estrec_procedures.py", "estrec_record.py"]
 MISC: list = []  # SPSS's own bundles carry no Misc-Files
 

@@ -35,6 +35,11 @@ restores your setting.
 | MIXED | inference, mixed | `/PRINT=SOLUTION TESTCOV COVB` | per-coefficient df (Satterthwaite by default) |
 | GENLINMIXED | inference, mixed | (subject variable nominal) | its default reference is the last target category |
 
+**From the menus:** after running a model from the dialogs, **File > Export > Save estimation
+record** writes a record of the last supported procedure in the Viewer. It runs
+`ESTREC WRITE OUTFILE='...'`, which re-runs that procedure's syntax (from its Notes table)
+quietly and records the result, so the record reflects the active dataset at that moment.
+
 Complex Samples procedures (CSGLM, CSLOGISTIC) aren't covered yet.
 
 ## Development

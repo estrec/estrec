@@ -11,6 +11,7 @@ VERSION = "0.1.0"
 SPECS = ["ESTREC_BEGIN.xml", "ESTREC_END.xml", "ESTREC_WRITE.xml"]
 CODE = ["ESTREC_BEGIN.py", "ESTREC_END.py", "ESTREC_WRITE.py", "estrec_session.py", "estrec_oxml.py",
         "estrec_procedures.py", "estrec_record.py"]
+DIALOGS = ["ESTREC_WRITE.spd"]  # File > Export > Save estimation record (built in SPSS's dialog builder)
 MISC: list = []  # SPSS's own bundles carry no Misc-Files
 
 FIELDS = [
@@ -18,6 +19,7 @@ FIELDS = [
     ("Display-Name", "estrec"),
     ("Command-Specs", ",".join(SPECS)),
     ("Code-Files", ",".join(CODE)),
+    ("Custom-Dialogs", ",".join(DIALOGS)),
     ("Summary", "Write estrec estimation records (JSON) from SPSS procedures"),
     ("Description", "ESTREC BEGIN starts capturing output (with OMS); ESTREC END OUTFILE= writes one "
                     "estrec record per REGRESSION, UNIANOVA, LOGISTIC REGRESSION, GENLIN, MIXED or "
@@ -54,7 +56,7 @@ def main():
         z.writestr(info, data)
     with zipfile.ZipFile(out, "w") as z:
         add(z, "META-INF/MANIFEST.MF", MANIFEST)
-        for f in SPECS + CODE:
+        for f in SPECS + CODE + DIALOGS:
             add(z, f, (HERE / f).read_bytes())
     print(out)
 

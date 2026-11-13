@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- SPSS: `spss/` extension bundle (`estrec.spe`): `ESTREC BEGIN` / `ESTREC END OUTFILE=` capture
+  procedures' output with OMS and write one record per REGRESSION, UNIANOVA, LOGISTIC
+  REGRESSION, GENLIN (incl. GEE), MIXED or GENLINMIXED. Built against SPSS 31 OMS output
+  (`tests/data/spss/`, `tests/test_spss.py`); estimates and covariance types checked against R.
 - Julia: EstRec.jl (`julia/`) writes records from FixedEffectModels.jl `reg` (OLS, IV, fixed
   effects; iid, robust, clustered) and GLM.jl `lm`/`glm`, as package extensions. Tests in
   `julia/test/` and `tests/test_julia.py` on the shared `tests/data/writers_probe.csv`.

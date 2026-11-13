@@ -1,0 +1,878 @@
+<?xml version="1.0" encoding="UTF-8"?><outputTree xmlns="http://www.ibm.com/software/analytics/spss/xml/oms" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.ibm.com/software/analytics/spss/xml/oms http://www.ibm.com/software/analytics/spss/xml/oms/spss-output-1.8.xsd"><textBlock text="Log"><line>GENLINMIXED</line><line>  /DATA_STRUCTURE SUBJECTS=id</line><line>  /FIELDS TARGET=ybin TRIALS=NONE OFFSET=NONE</line><line>  /TARGET_OPTIONS DISTRIBUTION=BINOMIAL LINK=LOGIT</line><line>  /FIXED EFFECTS=x1 x2 USE_INTERCEPT=TRUE</line><line>  /RANDOM USE_INTERCEPT=TRUE SUBJECTS=id COVARIANCE_TYPE=VARIANCE_COMPONENTS</line><line>  /BUILD_OPTIONS TARGET_CATEGORY_ORDER=ASCENDING INPUTS_CATEGORY_ORDER=ASCENDING</line><line>    MAX_ITERATIONS=100 CONFIDENCE_LEVEL=95 DF_METHOD=RESIDUAL COVB=MODEL</line><line>  /EMMEANS_OPTIONS SCALE=ORIGINAL PADJUST=LSD</line><line>  /OUTFILE MODEL='out/glmm2_model.zip'.</line></textBlock><command command="Generalized Linear Mixed Models" displayOutlineValues="value" displayOutlineVariables="name" displayTableValues="value" displayTableVariables="name" lang="en" text="Generalized Linear Mixed Models"><pivotTable subType="Notes" text="Notes"><dimension axis="row" text="Contents"><category text="Output Created"><cell date="2026-11-13T09:57:28" format="datetime" text="13-NOV-2026 09:57:28"/></category><category text="Comments"><cell text=" "/></category><group text="Input"><category text="Data"><cell text="/Users/you/Desktop/spss/writers_probe.csv"/></category><category text="Active Dataset"><cell text="probe"/></category><category text="Filter"><cell text="&lt;none&gt;"/></category><category text="Weight"><cell text="&lt;none&gt;"/></category><category text="Split File"><cell text="&lt;none&gt;"/></category><category text="N of Rows in Working Data File"><cell number="2000" text="2000"/></category></group><category text="Syntax"><cell text="GENLINMIXED  /DATA_STRUCTURE SUBJECTS=id  /FIELDS TARGET=ybin TRIALS=NONE OFFSET=NONE  /TARGET_OPTIONS DISTRIBUTION=BINOMIAL LINK=LOGIT  /FIXED EFFECTS=x1 x2 USE_INTERCEPT=TRUE  /RANDOM USE_INTERCEPT=TRUE SUBJECTS=id COVARIANCE_TYPE=VARIANCE_COMPONENTS  /BUILD_OPTIONS TARGET_CATEGORY_ORDER=ASCENDING INPUTS_CATEGORY_ORDER=ASCENDING    MAX_ITERATIONS=100 CONFIDENCE_LEVEL=95 DF_METHOD=RESIDUAL COVB=MODEL  /EMMEANS_OPTIONS SCALE=ORIGINAL PADJUST=LSD  /OUTFILE MODEL=&apos;out/glmm2_model.zip&apos;."/></category><group text="Resources"><category text="Processor Time"><cell duration="PT0H0M3.5S" format="dtime" text="00:00:03.48"/></category><category text="Elapsed Time"><cell duration="PT0H0M3S" format="dtime" text="00:00:03.00"/></category></group><group text="Files Saved"><category text="Model File"><cell text="/Users/you/Desktop/spss/estrec_probe_spss/glmm2_model.zip"/></category></group></dimension></pivotTable><pivotTable subType="Warnings" text="Warnings"><dimension axis="row" hideCategories="true" text="ERROR"><category number="1" text="1"><cell text="glmm: One or more records are not used in the analysis because they have one or more fields with invalid or missing values."/></category><category number="2" text="2"><cell text="glmm: Valid values for events (target) and trials variables are non-negative and positive integers respectively, and the number of trials cannot be less than the number of events."/></category></dimension></pivotTable><pivotTable subType="CaseProcessingSummary" text="Case Processing Summary"><dimension axis="row" text="Cases"><category text="Included"><dimension axis="column" text="Statistics"><category text="N"><cell number="1997" text="1997"/></category><category text="Percent"><cell decimals="1" format="pct" number="99.85" text="99.9%"/></category></dimension></category><category text="Excluded"><dimension axis="column" text="Statistics"><category text="N"><cell number="3" text="3"/></category><category text="Percent"><cell decimals="1" format="pct" number="0.15" text=".2%"/></category></dimension></category><category text="Total"><dimension axis="column" text="Statistics"><category text="N"><cell number="2000" text="2000"/></category><category text="Percent"><cell decimals="1" format="pct" number="100" text="100.0%"/></category></dimension></category></dimension></pivotTable><pivotTable subType="ModelSummary" text="Model Summary"><caption text="Information criteria are based on the -2 log likelihood (8973.545) and are used to compare models. Models with smaller information criterion values fit better."/><dimension axis="row" text="Content"><category text="Target"><cell text="ybin" varName="ybin" variable="true"/></category><category text="Probability Distribution"><cell text="Binomial"/></category><category text="Link Function"><cell text="Logit"/></category><group text="Information Criterion"><category text="Akaike Corrected"><cell decimals="3" number="8975.5470189405" text="8975.547"/></category><category text="Bayesian"><cell decimals="3" number="8981.1429088589" text="8981.143"/></category></group></dimension></pivotTable><pivotTable subType="Coefficients of Determination" text="Coefficients of Determination"><footnote><note text="Observation-level variance estimated via delta method."/></footnote><dimension axis="row" text="Type"><group text="Pseudo-R Square Measures"><category text="Marginal"><cell decimals="3" number="0.21299568799779" text=".213"/></category><category text="Conditional"><cell decimals="3" number="0.23118636800957" text=".231"/></category></group></dimension></pivotTable><pivotTable subType="Intraclass Correlation Coefficients" text="Intraclass Correlation Coefficients"><footnote><note text="Observation-level variance estimated via delta method."/></footnote><dimension axis="row" text="Type"><group text="Overall ICCs"><category text="Adjusted"><cell decimals="3" number="0.02311382508884" text=".023"/></category><category text="Conditional"><cell decimals="3" number="0.018190680011782" text=".018"/></category></group></dimension></pivotTable><pivotTable subType="DataStructure" text="Data Structure"><footnote><note text="Target: ybin"/></footnote><caption text="Only the first 10 records are displayed."/><dimension axis="row" text="Data"><category text="Data for First Subject"><dimension axis="row" hideCategories="true" text="Record"><category number="0" text="0"><dimension axis="column" text="Variables"><group text="Subjects"><category text="id" varName="id" variable="true"><cell number="1" text="1" varName="id"/></category></group><group text="Target"><category text="ybin" varName="ybin" variable="true"><cell number="1" text="1" varName="ybin"/></category></group></dimension></category><category number="1" text="1"><dimension axis="column" text="Variables"><group text="Subjects"><category text="id" varName="id" variable="true"><cell number="1" text="1" varName="id"/></category></group><group text="Target"><category text="ybin" varName="ybin" variable="true"><cell number="1" text="1" varName="ybin"/></category></group></dimension></category><category number="2" text="2"><dimension axis="column" text="Variables"><group text="Subjects"><category text="id" varName="id" variable="true"><cell number="1" text="1" varName="id"/></category></group><group text="Target"><category text="ybin" varName="ybin" variable="true"><cell number="1" text="1" varName="ybin"/></category></group></dimension></category><category number="3" text="3"><dimension axis="column" text="Variables"><group text="Subjects"><category text="id" varName="id" variable="true"><cell number="1" text="1" varName="id"/></category></group><group text="Target"><category text="ybin" varName="ybin" variable="true"><cell number="0" text="0" varName="ybin"/></category></group></dimension></category><category number="4" text="4"><dimension axis="column" text="Variables"><group text="Subjects"><category text="id" varName="id" variable="true"><cell number="1" text="1" varName="id"/></category></group><group text="Target"><category text="ybin" varName="ybin" variable="true"><cell number="0" text="0" varName="ybin"/></category></group></dimension></category><category number="5" text="5"><dimension axis="column" text="Variables"><group text="Subjects"><category text="id" varName="id" variable="true"><cell number="1" text="1" varName="id"/></category></group><group text="Target"><category text="ybin" varName="ybin" variable="true"><cell number="0" text="0" varName="ybin"/></category></group></dimension></category><category number="6" text="6"><dimension axis="column" text="Variables"><group text="Subjects"><category text="id" varName="id" variable="true"><cell number="1" text="1" varName="id"/></category></group><group text="Target"><category text="ybin" varName="ybin" variable="true"><cell number="1" text="1" varName="ybin"/></category></group></dimension></category><category number="7" text="7"><dimension axis="column" text="Variables"><group text="Subjects"><category text="id" varName="id" variable="true"><cell number="1" text="1" varName="id"/></category></group><group text="Target"><category text="ybin" varName="ybin" variable="true"><cell number="1" text="1" varName="ybin"/></category></group></dimension></category><category number="8" text="8"><dimension axis="column" text="Variables"><group text="Subjects"><category text="id" varName="id" variable="true"><cell number="1" text="1" varName="id"/></category></group><group text="Target"><category text="ybin" varName="ybin" variable="true"><cell number="1" text="1" varName="ybin"/></category></group></dimension></category><category number="9" text="9"><dimension axis="column" text="Variables"><group text="Subjects"><category text="id" varName="id" variable="true"><cell number="1" text="1" varName="id"/></category></group><group text="Target"><category text="ybin" varName="ybin" variable="true"><cell number="0" text="0" varName="ybin"/></category></group></dimension></category></dimension></category><category text="Total Number of Levels"><dimension axis="row" hideCategories="true" text="Record"><category text="Levels"><dimension axis="column" text="Variables"><group text="Subjects"><category text="id" varName="id" variable="true"><cell number="100" text="100"/></category></group></dimension></category></dimension></category></dimension></pivotTable><pivotTable subType="Classification" text="ClassificationOverall Percent Correct = 70.0%"><footnote><note text="Target: ybin"/></footnote><dimension axis="row" text="Observed"><category number="0" text="0" varName="ybin"><dimension axis="row" text="Statistics"><category text="Count"><dimension axis="column" text="Predicted"><category number="0" text="0" varName="ybin"><cell number="865" text="865"/></category><category number="1" text="1" varName="ybin"><cell number="253" text="253"/></category></dimension></category><category text="% within Observed"><dimension axis="column" text="Predicted"><category number="0" text="0" varName="ybin"><cell decimals="1" format="pct" number="77.37030411449" text="77.4%"/></category><category number="1" text="1" varName="ybin"><cell decimals="1" format="pct" number="22.62969588551" text="22.6%"/></category></dimension></category></dimension></category><category number="1" text="1" varName="ybin"><dimension axis="row" text="Statistics"><category text="Count"><dimension axis="column" text="Predicted"><category number="0" text="0" varName="ybin"><cell number="346" text="346"/></category><category number="1" text="1" varName="ybin"><cell number="533" text="533"/></category></dimension></category><category text="% within Observed"><dimension axis="column" text="Predicted"><category number="0" text="0" varName="ybin"><cell decimals="1" format="pct" number="39.362912400455" text="39.4%"/></category><category number="1" text="1" varName="ybin"><cell decimals="1" format="pct" number="60.637087599545" text="60.6%"/></category></dimension></category></dimension></category></dimension></pivotTable><pivotTable subType="FixedEffects" text="Fixed Effects"><footnote><note text="Target: ybin"/></footnote><caption text="Probability distribution: BinomialLink function: Logit"/><dimension axis="row" text="Source"><category text="Corrected Model"><dimension axis="column" text="Statistics"><category text="F"><cell decimals="3" number="147.31915819309" text="147.319"/></category><category text="df1"><cell number="2" text="2"/></category><category text="df2"><cell number="1994" text="1994"/></category><category text="Sig."><cell decimals="3" number="0" text=".000"/></category></dimension></category><category text="x1"><dimension axis="column" text="Statistics"><category text="F"><cell decimals="3" number="238.28334572507" text="238.283"/></category><category text="df1"><cell number="1" text="1"/></category><category text="df2"><cell number="1994" text="1994"/></category><category text="Sig."><cell decimals="3" number="0" text=".000"/></category></dimension></category><category text="x2"><dimension axis="column" text="Statistics"><category text="F"><cell decimals="3" number="107.4629809638" text="107.463"/></category><category text="df1"><cell number="1" text="1"/></category><category text="df2"><cell number="1994" text="1994"/></category><category text="Sig."><cell decimals="3" number="0" text=".000"/></category></dimension></category></dimension></pivotTable><chartTitle text="Fixed Effects"><chart><visualization date="2026-11-13" description="Fixed Effects" id="visualization" lang="en-US" style="visualizationStyle" type="32000000" version="3.0" xmlns="http://www.ibm.com/software/analytics/spss/xml/visualization" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.ibm.com/software/analytics/spss/xml/visualization http://www.ibm.com/software/analytics/spss/xml/visualization/vizml-3.0.xsd">
+	<!--  Size  -->
+	<location id="location_1022987" method="fixed" part="left" specifiedByUser="true" value="0%"/>
+	<location id="location_1023118" method="fixed" part="height" specifiedByUser="true" value="490px"/>
+	<!--  Data  -->
+	<extension legend1="legend_1027381" styleCycleRepository="styleCycleRepository" title1="labelFrame"/>
+	<embeddedSource id="pointSource">
+		<names>Label_X;Label_Y;Nodes;PointTooltip;Type;X;Y</names>
+		<types>string;string;string;string;string;string;string</types>
+		<row>-0.1320508075688772;2;x1;x1;continuous;0.2679491924311228;2</row>
+		<row>-0.1320508075688772;1;x2;x2;continuous;0.2679491924311228;1</row>
+	</embeddedSource>
+	<embeddedSource id="targetPointSource">
+		<names>Nodes;PointTooltip;Type;X;Y</names>
+		<types>string;string;string;string;string</types>
+		<row>ybin;ybin
+Probability distribution: Binomial
+Link function: Logit;target;2;1.5</row>
+	</embeddedSource>
+	<embeddedSource id="edgeSource">
+		<names>FromX;FromY;LineTooltip;ToX;ToY;Weight;Weight2</names>
+		<types>string;string;string;string;string;string;string</types>
+		<row>0.2679491924311228;2;Significance = .000;2;1.5;9;</row>
+		<row>0.2679491924311228;1;Significance = .000;2;1.5;9;</row>
+	</embeddedSource>
+	<sourceVariable categorical="false" id="x" source="pointSource" sourceName="X"/>
+	<sourceVariable categorical="false" id="y" source="pointSource" sourceName="Y"/>
+	<sourceVariable categorical="false" id="label_x" source="pointSource" sourceName="Label_X"/>
+	<sourceVariable categorical="false" id="label_y" source="pointSource" sourceName="Label_Y"/>
+	<sourceVariable categorical="true" id="type" source="pointSource" sourceName="Type"/>
+	<sourceVariable categorical="true" id="nodes" source="pointSource" sourceName="Nodes"/>
+	<sourceVariable categorical="true" id="pointTooltip" source="pointSource" sourceName="PointTooltip"/>
+	<sourceVariable categorical="false" id="x1" source="targetPointSource" sourceName="X"/>
+	<sourceVariable categorical="false" id="y1" source="targetPointSource" sourceName="Y"/>
+	<sourceVariable categorical="true" id="type1" source="targetPointSource" sourceName="Type"/>
+	<sourceVariable categorical="true" id="nodes1" source="targetPointSource" sourceName="Nodes"/>
+	<sourceVariable categorical="true" id="pointTooltip1" source="targetPointSource" sourceName="PointTooltip"/>
+	<sourceVariable categorical="false" id="fromX" source="edgeSource" sourceName="FromX"/>
+	<sourceVariable categorical="false" id="fromY" source="edgeSource" sourceName="FromY"/>
+	<sourceVariable categorical="false" id="toX" source="edgeSource" sourceName="ToX"/>
+	<sourceVariable categorical="false" id="toY" source="edgeSource" sourceName="ToY"/>
+	<sourceVariable id="weight" source="edgeSource" sourceName="Weight"/>
+	<sourceVariable categorical="true" id="weight2" source="edgeSource" sourceName="Weight2"/>
+	<derivedVariable categorical="false" id="lineWidth" value="abs(weight)"/>
+	<sourceVariable categorical="true" id="lineTooltip" source="edgeSource" sourceName="LineTooltip"/>
+	<expressionVariable categorical="false" expression="fromX+toX" id="expressionVariable_x"/>
+	<expressionVariable categorical="false" expression="fromY+toY" id="expressionVariable_y"/>
+	<intervalDomain id="domainForLegend">
+		<range max="100" min="0"/>
+	</intervalDomain>
+	<intervalDomain id="domainForDiagramX">
+		<range max="2.66667"/>
+	</intervalDomain>
+	<intervalDomain id="domainForDiagramY">
+		<range max="2"/>
+	</intervalDomain>
+	<!--  Structure  -->
+	<container id="titleContainer" style="style1">
+		<!--  Size  -->
+		<location id="location_1023018" method="sizeToContent" part="height" specifiedByUser="true"/>
+		<location id="location_1023019" method="sizeToContent" part="width" specifiedByUser="true"/>
+		<labelFrame id="labelFrame" style="style2">
+			<!--  Size  -->
+			<location id="location_1023021" method="sizeToContent" part="height" specifiedByUser="true"/>
+			<location id="location_1023022" method="sizeToContent" part="width" specifiedByUser="true"/>
+			<location id="location_1023023" method="fixed" part="top" specifiedByUser="true" value="0%"/>
+			<label id="label_1023024" purpose="title" style="labelStyle" textFrameStyle="style3"><text>Fixed Effects</text></label>
+		</labelFrame>
+	</container>
+	<graph cellStyle="graphStyle2" clip="false" id="embedded_graph" style="graphStyle">
+		<!--  Size  -->
+		<location id="location_1023033" method="attach" part="top" specifiedByUser="true" target="titleContainer"/>
+		<location id="location_1023034" method="same" part="left" specifiedByUser="true" target="visualization"/>
+		<location id="location_1023035" method="same" part="right" specifiedByUser="true" target="visualization" value="100%"/>
+		<location id="location_1023038" method="fixed" part="width" specifiedByUser="true" value="600px"/>
+		<coordinates id="coordinates_1023039">
+			<dimension domain="domainForDiagramX" id="dimension_1023040" lowerMargin="20px" niceUpperMapping="false" upperMargin="5%"/>
+			<dimension domain="domainForDiagramY" id="dimension_1023041" niceUpperMapping="false" upperMargin="10%"/>
+		</coordinates>
+		<point clip="none" id="point" labelCollisionHandling="outside" showCollidingLabels="true" style="pointStyle" zOrder="3">
+			<image id="imageAesthetic_1023080" variable="type">
+				<stringMapping from="categorical" id="stringMapping_1" to="nominal"/>
+				<stringMapping from="ordinal" id="stringMapping_2" to="ordinal"/>
+				<stringMapping from="continuous" id="stringMapping_3" to="continuous"/>
+				<stringMapping from="intercept" id="stringMapping_4" to="intercept"/>
+				<stringMapping from="interaction" id="stringMapping_5" to="interaction"/>
+			</image>
+			<x variable="x"/>
+			<y variable="y"/>
+		</point>
+		<point clip="none" dot="true" id="labelPoint" showCollidingLabels="true" style="pointStyle2" zOrder="3">
+			<labeling clamp="true" connectingLines="false" id="labeling_1023044" style="labelingStyle" textFrameStyle="labelingStyle3" variable="nodes"/>
+			<x variable="label_x"/>
+			<y variable="label_y"/>
+		</point>
+		<edge dot="true" id="edge" positionModifier="none" style="edgeStyle" zOrder="2">
+			<size cycle="cycle" high="9px" id="sizeAesthetic_1023116" low="9px" variable="lineWidth">
+				<scale id="scale_1023117" invert="false" method="linear"/>
+			</size>
+			<color affect="main" cycle="styleCycle2" id="edgeColor" variable="weight2"/>
+			<x variable="expressionVariable_x"/>
+			<y variable="expressionVariable_y"/>
+		</edge>
+		<point clip="none" id="targetpoint" labelCollisionHandling="quality" style="pointStyle3" zOrder="3">
+			<labeling clamp="true" id="labeling_1023046" style="labelingStyle2" textFrameStyle="labelingStyle4" variable="nodes1"/>
+			<image id="imageAesthetic_1023086" variable="type1">
+				<stringMapping from="target" id="stringMapping_6" to="histoImage"/>
+			</image>
+			<x variable="x1"/>
+			<y variable="y1"/>
+		</point>
+	</graph>
+	<legend id="legend_1027381" style="legendStyle" tickFrameStyle="style4" tickTextStyle="legendStyle2">
+		<!--  Size  -->
+		<location id="location_1023499" method="same" part="top" specifiedByUser="true" target="embedded_graph"/>
+		<location id="location_1023500" method="sizeToContent" part="width" specifiedByUser="true"/>
+		<location id="location_1023501" method="fixed" part="right" specifiedByUser="true" value="100%"/>
+		<label id="label_1023503" purpose="auto" style="labelStyle3" textFrameStyle="style5"><text id="text_1023504">Coefficient Estimate</text></label>
+		<legendTarget domain="domainForLegend" id="legendTarget1" target="edgeColor"/>
+	</legend>
+	<labelFrame id="placeholder1">
+		<!--  Size  -->
+		<location id="location_1023049" method="attach" part="top" specifiedByUser="true" target="embedded_graph"/>
+		<location id="location_1023050" method="fixed" part="left" specifiedByUser="true" value="0%"/>
+		<location id="location_1023051" method="fixed" part="right" specifiedByUser="true" value="47.5%"/>
+		<location id="location_1023052" method="fixed" part="height" specifiedByUser="true" value="60px"/>
+		<label id="label_1023053" style="labelStyle3"><text/></label>
+	</labelFrame>
+	<labelFrame id="placeholder2">
+		<!--  Size  -->
+		<location id="location_1023056" method="attach" part="top" specifiedByUser="true" target="embedded_graph"/>
+		<location id="location_1023057" method="fixed" part="right" specifiedByUser="true" value="100%"/>
+		<location id="location_1023058" method="fixed" part="left" specifiedByUser="true" value="52.5%"/>
+		<location id="location_1023059" method="fixed" part="height" specifiedByUser="true" value="60px"/>
+		<label id="label_1023060" style="labelStyle4"><text/></label>
+	</labelFrame>
+	<!--  Styles  -->
+	<style color="black" color2="transparent" font-size="12pt;8pt;" font-weight="bold" id="labelStyle" margin="3px" padding="2px" textAlignment="center"/>
+	<style font-size="10pt" font-weight="bold" id="labelStyle2" margin="3px" padding="2px"/>
+	<style color="black" color2="transparent" font-size="10pt;6pt;" font-weight="bold" id="labelStyle3" margin="3px" padding="2px"/>
+	<style font-size="10pt" id="labelStyle4" margin="3px" padding="2px"/>
+	<style color="white" color2="transparent" id="visualizationStyle" padding="0px" padding-bottom="60px"/>
+	<style color="transparent" color2="transparent" id="graphStyle" margin="0px" margin-bottom="30px" margin-top="30px"/>
+	<style border-bottom="solid" border-bottom-color="solid" border-top="solid" border-top-color="solid" color="transparent" color2="transparent" id="graphStyle2" padding="0px"/>
+	<style color="transparent" color2="transparent" id="legendStyle" margin="5px" visible="false"/>
+	<style color="black" color2="transparent" font-size="9pt;6pt;" font-weight="regular" id="legendStyle2"/>
+	<style color="black" color2="transparent" font-size="10pt;6pt;" font-weight="regular" id="labelingStyle" labelInside="true" labelLocationHorizontal="center" labelLocationVertical="center" margin="1px" padding="1px" stroke-width="0.5pt" textAlignment="right"/>
+	<style color="black" color2="transparent" font-size="8pt;6pt;" font-weight="regular" id="labelingStyle2" margin="1px" padding="1px" stroke-width="0.5pt" visible="false"/>
+	<style color="white" color2="transparent" id="labelingStyle3" opacity="0.5" visible="true"/>
+	<style color="transparent" color2="transparent" id="labelingStyle4" visible="true"/>
+	<style background-method="center" color="white" color2="transparent" depth="80%" id="pointStyle" size="20px" stroke-width="1px" symbol="circle"/>
+	<style background-method="center" color="transparent" color2="transparent" depth="80%" height="30px" id="pointStyle2" size="120px" stroke-width="1px" symbol="circle"/>
+	<style background-method="center" color="transparent" color2="transparent" depth="80%" id="pointStyle3" size="200px" stroke-width="1px" symbol="circle"/>
+	<style color="black" color2="black" depth="75%" id="edgeStyle" stroke-width="1px" symbol="arrow" width="5px"/>
+	<style font-size="14pt" id="popupStyle"/>
+	<style font-size="14pt" id="popupStyle2"/>
+	<style font-size="14pt" id="popupStyle3"/>
+	<!--  Style Cycles  -->
+	<styleCycle id="cycle">
+		<cycle id="cycle_1023268">
+			<style id="style_1023270" size="4px"/>
+			<style id="style_1023271" size="6px"/>
+			<style id="style_1023272" size="8px"/>
+			<style id="style_1023273" size="10px"/>
+			<style id="style_1023274" size="12px"/>
+			<style id="style_1023275" size="14px"/>
+			<style id="style_1023276" size="16px"/>
+			<style id="style_1023277" size="18px"/>
+			<style id="style_1023278" size="20px"/>
+			<style id="style_1023279" size="3px"/>
+			<style id="style_1023280" size="5px"/>
+			<style id="style_1023281" size="7px"/>
+			<style id="style_1023282" size="9px"/>
+			<style id="style_1023283" size="11px"/>
+			<style id="style_1023284" size="13px"/>
+			<style id="style_1023285" size="15px"/>
+			<style id="style_1023286" size="19px"/>
+		</cycle>
+	</styleCycle>
+	<!--  Interactivity  -->
+	<style font-family="SansSerif" font-size="8pt;6pt;" id="c-o-n-t-a-i-n-er" pattern="0" stroke-linecap="butt" text-fit="true">
+		<style color="white" color2="transparent" id="style1"/>
+		<style color="transparent" color2="transparent" id="style2"/>
+		<style color="transparent" color2="transparent" id="style3" visible="false"/>
+		<style color="transparent" color2="transparent" id="style4"/>
+		<style color="transparent" color2="transparent" id="style5" visible="false"/>
+	</style>
+	<styleCycle id="styleCycleRepository">
+		<cycle>
+			<style color="#31AFFF"/>
+			<style color="#A11850"/>
+			<style color="#21D5D2"/>
+			<style color="#4F2196"/>
+			<style color="#009E9A"/>
+			<style color="#0072C3"/>
+			<style color="#D0B0FF"/>
+			<style color="#006161"/>
+			<style color="#FA75A6"/>
+			<style color="#003C73"/>
+			<style color="#A970FF"/>
+			<style color="#D12765"/>
+			<style color="#6CCAFF"/>
+			<style color="#6E32C9"/>
+			<style color="#01BAB6"/>
+			<style color="#760B39"/>
+			<style color="#1193E8"/>
+			<style color="#007D79"/>
+			<style color="#FFA0C2"/>
+			<style color="#893FFC"/>
+		</cycle>
+		<cycle>
+			<style pattern="26"/>
+			<style pattern="1"/>
+			<style pattern="12"/>
+			<style pattern="3"/>
+			<style pattern="29"/>
+			<style pattern="6"/>
+			<style pattern="14"/>
+			<style pattern="7"/>
+			<style pattern="18"/>
+			<style pattern="17"/>
+			<style pattern="22"/>
+			<style pattern="9"/>
+			<style pattern="20"/>
+			<style pattern="10"/>
+			<style pattern="21"/>
+			<style pattern="27"/>
+			<style pattern="19"/>
+			<style pattern="23"/>
+			<style pattern="13"/>
+			<style pattern="4"/>
+			<style pattern="25"/>
+			<style pattern="28"/>
+			<style pattern="5"/>
+			<style pattern="15"/>
+			<style pattern="2"/>
+			<style pattern="24"/>
+			<style pattern="11"/>
+			<style pattern="16"/>
+			<style pattern="8"/>
+		</cycle>
+		<cycle>
+			<style size="5pt" symbol="circle"/>
+			<style size="5pt" symbol="square"/>
+			<style size="5pt" symbol="cross"/>
+			<style glyph-sides="3" size="5pt" symbol="polygon"/>
+			<style size="5pt" symbol="plus"/>
+			<style glyph-angle="90" glyph-aspect="0.5" size="5pt" symbol="circle"/>
+			<style glyph-angle="45" size="5pt" symbol="square"/>
+			<style glyph-sides="5" size="5pt" symbol="flower"/>
+			<style size="5pt" symbol="bowtie"/>
+			<style glyph-angle="90" glyph-aspect="0.5" size="5pt" symbol="square"/>
+			<style glyph-angle="180" glyph-sides="3" size="5pt" symbol="polygon"/>
+			<style glyph-aspect="0.5" size="5pt" symbol="circle"/>
+			<style glyph-sides="5" size="5pt" symbol="polygon"/>
+			<style glyph-sides="8" size="5pt" symbol="star"/>
+			<style glyph-aspect="0.5" size="5pt" symbol="square"/>
+			<style glyph-sides="3" size="5pt" symbol="flower"/>
+			<style glyph-angle="90" size="5pt" symbol="bowtie"/>
+			<style glyph-angle="90" size="5pt" symbol="line"/>
+			<style glyph-angle="90" glyph-aspect="0.5" glyph-sides="4" size="5pt" symbol="polygon"/>
+			<style size="5pt" symbol="line"/>
+			<style glyph-angle="270" glyph-sides="3" size="5pt" symbol="polygon"/>
+			<style size="5pt" symbol="arrow"/>
+			<style glyph-angle="90" glyph-sides="3" size="5pt" symbol="polygon"/>
+		</cycle>
+		<cycle>
+			<style/>
+			<style stroke-dasharray="12pt,2pt,2pt,10pt,2pt,2pt"/>
+			<style stroke-dasharray="8pt,8pt"/>
+			<style stroke-dasharray="10pt,2pt,2pt,2pt"/>
+			<style stroke-dasharray="3pt,6pt"/>
+			<style stroke-dasharray="12pt,2pt,2pt,2pt,2pt,2pt,2pt,2pt"/>
+			<style stroke-dasharray="6pt,3pt,6pt"/>
+			<style stroke-dasharray="8pt,1pt,8pt,7pt,2pt,7pt"/>
+			<style stroke-dasharray="6pt,2pt,3pt,5pt,2pt,2pt"/>
+			<style stroke-dasharray="15pt,2pt,6pt,2pt"/>
+			<style stroke-dasharray="5pt,5pt"/>
+			<style stroke-dasharray="8pt,2pt,4pt,2pt"/>
+			<style stroke-dasharray="3pt,2pt"/>
+			<style stroke-dasharray="12pt,5pt,3pt,5pt"/>
+			<style stroke-dasharray="6pt,3pt,3pt,3pt"/>
+			<style stroke-dasharray="12pt,3pt"/>
+		</cycle>
+	</styleCycle>
+	<styleCycle id="styleCycle1">
+		<cycle>
+			<style color="#31afff"/>
+			<style color="#A11850"/>
+			<style color="#21d5d2"/>
+			<style color="#4f2196"/>
+			<style color="#009E9A"/>
+			<style color="#0072C3"/>
+			<style color="#d0b0ff"/>
+			<style color="#006161"/>
+			<style color="#fa75a6"/>
+			<style color="#003c73"/>
+			<style color="#a970ff"/>
+			<style color="#d12765"/>
+			<style color="#6ccaff"/>
+			<style color="#6e32c9"/>
+			<style color="#01bab6"/>
+			<style color="#760b39"/>
+			<style color="#1193e8"/>
+			<style color="#007d79"/>
+			<style color="#ffa0c2"/>
+			<style color="#893FFC"/>
+		</cycle>
+	</styleCycle>
+	<styleCycle id="styleCycle2">
+		<cycle>
+			<style color="#31AFFF"/>
+			<style color="#A11850"/>
+			<style color="#21D5D2"/>
+			<style color="#4F2196"/>
+			<style color="#009E9A"/>
+			<style color="#0072C3"/>
+			<style color="#D0B0FF"/>
+			<style color="#006161"/>
+			<style color="#FA75A6"/>
+			<style color="#003C73"/>
+			<style color="#A970FF"/>
+			<style color="#D12765"/>
+			<style color="#6CCAFF"/>
+			<style color="#6E32C9"/>
+			<style color="#01BAB6"/>
+			<style color="#760B39"/>
+			<style color="#1193E8"/>
+			<style color="#007D79"/>
+			<style color="#FFA0C2"/>
+			<style color="#893FFC"/>
+		</cycle>
+	</styleCycle>
+	<popup id="popup_1023074" style="popupStyle" target="point">
+		<tokenMapping id="tokenMapping_1023075" variable="pointTooltip"/>
+	</popup>
+	<popup id="popup_1023076" style="popupStyle2" target="targetpoint">
+		<tokenMapping id="tokenMapping_1023077" variable="pointTooltip1"/>
+	</popup>
+	<popup id="popup_1023078" style="popupStyle3" target="edge">
+		<tokenMapping id="tokenMapping_1023079" variable="lineTooltip"/>
+	</popup>
+	<resources id="resources_1">
+		<imageResource id="imageResource_1" name="continuous">JIAFOEHENAKAKBKAAAAAAANAJEIEEECFAAAAAAABAAAAAAABEADAAAAAAANONNCOCFAAAAAAADAFMEEFFEPPPPPPPPPPAAGMDMGMEICIEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHDBDHCPAAAAAABAEHCFOE
+DFAAAEGOINGGAAAAAAGGJEEEBEEFIHOFFFNIBDOAAIADMADANJGCNFBBCBLDDCLCNHBADAPPGOPAMHBAIBKFJKDADCLAIEECBGCMDJFHCPJMAMPCCJACOFGCCALDAMGDEAHANMDNJBBBKMMBJELMMHGLBGBGLFEOKBLIOGGKOBDOKKGJAGPABLACIJCKAAMOKEBAIMFB
+FFJPILKKBAIMNJMBMHPMGJHBHEGFHBJNHMPNJKKHAAAAAAAAJEFEOEEEOKCEAGCI</imageResource>
+		<imageResource id="imageResource_2" name="nominal">JIAFOEHENAKAKBKAAAAAAANAJEIEEECFAAAAAAABAAAAAAABIADAAAAAAAICNCPADFAAAADAAAAFMEEFFEPPPPPPMFDJKCGKKMDIPHELKOMJFABDDCAHAMCLDNBJDGNJJNHCCHBMOJFMMOKIILIOEJAMOOLIGLBGKJEMPOHCDHBMBOKGKGFLINBJBNBPBLHIJLMOGMDB
+JBEGLJDNIHKKNNMMMOMKIGMJEFLJCMKONFEJKCLJPLGKKJOLFKCFAJANAMDONJAKPAGDODCIJMINGEGEAHLKIOEGJJLDFGKJLDMIGLDKNJBMGKHIJLLOPJMGNIFLANLOMNLGAHKJEMOOCMDOCKILCBGCJLKNIJKLLNKJJGNJEFNMMCCDCGKJCNKLDNMOFGLJDNINNFDG
+JKNMBPKGOJEFELJHEJBKPAKDBHGKMNEIFLIOFNIDIDIKLBBENIHLCGPJMAIDCKFMDKIMMBCCDMNDBFOGCKPDMLDNNODNHEMEHLBNLOAJKLFGNJJAEDMGCKFJOGBKFFCKDCHEAKDMIODLENDJFNJDJDMJHADDMGCKLNCHGKMNBOLGLGMGDKLNMJGACDJHKKMNOJMAEDBN
+GCGCPHELLOAGGJMCMFHJCNAJILEKOLLCODANDCDCOFEJLCKLIBLCLJEMOOFOKHKHFOHHHHHLMAPBCCAHAMNMIBIBLJDMLONKANJIKHKKHFAOGGGGFDNHHMAKKMHHEIFLHOPMPBPBHNBEBEGMBBHBFMGOFKECBHAMOFFJLCHMFBLBINEEEEELFNDJMLENNOGGKJLDGLHN
+FJLGOJEFLLMNLJPJBMGKDLENCJCEEIJMIIJLMOMIHLCGMDBIIMLJFMBHNJLAEDMJNBEEBMBOAKHIILMOFLGNEJFLINCJDHFKGFMGPJEFILINHJHLNAACANECECGKJMCIHLMAACNIILDGNNIFIFPFIJCNEPKLOMGMLEOFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAIBHGMNJJAAAAAABAEHCFOEDFAAAEGOINGGAAAAAAAPJEEEBEEFIHOFDGGGAABAHGBKPKMIKLCFPMBEMEGCABBFKGJPIOHHMKMPLFHFABLJJBEEMNCOBGMHHHJOPKGDPPFBIJKIPFLFFLIFPHEENOGBHABLJBBEEAHIAMHOPBCHGGCCDLOHDIID
+ACADBMCJHLGJJFNINFGAEMGALJBPAMPJHGBLJMFPECOMLNAGBIJIOFPOJPONMNMHLOCCMMPPPNFFADMOADDNEMFNMAPBPLJAOHHDKLDPLIJPIKIOPNPDKKMCMIMKHONMPDOBFHAFBGNPJDBJFPPKDPGJAGGOPHMACGLKDOPLNLOPEPBGBFMPLEFCGJFIHEIJINPNALGK
+MKBOEDKNILHCMGPDDNPLPGAEHHMEKJFGAKPPAPHIGCLOHDGLHGHDGHBDALJCDDNPHNENLOAGKPHPFOPPEKJKMFLNKNINEMELJBIBGCOECGBGJJEDBJBIBEKNMIBJBFMFFAGOGFEAAAAAIHLPCFCIDKLJHOHGAAAAAAAAJEFEOEEEOKCEAGCI</imageResource>
+		<imageResource id="imageResource_3" name="ordinal">JIAFOEHENAKAKBKAAAAAAANAJEIEEECFAAAAAAABAAAAAAABIADAAAAAAAICNCPADFAAAADAAAAFMEEFFEPPPPPPFLENGJLGOJDNPMGAGACLCNBJCLDNBJOFGJPMNONDNDOOPDODHODDDDNFFJPMAPCECEKPDFCFGPMEMEFPJEJENPIFIFHFBJNMCMMNIKCLDNCJKHIK
+HNDLDNDJLNMBMBHNFBFBMLINPJLNLBKBELENEJFGKJBNDOLCKCJOGDGDHIALLNNMCOILJMAOCLNPIHIHKLHNNJLPFFFFBNKALANNBCBCDNOAOADLDNCJBNJAJAFOMCMCNNPBPBHOBDBDPPMFLFJLGNLJMHJKINKNKOKMMIDLNNHJLLAOMPGFGFALLMHONGAKENKFDJOM
+GNCBCBMFEJOMOPJFKFHPNEOEILGNKJDPIEIEAOFCGCILANKOCNNANAJPBFCFBOICHCBMLNHKINGBHBFNBBBBBPDEEELOIDIDPPMFMFOMFAFAPNPNPNBLCNAJHGBGBGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAFIGJAFPPAAAAAABAEHCFOEDFAAAEGOINGGAAAAAAOKJEEEBEEFIHOFFFPIBELACIAEABFIPNMCLANBCKAEKLEAJAFACONKDGEHKOGFEBOPDPIACKDFJHJKADIMOAFCGGIAKBGLNKJOOCGCOHHIHMAPBPGGAGIAPHMBFJMKGBAHFIABNABGDAHL
+GIAAGDJCIENALKCDIFIJFHGHDDNNAGFCINHLEIMKGFMPNHKBBIFLHLGEFCOFBPFGNIMIMKMLCBPOBIHNDANFNIOCILKLHILDDLPMIJKPHCJDCOKLCGEAPIFAOADGKPAIMJIDBJPFDDPCECFABBLDOCJDCOADJHKJKKGBKHDPBCIDILPNHOKPCLFGFBBMBOOEEGCKFICI
+EPDNFDPDDHGKGDGNJCOMICIOAAAAAAAAJEFEOEEEOKCEAGCI</imageResource>
+		<imageResource id="imageResource_4" name="intercept">JIAFOEHENAKAKBKAAAAAAANAJEIEEECFAAAAAAABAAAAAAABIACAAAAAAAAJBJIGGDAAAABAMLJEEEBEEFIHOFFKCNPOPGCNAEIBHAAPNPPBOPNDKPCMMKNDKAFDGCOPDDLADJCFAGOMHBKLEBKELOPIBOIBNFLHFCLOPIIFNMCJFMHJGJBCDAKFGDKMNNNIKKAKIDDB
+OFLPCNCJOBJFCKPGMFMEOLPMNLILHOODHPECHJLNILDHHFJLFFGDCJKDNAGJGNJNHHLPMOHIDOPFLDOPMPILDDLPFLMLHHPPBJNGHHGBOIPLALNPFIFNJLODOOMPMDJAHJEBMOPJOMFKHHBHCBJPNGMKIHILOOFEJCAJNDCCLHHFFDPGKCJHBLEONHOHNPBGOEBMDDHH
+KCGLJIINOLKKIJIHHNMIGHNMLIEBEJBCOCDMFNGGFMEELDADKNDHHCEBMDBLIMGDEEPIBCJCKOILEGMILMGMICFAFANJIAKPEFIDCEFCNDCBOAHIPMNJBPNAICIJIEAIEKEKDOKIBDONBIEBEBFHCCKOBLIGAKCLOBJINKAGPMNFDABAOEGLMIIGLOIANGLGIKAKNFKA
+KFIJCIMLGICPKBOMHLCCBKFHBFMGNAPJGLDEKACJGPPDGICIEOCLPDCJOEIPLDEBMDMHFDINMKOJDIKHPBEFLLMFNKHMJMBEKACHFPBCPCLPMIMPJAICNPFNKPCHIPPDAEKONKAIENFOKKHDAIPFBIPIMENCFANFAPCGNAIPNPAIFFGEMKKBAAFOMDLKMACDKCNHGFAK
+EIJDFLHMKKNPEOICAFHAJJGMIICAOAGELJNEEMOLBEAKJDKMMBEIAOAICAGKJEIJGCGGOAHCMFDGMMHDOCDHGAOFPEIDJPGAMNIDLGNHFGMNJCHOAGONCCJCIMKFDDGNNJDLOMMCLGPHBOMOIPBMLPFPPFKLFFOHDAINGJPKHPOAMPNLDDAAAAAAAAJEFEOEEEOKCEAG
+CI</imageResource>
+		<imageResource id="imageResource_5" name="interaction">JIAFOEHENAKAKBKAAAAAAANAJEIEEECFAAAAAAABAAAAAAABIAGAAAAAAAPBDPPPBGAAAAAAOPJEEEBEEFIHOFFKDNPKKACMAFEBGAAPFKLAGCLKJMKGCPNAGJGJMCKAGHBDKAGDBGCKBFMMGGNHIADIPGAGCBMGGANLFMIDFGGBNBCCKFMGDPLDONNOCHNDMGDGILAP
+LNBGMNDHOLNNNPDLCMADELKIAFHAEBJCEMAAMDKKMLJCLIJBAHCIILKFJHAPAAKNBMNAOAAFCONMJEIHAEMLANCIFDEJJPAAHJGBAEKBALFIKAPBCCOKAJDAAPIKKOAAMJANCIGIGEHEKKLNJKCLFLCDMFBIGGMPENAIICEMGIDOMFMMKDIDPJCMGCKBECPGIJEKFAAN
+FFLHALKBKINPLIGAGECGHHBENFAELNFFLLIPGPKJBADGIHCEAEDAAPAKAAIOPCFEHLJCFNLOFHCOBMEKAAPNIBELJHDCGILOBFIANOACBDAEPDJFOPENNAFDILDEACDKPCGDNOFDGGBPFKKPCGPMPDBAEFDPAKLCLEDOPJBNBAPPANBAFEMHAANMOIIMKKPDNMDJBBAA
+AAAAAAJEFEOEEEOKCEAGCI</imageResource>
+		<imageResource id="imageResource_1027453" name="histoImage">JIAFOEHENAKAKBKAAAAAAANAJEIEEECFAAAAAAIMAAAAAAIMIAGAAAAAAANKIFOKOJAAAAFBDNJEEEBEEFIHOFNONJLAEHFJFNFJHMBNFIKAIACPKAABMAPIABIAIFCACIIPKIAKAFAFAFGJNFDGBHBCNOCKKCPABIGFIEJBDAKNAKOAFHAHAKCIKEHIHEEBECEEOFCE
+JCIAMCMCACCADMDHEEFMCFJHIACKAKEBEAEMECMLGMBHMGLIALHOOJPEOONGIPPJLJMNHNJNHOMJPOONDPLFLOHLACHOMHHPLNLPLDHGPGOONPCHPGCEFJKCOANCANJLDHEKCFMDPLDMBOLAALAJFHLIJPIDMBGMAMCOELFFMMLNBOAGBALAPMPKCOFHJDMBBHDIFMFJ
+MGCOFPKDMBBBBMCCKEFBBHNBMBOIABIFMCJKOCOKPIDCFABMCKAHGIHBHNNMBJEMAOGOLDDGDBHNDNBJECAOGELDDBDBHNHNBODFAHDGNJKGFMFPGHIPEAMNIEHCPKILOPOALIBMNMDHKOBBHPBMBGJBILBGOEDDCOOLIDMADILBEOELDEMNHCHIGGAHDEMJGHKILPGO
+AGGAHDAMJOPABHPBNBKIBMFAHHKPDFMNHFHICAAHBJNJOPGBHPHNBJAAILILOMEOABHPJNBBHAILIKOMEOCBHPLNBBFCILAJOMEOGBHPPNBFJAILIHJELGEDAODGCJIFMKDAHEIBAHBNMHJKJAADHAPJKIFPAOICHAOCGJPGELBBMMBNHECGNFIDKKIPALJDMPEAGOOO
+DABLODCFGBMFIBLKNEGAAPKJMCHBLOFCFKAMFMALOMEFAAPKJNCEBLOGCFCAMFEALKMEFEAHNAMCDBLOHCJKBMLIHLGEHIMLGCGBJIFHEJEJAOFELFBKDEGAHNIMCBBLOJCJKAMLIFDOKDCCDILGGGBIIFHFJEBAOFEKBFNBBLDILGIGIFMKPCPFDIHBHGMEHECOAOKJ
+KBEBLOMMHJAOFEJBDNBKOAMFLFDICGNLJPOAMLACNOKDIPAMFLGDACGNLJPKAMLIBNOKDIPBMFDHDACGNNJPCAMLIANKKDEPDILHAKJFMKPDLKBMEOFLKOADHAOOFIGGBLOANKEADJGNKKDMMDILHCKJFMKHELOAMEIFLJOALHAMNLBNICGNDKFFAGCLKNEHINHAOOBJ
+GEBLOCNKAADJENCKDMOHAHPMEDJIFPJGEBMEOELIOAPPAILHHKJEMKDFDCAGCFKFELIJDPHOPMDNGKNELJIGKOENJKEPCOLIPCCNKMFJLCJOLJPGOLBMDMEOLGKKMMEGAAPKJEDJIFPKKNBMEIINFLEBBNIBDFGKMEBKEPEPEHKMNMNMFKMLMLMDKHCHEOIEKOFNDKHA
+FNJKNFLJGEPPKPHNEHGPLMPCFOLOJEEFPDBIJLLGABLOFFLCIJMALLGJCPFGAKAPPGPLNPGHKOJNDLHCNHMPOPLPCFONHCPAOBEKPFOAKBEENMKJEDBKHPGDMGAJGOFJJOHAADHGNACGNNKGDADBBGFNCFODJPAPDEKGKJBJBEDJGMNIDJDHGAHFNCJFCENALBEDAKHL
+GBPCGJGOIFELFBMMDJJFMKLFNCAGCBMOKNEMFKMJODPNNLLJCDOKPLOJONICKCCJDPNKAMPDPGJNCENIKBGDEKHHGFMKAJGOIFFLJAMMNEDIIFPLMOAGCAMKKNEMFKMJOMMBNDKENGCLDLJGGGAOOLDEKMHDCILNHNPKHPOJJEGPMGPNOCNMBLKGDBIJLBDLIFPLMKAG
+AHGFNGBKMFOEHBPMOJFKPJMNHHPBNDBDMHILMJPGEJOCKCOCGKGJNCKFAPMNILHECNGBADPCGGBLOIJNAMAMMGKNAAGOEBAHCPEIJAENJDAHDFOHOPENJCJGOCGBDPGINADKPJNDIPAKEDOKNELBAMMJIBFMKDGGBADICLJGKBMMHOCJCOLLEFCOFOBNBONLLHFKJLIF
+NPLFJEJAFLLGLNGDGKLHIBGBNEDIJPADKIFPMKEBMAGMGKJGADPJLEOFIDDHGIOGNOENJIGGPEPJOCNMFMLOOMNKLFNLLJGPPKPANBCJGOELKGKBMMHIBFMKLGFGAGACGDNEBIJHAIDFGCOEEKOBNFLLKEDOJIKDGCPDPJKPPDEPAJEDOGEEDFAGOBMICGNFLCBADIAL
+JGKAMMDAMPKODLPMIKBEKFKBNHKLDHHKEDHJIKPNOJMDJENCKJHDHKNILKGFJEDHGEEDFAGOBMICGNHHCMAGAAGBNEBIJHEIBHAEPPOPEPEPIKBFCNILKCHFMCMFIONNPIMHPHKPELEDHGEEDFAGOBMECGNHHCEAOJMJNEDBAGOABGMNBLJGDJHPGIAOHDHCOEIEDHKC
+NLLLLFHDKHFPHPPLHJGMNIJGCAMMBIBFMKDPILBMDBDLIKLBMIPFJINFLLEHBKCOCMCEJGMFFLLLHLPGHKEPGENIIOMNBLDGCNMJBFFHDIBPJJEMKDPILAMDJCLIKLBMIPFJICODHDFNODHCHMLPOAGBOMBHIDIOBOHIJOPNOJKHKEKBHDOKOGADODDJIFPOBDDIHCEG
+BFHCIBLLCBFEDFIILPCABPBCDEMJDOCPIOOPNPEJGFPLOLHPJAAGMJDDOKOEADGDDJIFPOBDBIHCDGBFHCIBLDCILAGGNMCKLDPOILDEKBHOGHEFOFOJHPOCLDOILFBKOEADGDDJIFHPBFDIHCCGBFHBIBHDCICODGECCODLCFLFGNMKBJGOILNCNPCOLAKKPFPKOBNB
+JNHLPEKJDLCENFAGMFGCBLOODKGAPEEKMFNJAGMOIAKIHHLMLHGHPOOCNILOCPJNHCPJEKBKDAGAIEDOGFIKDBMINMACGNNHEFAOJEIFENFAGMNIAOPDKMKMICDLJFDDPODGJOIDHKLMDNHEOIIHHPCCPFMOJNDCNMJFBKOCADOCDJIFPPBBBMDBICHFBCHDNKACBHBI
+GFLCNFPHEBOPGLAKAIGIINKPMCCCENFAGMFGALKEMKAOJAEJLKAJAGDIIIPDDBFLDOLJPPAKLKLBGGCFLOJILNFKJLIHFBJLJEHNPBFIBMHGBBFBPJMBGGDFHAIBDJBEMKPPKEBMHALCHFBDBMCCEMCMMIHMGGDCGGDFNKOINLEKBPEEEBJLJELGABFOKDIIHPEEGINA
+MBICPDGNGCFHAIBDJBEMODIKABMHAKCHFBDBMCCEMCMMIFNOIPGOJHKLGCNLFCFGPPOGLJEDHJIICCHLIHPKLPENJKDFEFPDAPMCCHEPIOBNPBGAAHNCNGBJLBMIHMACGPBEFIAODAFJKMAEALIABLADDGFLJPIMJHEFDLNHHHJGMDBFFEOGJIADGGMMIBKBBDCGEAOA
+PPAAOKPKJCFHAIBDFBLINHABGBMHAJCHJBIAGBBCGBGGMEOCPLAEHNEGELBKMOHOHDKMDHJAKCCHLEEICJCJCBPOJFEOIPBPDOIDFPPEAHNJNEIMNAGMDGABLPBECAPBAKEFGCCIFEIIFIJBLIJJDKPPAEFDPHEHHKEDOKCEBJLFCKMIKBFDKICPDPDPBHIFGAHNMFHK
+KDAMIJKIFMOHAJAMHAICFJJIAGBBCGBGGENOCPLIEFNKJFLDKGJPLNFLCPMJCAFEOGJICHCOEMJAPOJFEOLOPKPLGMJCJBMFHHNJCHDIBPEBLINPAHJBIHALCHJJIAGBBCGBGGELGLICIFGEFDCLPGDJGMFFJCCHDFBIIPNHPLFAFAFAIDMFBDILOPKDEOGADOBDIINH
+BBCAPAEFOCDBBMCCEMCMMIKMAMDLHEFPMKLJICLOJNPDJMDHKIEBJLJKAEMPOAAGBPMCCFGFGFGIDFFBDILHAKDEOEADGBDIINHBBCAPAEFKCDCBMCCEMCMMIGMMKHKHFCFNIMKOECNILKEFEOGGLLCNOHFCCCHDIBPEBLFFKCCAPAEFKCDCBMCCEMCMMIGMKBNKOGBK
+MKBDLCEKBHFJKIMNCONMPANMJJFPHFKKKFLKODNNILAOELEDHBPKCCHDJGPLCBFJDBMIFKINLMLLCOCBIHAJCHJBJAOGCDOGMHECFMLMKKKOJJNBMLHJJFIDHKCFBJLFMDJPFFEGNPOJDEJCNLPNIFJGMDOFFEOGCNOHFCKCHCIBLIBMLMLLDEMKAFIJDIEJJMJEAOMP
+BMNEGMNIPIEKIHGPIGBFALMFKBHFNKIMNCOJMPKCCDHOFLDMEFFPKLELAMDLIMJCJGOCOBFEOGCNOJJKAJDBMIFKINLMLLDEMKAFIJDIEJJMJMJLIPKBEEMNLHIILJDHOOHGPABKIMNCGNMPCCJJGNLGIBFKHPNHGFKBPIHEBJLJELHGKCEOEADGJCGFPFDHIAJLILEH
+OPAOGCDOGMHFIKIPOMFFLIOIOFDJIEDHMACHEDIEOMMKDCONNLIELPJHFKCNMFMKCLFDIIAJLAMIDMAKOJGABOEOCFMIAOGCDOGMHFEGLIHKGJALOLPOBICHEDIIALBEPOBBENAPHKPEKEDOBLKOLMGABBAGMCFMGKEGDIEHMFGPNDFFLMILBIKFNPLPKDJGOILEOKGA
+JGHPKPJAPOJFEKNNMODGCNMFMCKLGAJAPGKEGDIEDLMLCGGJPEMOGFGCHFDIIALBNDIFAONNPIAOIHMCKLGAJAPKPLLBEKMFMIAOGCDOGMDKNBOPIPPHEHFHKFDFKGNDJONHJGOIDFOMGABBPOHIEFNKNNAJKNGBOBAJGOCKFJFLBEEIMFAGMBFMKPHLJDEAFOCOEAHD
+JBHDOBNLOPBJHBIKOEHOOLCNIDHLMJNACCMMIBAPCBFNJMNODCNIHELKPGLBEEAIBLEBKJCFNACNOHOFJIHPONBELNHFPAKEDHMNCHHDIEHMFCPHDPOHOIODLHCMGFJGOCKBNFDIEIHNPLNACABHCILJMILBPFONELLHPHFENAPPFCPFKBHNBCHHDIIAFMPMDLIIHDOD
+FMPAOHBOMFECJNLBEEIMFAGMBFIGKMEDIMNAPPJLLIOKKKDJOEHDOLBHGEKJDNBKOIGABBOFLHDEHBPOLJABIDOBJEHNACBONENIGAJFOHBJKGGLNLLIKJODOPKJMDHKJENFNACNGGCPOEKLKKOGDOIJPPBCAHNACBONEJIGAJGODCHOGAOFKHMNKBHNLEPAFFKOKGAB
+BGKNNHPIDFKFPOBOCNIHFGKLGAJAPGCNHDIELPJPFGONLELCBPPCLCOMJOEFHGDIIIHGPILKKONFPBDNHLCLNLGAJADLOKKEFOCADOICEDJOLBEKONPIPBJAMNIJPICJGMFHLKDLBEEIJJDKHBDFFPGONOJKDOCNPLLEDHBOEHNACBONEKOGABBPDLOBCOHJAMFHIFMP
+NKEFABKLFNNNACCMKNHLNDABFPPMMIILGAJAPKPDLBEADGMJDJLBEEMHCMFPKKKPJBBHPLPCAKKFDBNACNOGOMHFPDMLMLMHBPDAJGOAFNCNACCEOAADGICEJHLBEILAMIDHOEOGABBPPKHGDKODPLBJKABMEJGCKBEEINCOHDPGCNFDNIDLJKDMPBOLBJGOKMLBKGAJ
+KAGNHFJJMFAGMBFEGCFGDIEDJBCDFNLPOKFFELPKPLFHIGKKBEEICODIMIFHLLOPCEKBPCPKLGAJAPGCNFDIIIPPCLAKKGNJGEEJDDDPLAJKIAMEKGCLBEKDMCJPOMLPJLLPGKDMOFBJGOCIKLGAJAPGCNFDIIILPOIGJDGHNIEFAAGKFDJNACCMGLDDPDHPOOHECLHM
+PGGJGOEIOKBECMLJEDNACNBGBNPPIHLJMJBDAPFGJGDPNGANEHDIIALFNDPPPFOFDJEILPIFMLLGAJAPGCNEDIIIPPAPGMEHBAGFGKNANACCEBPJKCILKLBFLAJOHCABNFDIEIHDJGKBEEMPCOHDLBKAALCCNGJGABBGGMAKJMONPHDPACOHMFHDIDGOKBECMLJEDNAC
+BMNEGMCGALFELJKBEEIHNPDKDJIOKJGMNKMLPNPKFCOLGHNACBOFHNACKJELNKBEEINEPHJPKKHPNENIGDPCNOAHNACFBIMLNACCEOAADGMJDHNACBPKJFPMMLFONPMDLHIKBECMMKNKCFJDAMIBKAFPHGDIIAACOIINMGLBLAADIKNKNACCMPBFBOHCOFOGNPKPFPDK
+CLDMHIFKFLFFGCHBIBHEBKOKBEEDJGDHDIIAFEOGDKHEPIGKEPGENIIKILALAJOCMJJDDCNKBHCMCHBIBHEBKOKBEEDJOHIGABBMPFGLNGDKLLKDHHGKGHNGLNCNCNJPDPFNGDKAHBIBHEBKOKBEEDJOLIGAJCHLOJLKHJOCFKOMHLPNOEJFJJJJEDJGMNIDKDOHAOAI
+ELGOBDLMFAGMBFIKLGABNEKPNKBECIOOINELJIGIOAIBAEFHLOENBPOJJFOHHPMNDHONINHPHKPELEHMGEEJLAMIDKAFHNACKJEPLGDIEANPLHJGJCNLDLCGFANPLODOPIDNNIJDJDEHNGNIKBENFCHDHJCPGINADKJOPCNLEELGHJPCHKPEHHOOEKPGPEOJEJOBLBCJ
+LAMIDKAFHNACKJEPLHDIAKHOOINBDKNELKHFDNENJEDJIGIPAJBCENLKHEPAKMOGJNCJKKHFPKOEFDPKNLGNLHJHGIPIBGDADOICENPLNACCAIIFBMCCEHKNDKJIKDAFJGFBBAOAKCFJDBMIFKKNEFCAPKNFFLMJAGMCFICPHDIIAJLAMIDMBGKCAIHNMMBCHBIBHEBL
+OPOGABBAGMCFNCDDDGHMOIFKNBLDGHAOALOFAPKJFFLMJAGMCFMKLGAJIGEGEKBEDIGAEDHGOMMBMBOABNALBGDMKEHODBGAPKFJDEOEADGJCGNLGABGPGCBOEADGBHJMEEEKGAJPAPDMPAJKEKEKEAHIFNAIHNIMFCHCIBLEBLKHKBEEIMFAGMBOCDBAOOOLLPOGKBP
+DOHMHIOLODGHMOIBFGHGHGDNBODMHINLGABBDHNNLLHHHKKFFLKGBFPOONNLJKELELEDEHMGOGOGOCNCLFGLMCEPHPCKCKCCKHAOBIHAIKOGNNKLEDAHAOAEKLAHBOCEIOINIJBMLGEOCJLAMIDMAKPPLBEEAIBLILMIDJCICICAKGCNEKJEIKIJHCMEIJAENJKDFHCP
+OPOCKBEEMLHHADJGCNECKJODNHKDFNJKDFHOCLGGKCPPMADCOPOFFLKGFFKMPMPMHKJLDHHOKHPNGENNMLJHDHIOINIJAMLGDOCJDBMIFMAKLGAJIFNIDINHLPGPJHFMMLBHDOGEKLIHBPCCFLKGFNKIKALALANLJDBFEPDFGKMEJANBLCOJFBKLFHLOGBKPKBLBECPC
+PCPCEDHNILBHDGKJGDNGKFIOLOIKBMLGCOEJDBMIFMAKOLGABBCHCIBLIDNIDILJPGOLJJGAPAOBMONPLIPFNKKFFDKDDCODFCLECPNDIMEMJIDBJCNCNCNCEPFDGDIEJPDGDLCLCLCGPGABMLGBOEJDBMIFMEGIKBEELEDJAHCIBLIDNIDIJKDFHKCNFHHNNFHONPAF
+CFPPOPNPDEDOIFEPDIGANACKODNHKPEINJHMDGNFDIAPKHJFDHIPOLBEEAIBPILNIBABPNJICBHPPACGJJHDMGINABKBHBFEPCOGKLPMOJNDLEPBNHEPBBFDNGKNEJGGMMIJBHJNMLCJGABMMNJLFOGADOBDIINPBMPNACCEOEADGJOADGAOOPLPPOHKMMMMMEPOODEC
+IIICKPOFNLKHBFNIKBFDIOKILCOKAKOBNDKHIHNMCBEKMPLPACIPOJIIIGABBHDGPBBBMMJFHIMJAGMCGCBLPDMDAPACFOCHDIBPEHIBFCCOODEGMNILBHHJNIJIGGIDPHOPMDNHHPNNHHMDPOHHAGOKKDEOGADOBDIINHBBCAPAEFOCHDIBPEHKFJALFGLMGBKLCPKM
+LCJOIMBJDCIDFMDAGOGKDFOGADOBDIINHBBCAPAEFOKOAADGKOELCAGPPOPNPELOHNPKHMBGOBADHCNJKOAADGCDIINHBBCAPAEGBJLBMIHGCEDBAGOAGCEOGADOBDJINHBHJBIHALCHFHAIBDNEJKDAMIJGKENBAGMEGABLPBECAPBAMCCHDIBPMGBFFAIHOELFEOGA
+DOBDJINPACBIPAAGBFHAIBDNGEDKBAPBDGDKKDAMIJMECGPDEIFAPBEMCKOAADGKDFNLKDAMIJMECGPBEFIAODAJFENFAGMFHKKDFHBIBHJJEMODIKABMHACLJKLAMILOMEMFNFAGMFGEBLPAKCFAPBMMCKOEADGLDDOHFHCIBLJJEMKPPIIAOJAINENFAGMFHGMPKOC
+ADOCDKIFPPBBBMDBALJKDBMINOMINFNJAGMGGEBLOPDKCAPECMGKOEADGLDDKHFHCIBLJBFMKLPIKBMDBBLJKLBMIPOMIMKOGADODDKIFHPBFDIHCCGFFHDIBPNJFBLKLBMIPMMCGNNHMEAOJMIFFDBAGOAOMPHKGCAMMBIJFMKHPIJBMDBCLKGKAMMDMJILCEKPAMMD
+IJFMKHPILAMDJCLKGKAMMDCFJFDFAGOBMMCGNJHMNAOJIJNFDFAGOBJKIKJCADPANACGNJHCEAOJMJFFDNAGODJKAKJGADPBGGBLOLDBGADAALLGKBMMHCJJFDNAGODKBEMKPGFCAGABGHNGAADHKEGCNGAADHCNACGNFLCDADAJGBNGBADPCPDLGLAIJHJGCBLOKFJC
+IBMELIGDBIJLJPJELJAMMNEDJIFPMMCAGAFNCKNEAGOGOHANGCADHDNECGNBDLBIBIFLIGLCIJHKNEKNKAGOJKJEMKDGGFADILGBNPAAGOMKDFPDAIJDLGCBLOHJNBMEAELJOHCADHHOANPEAGOOKBFMKPFNCAGCBKNMEGAAPKJKCDDJBAMLGCNICGNNKGDADBBNKKDM
+PDAOONJGGBLOGFLCIJMIGFNBGPDILHGKJFMKHFNOAGCEGEEHINHAOOBJBCBLOFNIAIJEJBBNBGPAILHDGIEMKDFDKAGCHGEEPBCLBGPOJCKBKFELHJKNMIONCENGGENGBKBMDLGPANKLNLFGIHIJPHAMNDBDECGNHKFBAGCJGEEPBBLBODODFENDGMPHAEDGGJMHOEPK
+PLLFGEFELNKEJGENCKDEENFPJPPAIONONNFKIHILNPAOOFIBCBLOCNKCADJFDCKPEIBCBIHGOIHKHJMBCKPDOOMDHEDLOPLPMAFBOGODNBIPDPEDFONMPDIEPAPMINDIHILNNAOOBIBCBLOBNKDADBGDKKFOIIHJFFONDDHEAKJCOFIHHKMIOJLFFFCEPCMKNCDKHBHN
+OJEKGFJPLJBPAHLDBMFDHDMCGNDKFJAGCNGEFLIBBHPMBFELFLEMLHGOABNMBPEMCNDJBIPDLEJGMPKOPKIKFODBODIGABMFLGDMCGNBKFNAGCPGMFLAJBADDHPAFOHAOOJDEMLMLKJIBMHGAJHHKEJOBLCOPEJOBMJCLLAPAHLHAMFLFLAEMKPDPFAIHBBGMFLMIFNL
+LKEJOOMBHPODFONCIDIONLMKKBPLKPEKHNMBHLOINHPIGOOGLDJIHILNBAOKJKFACGNNJPKAMLIBLCEDIMPPOKLPLANGPLPPBFKJHFLLDDNMJKJJLEDPLFONLEDHCPGCLHPCJKCLCAGONMPHFIOJJFCPDDKBIPKGLDKHEPFJMBKBJDPOBCKJDLFGBBOJGEPDILGIGJII
+FPGOLDAPCIMKCFDDCKJDGBHGEHHPKBEOANIIHCIOAMDCPIBNGMMJOKEDHLGPNGELKOJOCEKJPPOOCAKBJDPLLBNMNNBFAELJPLMCGKFNHAGKBNEJFHDEJGINMKOCEFMGKKJEAHNMMCDBLONMHJAOFEJFHKGCEEDGMGLLLKPANBPCICAKDOPMMDDEHEGEMIAKDANLKHBN
+KLEPMBKJNNEPOBKBNLALPBFBNLLJPELLPMNKEKPDHJNLJELFOIMMFKFLHAGGANEOHLHADNIIHNLPCOJOIHBMFDCLAFMKDDPFDIHBHGFKMMEBHFPLFIGPONLPDBKPLOALBGEHEGIPAHKPMPHOPDHKNHHHMNBEPOHDJMCKJNHFHHCKHELADHCAPMKBDFJONNDBLAJGLOHJ
+DPJGNPBKCCKFNLPLAJGBNOIPPAKHIHKHLFMDNBPAILGCGJKIFPFJEBAOFEKFLCDBDLPKJLJJGHGLLOEEPJEHPOOEHAOOJLHIGPFOGOCNOOGNNKJONLGAJBEDLPKKLJIOBJCMGLELMGHNECKFHHAHGBNLDPJNMEKFDPJMLCEPHKPIHKJOJGABMFDALIFMKLKEKCAPCGNK
+GFBDCOFCGNKNKHNKJGHFLMGJELLKFFLCKPIKJHDHKNJJOJOEPGHNMMEPGOCPGOEPFKJMLGPBDKFFLPGKHAKBDGKDNLFLHHKKHOLELGGABNDOFMMEPCBLAPKJNCHBLOJCJCBMLIGPNIJACCOGCNPFPKJHLANLNFLCANABFPLBDNGPKLNICANMBNMJKIPKNLFMLJLCKNEL
+IIGIGAOGIMPFOAMNDHIIHGNIFEPBMDPOFDHMAJHNKLANEJFLPGAOJOCODAPKJMHECGNBFCFDIHBPOLDDOECIPNGOFBPCJKEICOPOCGMCIMMKNILAJGIHAOGIMFMLEKCBOPKGGHPFKHJHNMCICHHGIIDAMMNNHICGNPEKEAILIAOLFNGEADHEPBLIFHDJCFAOCGECFIGC
+AMMBCJEEMKHJEJFAHBGCFCMIGAMHMEKIIIFPBOIKCJCKNECOEJEMKLAHEJDAHBLMJJKFCGNDIDCMAILIGOMENABLOAMBFJAILIHOMEOGBHPPNBBFCILAJOMEOCBHPLNBBHAILIKOMEOABHPJNBJAAILILOEPHLILPLOAFAAOCCLDNPJCOOLKDEBDILAOOEPHIILPIOAG
+GAHDAMJGHKILPGOANMAOGIIDNOABHPJMBGIBMNACHKJBBHPFMBGJBILBGOENDCOODIDMCGAHDPMJMLCOKPLDMHCAOGEKDFNKILONOAPJCILBLOMEMEMFPFHECJAILBNOMINEMFPEHECBDILJPOMAPCOKLJDCFABMCKIEFHBHNHMBOIABIFMCJKCCOKDIDMBBBBMCCKEG
+DBPKHNBOIILBMCOCPLKIHNFOAHALAIFIHGLKIJHLDCKHOPPBPDDBBBDLCGLHHDKGAAAAAAAAJEFEOEEEOKCEAGCI</imageResource>
+	</resources>
+</visualization></chart></chartTitle><pivotTable subType="FixedCoefficients" text="Fixed Coefficients"><footnote><note text="Target: ybin"/></footnote><caption text="Probability distribution: BinomialLink function: Logit"/><dimension axis="row" text="Model Term"><category text="Intercept"><dimension axis="column" text="Statistics"><category text="Coefficient"><cell decimals="3" format="g" number="0.24064329124945" text=".241"/></category><category text="Std. Error"><cell decimals="4" format="g" number="0.059118715290671" text=".0591"/></category><category text="t"><cell decimals="3" number="4.0705094836088" text="4.071"/></category><category text="Sig."><cell decimals="3" number="4.8741187430812e-05" text=".000"/></category><group text="95% Confidence Interval"><category text="Lower"><cell decimals="3" format="g" number="0.12470236266624" text=".125"/></category><category text="Upper"><cell decimals="3" format="g" number="0.35658421983265" text=".357"/></category></group><category text="Exp(Coefficient)"><cell decimals="3" format="g" number="1.2720671968685" text="1.272"/></category><group text="95% Confidence Interval for Exp(Coefficient)"><category text="Lower"><cell decimals="3" format="g" number="1.1328112359692" text="1.133"/></category><category text="Upper"><cell decimals="3" format="g" number="1.4284418285846" text="1.428"/></category></group></dimension></category><category text="x1"><dimension axis="column" text="Statistics"><category text="Coefficient"><cell decimals="3" format="g" number="-0.75488109649257" text="-.755"/></category><category text="Std. Error"><cell decimals="4" format="g" number="0.048902572470289" text=".0489"/></category><category text="t"><cell decimals="3" number="-15.436429176629" text="-15.436"/></category><category text="Sig."><cell decimals="3" number="0" text=".000"/></category><group text="95% Confidence Interval"><category text="Lower"><cell decimals="3" format="g" number="-0.85078659163798" text="-.851"/></category><category text="Upper"><cell decimals="3" format="g" number="-0.65897560134715" text="-.659"/></category></group><category text="Exp(Coefficient)"><cell decimals="3" format="g" number="0.47006650396381" text=".470"/></category><group text="95% Confidence Interval for Exp(Coefficient)"><category text="Lower"><cell decimals="3" format="g" number="0.4270788631291" text=".427"/></category><category text="Upper"><cell decimals="3" format="g" number="0.51738106758509" text=".517"/></category></group></dimension></category><category text="x2"><dimension axis="column" text="Statistics"><category text="Coefficient"><cell decimals="3" format="g" number="0.55648169636722" text=".556"/></category><category text="Std. Error"><cell decimals="4" format="g" number="0.05368110444083" text=".0537"/></category><category text="t"><cell decimals="3" number="10.366435306498" text="10.366"/></category><category text="Sig."><cell decimals="3" number="0" text=".000"/></category><group text="95% Confidence Interval"><category text="Lower"><cell decimals="3" format="g" number="0.45120476222477" text=".451"/></category><category text="Upper"><cell decimals="3" format="g" number="0.66175863050966" text=".662"/></category></group><category text="Exp(Coefficient)"><cell decimals="3" format="g" number="1.7445239254975" text="1.745"/></category><group text="95% Confidence Interval for Exp(Coefficient)"><category text="Lower"><cell decimals="3" format="g" number="1.5702027673901" text="1.570"/></category><category text="Upper"><cell decimals="3" format="g" number="1.9381979129306" text="1.938"/></category></group></dimension></category></dimension></pivotTable><chartTitle text="Fixed Coefficients"><chart><visualization date="2026-11-13" description="Fixed Coefficients" id="visualization" lang="en-US" style="visualizationStyle" type="32000000" version="3.0" xmlns="http://www.ibm.com/software/analytics/spss/xml/visualization" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.ibm.com/software/analytics/spss/xml/visualization http://www.ibm.com/software/analytics/spss/xml/visualization/vizml-3.0.xsd">
+	<!--  Size  -->
+	<location id="location_1022987" method="fixed" part="left" specifiedByUser="true" value="0%"/>
+	<location id="location_1023118" method="fixed" part="height" specifiedByUser="true" value="490px"/>
+	<!--  Data  -->
+	<extension legend1="legend_1027648" styleCycleRepository="styleCycleRepository" title1="labelFrame"/>
+	<embeddedSource id="pointSource">
+		<names>Label_X;Label_Y;Nodes;PointTooltip;Type;X;Y</names>
+		<types>string;string;string;string;string;string;string</types>
+		<row>0.1639320225002101;3;Intercept;;intercept;0.7639320225002102;3</row>
+		<row>-0.6000000000000001;2;x1;x1;continuous;0;2</row>
+		<row>0.1639320225002101;1;x2;x2;continuous;0.7639320225002102;1</row>
+	</embeddedSource>
+	<embeddedSource id="targetPointSource">
+		<names>Nodes;PointTooltip;Type;X;Y</names>
+		<types>string;string;string;string;string</types>
+		<row>ybin;ybin
+Probability distribution: Binomial
+Link function: Logit;target;3;2</row>
+	</embeddedSource>
+	<embeddedSource id="edgeSource">
+		<names>FromX;FromY;LineTooltip;ToX;ToY;Weight;Weight2</names>
+		<types>string;string;string;string;string;string;string</types>
+		<row>0.7639320225002102;3;Coefficient = .241
+Significance = .000;3;2;9;Positive</row>
+		<row>0;2;Coefficient = -.755
+Significance = .000;3;2;9;Negative</row>
+		<row>0.7639320225002102;1;Coefficient = .556
+Significance = .000;3;2;9;Positive</row>
+	</embeddedSource>
+	<sourceVariable categorical="false" id="x" source="pointSource" sourceName="X"/>
+	<sourceVariable categorical="false" id="y" source="pointSource" sourceName="Y"/>
+	<sourceVariable categorical="false" id="label_x" source="pointSource" sourceName="Label_X"/>
+	<sourceVariable categorical="false" id="label_y" source="pointSource" sourceName="Label_Y"/>
+	<sourceVariable categorical="true" id="type" source="pointSource" sourceName="Type"/>
+	<sourceVariable categorical="true" id="nodes" source="pointSource" sourceName="Nodes"/>
+	<sourceVariable categorical="true" id="pointTooltip" source="pointSource" sourceName="PointTooltip"/>
+	<sourceVariable categorical="false" id="x1" source="targetPointSource" sourceName="X"/>
+	<sourceVariable categorical="false" id="y1" source="targetPointSource" sourceName="Y"/>
+	<sourceVariable categorical="true" id="type1" source="targetPointSource" sourceName="Type"/>
+	<sourceVariable categorical="true" id="nodes1" source="targetPointSource" sourceName="Nodes"/>
+	<sourceVariable categorical="true" id="pointTooltip1" source="targetPointSource" sourceName="PointTooltip"/>
+	<sourceVariable categorical="false" id="fromX" source="edgeSource" sourceName="FromX"/>
+	<sourceVariable categorical="false" id="fromY" source="edgeSource" sourceName="FromY"/>
+	<sourceVariable categorical="false" id="toX" source="edgeSource" sourceName="ToX"/>
+	<sourceVariable categorical="false" id="toY" source="edgeSource" sourceName="ToY"/>
+	<sourceVariable id="weight" source="edgeSource" sourceName="Weight"/>
+	<sourceVariable categorical="true" id="weight2" source="edgeSource" sourceName="Weight2"/>
+	<derivedVariable categorical="false" id="lineWidth" value="abs(weight)"/>
+	<sourceVariable categorical="true" id="lineTooltip" source="edgeSource" sourceName="LineTooltip"/>
+	<expressionVariable categorical="false" expression="fromX+toX" id="expressionVariable_x"/>
+	<expressionVariable categorical="false" expression="fromY+toY" id="expressionVariable_y"/>
+	<intervalDomain id="domainForLegend">
+		<range max="100" min="0"/>
+	</intervalDomain>
+	<intervalDomain id="domainForDiagramX">
+		<range max="4"/>
+	</intervalDomain>
+	<intervalDomain id="domainForDiagramY">
+		<range max="3"/>
+	</intervalDomain>
+	<!--  Structure  -->
+	<container id="titleContainer" style="style1">
+		<!--  Size  -->
+		<location id="location_1023018" method="sizeToContent" part="height" specifiedByUser="true"/>
+		<location id="location_1023019" method="sizeToContent" part="width" specifiedByUser="true"/>
+		<labelFrame id="labelFrame" style="style2">
+			<!--  Size  -->
+			<location id="location_1023021" method="sizeToContent" part="height" specifiedByUser="true"/>
+			<location id="location_1023022" method="sizeToContent" part="width" specifiedByUser="true"/>
+			<location id="location_1023023" method="fixed" part="top" specifiedByUser="true" value="0%"/>
+			<label id="label_1023024" purpose="title" style="labelStyle" textFrameStyle="style3"><text>Fixed Coefficients</text></label>
+		</labelFrame>
+	</container>
+	<graph cellStyle="graphStyle2" clip="false" id="embedded_graph" style="graphStyle">
+		<!--  Size  -->
+		<location id="location_1023033" method="attach" part="top" specifiedByUser="true" target="titleContainer"/>
+		<location id="location_1023034" method="same" part="left" specifiedByUser="true" target="visualization"/>
+		<location id="location_1023035" method="same" part="right" specifiedByUser="true" target="visualization"/>
+		<location id="location_1023038" method="fixed" part="width" specifiedByUser="true" value="600px"/>
+		<coordinates id="coordinates_1023039">
+			<dimension domain="domainForDiagramX" id="dimension_1023040" lowerMargin="20px" niceUpperMapping="false" upperMargin="5%"/>
+			<dimension domain="domainForDiagramY" id="dimension_1023041" niceUpperMapping="false" upperMargin="10%"/>
+		</coordinates>
+		<point clip="none" id="point" labelCollisionHandling="outside" showCollidingLabels="true" style="pointStyle" zOrder="3">
+			<image id="imageAesthetic_1023080" variable="type">
+				<stringMapping from="categorical" id="stringMapping_1" to="nominal"/>
+				<stringMapping from="ordinal" id="stringMapping_2" to="ordinal"/>
+				<stringMapping from="continuous" id="stringMapping_3" to="continuous"/>
+				<stringMapping from="intercept" id="stringMapping_4" to="intercept"/>
+				<stringMapping from="interaction" id="stringMapping_5" to="interaction"/>
+			</image>
+			<x variable="x"/>
+			<y variable="y"/>
+		</point>
+		<point clip="none" dot="true" id="labelPoint" showCollidingLabels="true" style="pointStyle2" zOrder="3">
+			<labeling clamp="true" connectingLines="false" id="labeling_1023044" style="labelingStyle" textFrameStyle="labelingStyle3" variable="nodes"/>
+			<x variable="label_x"/>
+			<y variable="label_y"/>
+		</point>
+		<edge dot="true" id="edge" positionModifier="none" style="edgeStyle" zOrder="2">
+			<size cycle="cycle" high="9px" id="sizeAesthetic_1023116" low="9px" variable="lineWidth">
+				<scale id="scale_1023117" invert="false" method="linear"/>
+			</size>
+			<color affect="main" cycle="styleCycle2" id="edgeColor" variable="weight2"/>
+			<x variable="expressionVariable_x"/>
+			<y variable="expressionVariable_y"/>
+		</edge>
+		<point clip="none" id="targetpoint" labelCollisionHandling="quality" style="pointStyle3" zOrder="3">
+			<labeling clamp="true" id="labeling_1023046" style="labelingStyle2" textFrameStyle="labelingStyle4" variable="nodes1"/>
+			<image id="imageAesthetic_1023086" variable="type1">
+				<stringMapping from="target" id="stringMapping_6" to="histoImage"/>
+			</image>
+			<x variable="x1"/>
+			<y variable="y1"/>
+		</point>
+	</graph>
+	<legend id="legend_1027648" style="legendStyle" tickFrameStyle="style4" tickTextStyle="legendStyle2">
+		<!--  Size  -->
+		<location id="location_1023499" method="same" part="top" specifiedByUser="true" target="embedded_graph"/>
+		<location id="location_1023500" method="sizeToContent" part="width" specifiedByUser="true"/>
+		<location id="location_1023501" method="fixed" part="right" specifiedByUser="true" value="100%"/>
+		<label id="label_1023503" purpose="auto" style="labelStyle3" textFrameStyle="style5"><text id="text_1023504">Coefficient Estimate</text></label>
+		<legendTarget domain="domainForLegend" id="legendTarget1" target="edgeColor"/>
+	</legend>
+	<labelFrame id="placeholder1">
+		<!--  Size  -->
+		<location id="location_1023049" method="attach" part="top" specifiedByUser="true" target="embedded_graph"/>
+		<location id="location_1023050" method="fixed" part="left" specifiedByUser="true" value="0%"/>
+		<location id="location_1023051" method="fixed" part="right" specifiedByUser="true" value="47.5%"/>
+		<location id="location_1023052" method="fixed" part="height" specifiedByUser="true" value="60px"/>
+		<label id="label_1023053" style="labelStyle3"><text/></label>
+	</labelFrame>
+	<labelFrame id="placeholder2">
+		<!--  Size  -->
+		<location id="location_1023056" method="attach" part="top" specifiedByUser="true" target="embedded_graph"/>
+		<location id="location_1023057" method="fixed" part="right" specifiedByUser="true" value="100%"/>
+		<location id="location_1023058" method="fixed" part="left" specifiedByUser="true" value="52.5%"/>
+		<location id="location_1023059" method="fixed" part="height" specifiedByUser="true" value="60px"/>
+		<label id="label_1023060" style="labelStyle4"><text/></label>
+	</labelFrame>
+	<!--  Styles  -->
+	<style color="black" color2="transparent" font-size="12pt;8pt;" font-weight="bold" id="labelStyle" margin="3px" padding="2px" textAlignment="center"/>
+	<style font-size="10pt" font-weight="bold" id="labelStyle2" margin="3px" padding="2px"/>
+	<style color="black" color2="transparent" font-size="10pt;6pt;" font-weight="bold" id="labelStyle3" margin="3px" padding="2px"/>
+	<style font-size="10pt" id="labelStyle4" margin="3px" padding="2px"/>
+	<style color="white" color2="transparent" id="visualizationStyle" padding="0px" padding-bottom="60px"/>
+	<style color="transparent" color2="transparent" id="graphStyle" margin="0px" margin-bottom="30px" margin-top="30px"/>
+	<style border-bottom="solid" border-bottom-color="solid" border-top="solid" border-top-color="solid" color="transparent" color2="transparent" id="graphStyle2" padding="0px"/>
+	<style color="transparent" color2="transparent" id="legendStyle" margin="5px"/>
+	<style color="black" color2="transparent" font-size="9pt;6pt;" font-weight="regular" id="legendStyle2"/>
+	<style color="black" color2="transparent" font-size="10pt;6pt;" font-weight="regular" id="labelingStyle" labelInside="true" labelLocationHorizontal="center" labelLocationVertical="center" margin="1px" padding="1px" stroke-width="0.5pt" textAlignment="right"/>
+	<style color="black" color2="transparent" font-size="8pt;6pt;" font-weight="regular" id="labelingStyle2" margin="1px" padding="1px" stroke-width="0.5pt" visible="false"/>
+	<style color="white" color2="transparent" id="labelingStyle3" opacity="0.5" visible="true"/>
+	<style color="transparent" color2="transparent" id="labelingStyle4" visible="true"/>
+	<style background-method="center" color="white" color2="transparent" depth="80%" id="pointStyle" size="20px" stroke-width="1px" symbol="circle"/>
+	<style background-method="center" color="transparent" color2="transparent" depth="80%" height="30px" id="pointStyle2" size="120px" stroke-width="1px" symbol="circle"/>
+	<style background-method="center" color="transparent" color2="transparent" depth="80%" id="pointStyle3" size="200px" stroke-width="1px" symbol="circle"/>
+	<style color="black" color2="black" depth="75%" id="edgeStyle" stroke-width="1px" symbol="arrow" width="5px"/>
+	<style font-size="14pt" id="popupStyle"/>
+	<style font-size="14pt" id="popupStyle2"/>
+	<style font-size="14pt" id="popupStyle3"/>
+	<!--  Style Cycles  -->
+	<styleCycle id="cycle">
+		<cycle id="cycle_1023268">
+			<style id="style_1023270" size="4px"/>
+			<style id="style_1023271" size="6px"/>
+			<style id="style_1023272" size="8px"/>
+			<style id="style_1023273" size="10px"/>
+			<style id="style_1023274" size="12px"/>
+			<style id="style_1023275" size="14px"/>
+			<style id="style_1023276" size="16px"/>
+			<style id="style_1023277" size="18px"/>
+			<style id="style_1023278" size="20px"/>
+			<style id="style_1023279" size="3px"/>
+			<style id="style_1023280" size="5px"/>
+			<style id="style_1023281" size="7px"/>
+			<style id="style_1023282" size="9px"/>
+			<style id="style_1023283" size="11px"/>
+			<style id="style_1023284" size="13px"/>
+			<style id="style_1023285" size="15px"/>
+			<style id="style_1023286" size="19px"/>
+		</cycle>
+	</styleCycle>
+	<!--  Interactivity  -->
+	<style font-family="SansSerif" font-size="8pt;6pt;" id="c-o-n-t-a-i-n-er" pattern="0" stroke-linecap="butt" text-fit="true">
+		<style color="white" color2="transparent" id="style1"/>
+		<style color="transparent" color2="transparent" id="style2"/>
+		<style color="transparent" color2="transparent" id="style3" visible="false"/>
+		<style color="transparent" color2="transparent" id="style4"/>
+		<style color="transparent" color2="transparent" id="style5" visible="false"/>
+	</style>
+	<styleCycle id="styleCycleRepository">
+		<cycle>
+			<style color="#31AFFF"/>
+			<style color="#A11850"/>
+			<style color="#21D5D2"/>
+			<style color="#4F2196"/>
+			<style color="#009E9A"/>
+			<style color="#0072C3"/>
+			<style color="#D0B0FF"/>
+			<style color="#006161"/>
+			<style color="#FA75A6"/>
+			<style color="#003C73"/>
+			<style color="#A970FF"/>
+			<style color="#D12765"/>
+			<style color="#6CCAFF"/>
+			<style color="#6E32C9"/>
+			<style color="#01BAB6"/>
+			<style color="#760B39"/>
+			<style color="#1193E8"/>
+			<style color="#007D79"/>
+			<style color="#FFA0C2"/>
+			<style color="#893FFC"/>
+		</cycle>
+		<cycle>
+			<style pattern="26"/>
+			<style pattern="1"/>
+			<style pattern="12"/>
+			<style pattern="3"/>
+			<style pattern="29"/>
+			<style pattern="6"/>
+			<style pattern="14"/>
+			<style pattern="7"/>
+			<style pattern="18"/>
+			<style pattern="17"/>
+			<style pattern="22"/>
+			<style pattern="9"/>
+			<style pattern="20"/>
+			<style pattern="10"/>
+			<style pattern="21"/>
+			<style pattern="27"/>
+			<style pattern="19"/>
+			<style pattern="23"/>
+			<style pattern="13"/>
+			<style pattern="4"/>
+			<style pattern="25"/>
+			<style pattern="28"/>
+			<style pattern="5"/>
+			<style pattern="15"/>
+			<style pattern="2"/>
+			<style pattern="24"/>
+			<style pattern="11"/>
+			<style pattern="16"/>
+			<style pattern="8"/>
+		</cycle>
+		<cycle>
+			<style size="5pt" symbol="circle"/>
+			<style size="5pt" symbol="square"/>
+			<style size="5pt" symbol="cross"/>
+			<style glyph-sides="3" size="5pt" symbol="polygon"/>
+			<style size="5pt" symbol="plus"/>
+			<style glyph-angle="90" glyph-aspect="0.5" size="5pt" symbol="circle"/>
+			<style glyph-angle="45" size="5pt" symbol="square"/>
+			<style glyph-sides="5" size="5pt" symbol="flower"/>
+			<style size="5pt" symbol="bowtie"/>
+			<style glyph-angle="90" glyph-aspect="0.5" size="5pt" symbol="square"/>
+			<style glyph-angle="180" glyph-sides="3" size="5pt" symbol="polygon"/>
+			<style glyph-aspect="0.5" size="5pt" symbol="circle"/>
+			<style glyph-sides="5" size="5pt" symbol="polygon"/>
+			<style glyph-sides="8" size="5pt" symbol="star"/>
+			<style glyph-aspect="0.5" size="5pt" symbol="square"/>
+			<style glyph-sides="3" size="5pt" symbol="flower"/>
+			<style glyph-angle="90" size="5pt" symbol="bowtie"/>
+			<style glyph-angle="90" size="5pt" symbol="line"/>
+			<style glyph-angle="90" glyph-aspect="0.5" glyph-sides="4" size="5pt" symbol="polygon"/>
+			<style size="5pt" symbol="line"/>
+			<style glyph-angle="270" glyph-sides="3" size="5pt" symbol="polygon"/>
+			<style size="5pt" symbol="arrow"/>
+			<style glyph-angle="90" glyph-sides="3" size="5pt" symbol="polygon"/>
+		</cycle>
+		<cycle>
+			<style/>
+			<style stroke-dasharray="12pt,2pt,2pt,10pt,2pt,2pt"/>
+			<style stroke-dasharray="8pt,8pt"/>
+			<style stroke-dasharray="10pt,2pt,2pt,2pt"/>
+			<style stroke-dasharray="3pt,6pt"/>
+			<style stroke-dasharray="12pt,2pt,2pt,2pt,2pt,2pt,2pt,2pt"/>
+			<style stroke-dasharray="6pt,3pt,6pt"/>
+			<style stroke-dasharray="8pt,1pt,8pt,7pt,2pt,7pt"/>
+			<style stroke-dasharray="6pt,2pt,3pt,5pt,2pt,2pt"/>
+			<style stroke-dasharray="15pt,2pt,6pt,2pt"/>
+			<style stroke-dasharray="5pt,5pt"/>
+			<style stroke-dasharray="8pt,2pt,4pt,2pt"/>
+			<style stroke-dasharray="3pt,2pt"/>
+			<style stroke-dasharray="12pt,5pt,3pt,5pt"/>
+			<style stroke-dasharray="6pt,3pt,3pt,3pt"/>
+			<style stroke-dasharray="12pt,3pt"/>
+		</cycle>
+	</styleCycle>
+	<styleCycle id="styleCycle1">
+		<cycle>
+			<style color="#31afff"/>
+			<style color="#A11850"/>
+			<style color="#21d5d2"/>
+			<style color="#4f2196"/>
+			<style color="#009E9A"/>
+			<style color="#0072C3"/>
+			<style color="#d0b0ff"/>
+			<style color="#006161"/>
+			<style color="#fa75a6"/>
+			<style color="#003c73"/>
+			<style color="#a970ff"/>
+			<style color="#d12765"/>
+			<style color="#6ccaff"/>
+			<style color="#6e32c9"/>
+			<style color="#01bab6"/>
+			<style color="#760b39"/>
+			<style color="#1193e8"/>
+			<style color="#007d79"/>
+			<style color="#ffa0c2"/>
+			<style color="#893FFC"/>
+		</cycle>
+	</styleCycle>
+	<styleCycle id="styleCycle2">
+		<cycle>
+			<style color="#31AFFF"/>
+			<style color="#A11850"/>
+			<style color="#21D5D2"/>
+			<style color="#4F2196"/>
+			<style color="#009E9A"/>
+			<style color="#0072C3"/>
+			<style color="#D0B0FF"/>
+			<style color="#006161"/>
+			<style color="#FA75A6"/>
+			<style color="#003C73"/>
+			<style color="#A970FF"/>
+			<style color="#D12765"/>
+			<style color="#6CCAFF"/>
+			<style color="#6E32C9"/>
+			<style color="#01BAB6"/>
+			<style color="#760B39"/>
+			<style color="#1193E8"/>
+			<style color="#007D79"/>
+			<style color="#FFA0C2"/>
+			<style color="#893FFC"/>
+		</cycle>
+	</styleCycle>
+	<popup id="popup_1023074" style="popupStyle" target="point">
+		<tokenMapping id="tokenMapping_1023075" variable="pointTooltip"/>
+	</popup>
+	<popup id="popup_1023076" style="popupStyle2" target="targetpoint">
+		<tokenMapping id="tokenMapping_1023077" variable="pointTooltip1"/>
+	</popup>
+	<popup id="popup_1023078" style="popupStyle3" target="edge">
+		<tokenMapping id="tokenMapping_1023079" variable="lineTooltip"/>
+	</popup>
+	<resources id="resources_1">
+		<imageResource id="imageResource_1" name="continuous">JIAFOEHENAKAKBKAAAAAAANAJEIEEECFAAAAAAABAAAAAAABEADAAAAAAANONNCOCFAAAAAAADAFMEEFFEPPPPPPPPPPAAGMDMGMEICIEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHDBDHCPAAAAAABAEHCFOE
+DFAAAEGOINGGAAAAAAGGJEEEBEEFIHOFFFNIBDOAAIADMADANJGCNFBBCBLDDCLCNHBADAPPGOPAMHBAIBKFJKDADCLAIEECBGCMDJFHCPJMAMPCCJACOFGCCALDAMGDEAHANMDNJBBBKMMBJELMMHGLBGBGLFEOKBLIOGGKOBDOKKGJAGPABLACIJCKAAMOKEBAIMFB
+FFJPILKKBAIMNJMBMHPMGJHBHEGFHBJNHMPNJKKHAAAAAAAAJEFEOEEEOKCEAGCI</imageResource>
+		<imageResource id="imageResource_2" name="nominal">JIAFOEHENAKAKBKAAAAAAANAJEIEEECFAAAAAAABAAAAAAABIADAAAAAAAICNCPADFAAAADAAAAFMEEFFEPPPPPPMFDJKCGKKMDIPHELKOMJFABDDCAHAMCLDNBJDGNJJNHCCHBMOJFMMOKIILIOEJAMOOLIGLBGKJEMPOHCDHBMBOKGKGFLINBJBNBPBLHIJLMOGMDB
+JBEGLJDNIHKKNNMMMOMKIGMJEFLJCMKONFEJKCLJPLGKKJOLFKCFAJANAMDONJAKPAGDODCIJMINGEGEAHLKIOEGJJLDFGKJLDMIGLDKNJBMGKHIJLLOPJMGNIFLANLOMNLGAHKJEMOOCMDOCKILCBGCJLKNIJKLLNKJJGNJEFNMMCCDCGKJCNKLDNMOFGLJDNINNFDG
+JKNMBPKGOJEFELJHEJBKPAKDBHGKMNEIFLIOFNIDIDIKLBBENIHLCGPJMAIDCKFMDKIMMBCCDMNDBFOGCKPDMLDNNODNHEMEHLBNLOAJKLFGNJJAEDMGCKFJOGBKFFCKDCHEAKDMIODLENDJFNJDJDMJHADDMGCKLNCHGKMNBOLGLGMGDKLNMJGACDJHKKMNOJMAEDBN
+GCGCPHELLOAGGJMCMFHJCNAJILEKOLLCODANDCDCOFEJLCKLIBLCLJEMOOFOKHKHFOHHHHHLMAPBCCAHAMNMIBIBLJDMLONKANJIKHKKHFAOGGGGFDNHHMAKKMHHEIFLHOPMPBPBHNBEBEGMBBHBFMGOFKECBHAMOFFJLCHMFBLBINEEEEELFNDJMLENNOGGKJLDGLHN
+FJLGOJEFLLMNLJPJBMGKDLENCJCEEIJMIIJLMOMIHLCGMDBIIMLJFMBHNJLAEDMJNBEEBMBOAKHIILMOFLGNEJFLINCJDHFKGFMGPJEFILINHJHLNAACANECECGKJMCIHLMAACNIILDGNNIFIFPFIJCNEPKLOMGMLEOFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAIBHGMNJJAAAAAABAEHCFOEDFAAAEGOINGGAAAAAAAPJEEEBEEFIHOFDGGGAABAHGBKPKMIKLCFPMBEMEGCABBFKGJPIOHHMKMPLFHFABLJJBEEMNCOBGMHHHJOPKGDPPFBIJKIPFLFFLIFPHEENOGBHABLJBBEEAHIAMHOPBCHGGCCDLOHDIID
+ACADBMCJHLGJJFNINFGAEMGALJBPAMPJHGBLJMFPECOMLNAGBIJIOFPOJPONMNMHLOCCMMPPPNFFADMOADDNEMFNMAPBPLJAOHHDKLDPLIJPIKIOPNPDKKMCMIMKHONMPDOBFHAFBGNPJDBJFPPKDPGJAGGOPHMACGLKDOPLNLOPEPBGBFMPLEFCGJFIHEIJINPNALGK
+MKBOEDKNILHCMGPDDNPLPGAEHHMEKJFGAKPPAPHIGCLOHDGLHGHDGHBDALJCDDNPHNENLOAGKPHPFOPPEKJKMFLNKNINEMELJBIBGCOECGBGJJEDBJBIBEKNMIBJBFMFFAGOGFEAAAAAIHLPCFCIDKLJHOHGAAAAAAAAJEFEOEEEOKCEAGCI</imageResource>
+		<imageResource id="imageResource_3" name="ordinal">JIAFOEHENAKAKBKAAAAAAANAJEIEEECFAAAAAAABAAAAAAABIADAAAAAAAICNCPADFAAAADAAAAFMEEFFEPPPPPPFLENGJLGOJDNPMGAGACLCNBJCLDNBJOFGJPMNONDNDOOPDODHODDDDNFFJPMAPCECEKPDFCFGPMEMEFPJEJENPIFIFHFBJNMCMMNIKCLDNCJKHIK
+HNDLDNDJLNMBMBHNFBFBMLINPJLNLBKBELENEJFGKJBNDOLCKCJOGDGDHIALLNNMCOILJMAOCLNPIHIHKLHNNJLPFFFFBNKALANNBCBCDNOAOADLDNCJBNJAJAFOMCMCNNPBPBHOBDBDPPMFLFJLGNLJMHJKINKNKOKMMIDLNNHJLLAOMPGFGFALLMHONGAKENKFDJOM
+GNCBCBMFEJOMOPJFKFHPNEOEILGNKJDPIEIEAOFCGCILANKOCNNANAJPBFCFBOICHCBMLNHKINGBHBFNBBBBBPDEEELOIDIDPPMFMFOMFAFAPNPNPNBLCNAJHGBGBGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAFIGJAFPPAAAAAABAEHCFOEDFAAAEGOINGGAAAAAAOKJEEEBEEFIHOFFFPIBELACIAEABFIPNMCLANBCKAEKLEAJAFACONKDGEHKOGFEBOPDPIACKDFJHJKADIMOAFCGGIAKBGLNKJOOCGCOHHIHMAPBPGGAGIAPHMBFJMKGBAHFIABNABGDAHL
+GIAAGDJCIENALKCDIFIJFHGHDDNNAGFCINHLEIMKGFMPNHKBBIFLHLGEFCOFBPFGNIMIMKMLCBPOBIHNDANFNIOCILKLHILDDLPMIJKPHCJDCOKLCGEAPIFAOADGKPAIMJIDBJPFDDPCECFABBLDOCJDCOADJHKJKKGBKHDPBCIDILPNHOKPCLFGFBBMBOOEEGCKFICI
+EPDNFDPDDHGKGDGNJCOMICIOAAAAAAAAJEFEOEEEOKCEAGCI</imageResource>
+		<imageResource id="imageResource_4" name="intercept">JIAFOEHENAKAKBKAAAAAAANAJEIEEECFAAAAAAABAAAAAAABIACAAAAAAAAJBJIGGDAAAABAMLJEEEBEEFIHOFFKCNPOPGCNAEIBHAAPNPPBOPNDKPCMMKNDKAFDGCOPDDLADJCFAGOMHBKLEBKELOPIBOIBNFLHFCLOPIIFNMCJFMHJGJBCDAKFGDKMNNNIKKAKIDDB
+OFLPCNCJOBJFCKPGMFMEOLPMNLILHOODHPECHJLNILDHHFJLFFGDCJKDNAGJGNJNHHLPMOHIDOPFLDOPMPILDDLPFLMLHHPPBJNGHHGBOIPLALNPFIFNJLODOOMPMDJAHJEBMOPJOMFKHHBHCBJPNGMKIHILOOFEJCAJNDCCLHHFFDPGKCJHBLEONHOHNPBGOEBMDDHH
+KCGLJIINOLKKIJIHHNMIGHNMLIEBEJBCOCDMFNGGFMEELDADKNDHHCEBMDBLIMGDEEPIBCJCKOILEGMILMGMICFAFANJIAKPEFIDCEFCNDCBOAHIPMNJBPNAICIJIEAIEKEKDOKIBDONBIEBEBFHCCKOBLIGAKCLOBJINKAGPMNFDABAOEGLMIIGLOIANGLGIKAKNFKA
+KFIJCIMLGICPKBOMHLCCBKFHBFMGNAPJGLDEKACJGPPDGICIEOCLPDCJOEIPLDEBMDMHFDINMKOJDIKHPBEFLLMFNKHMJMBEKACHFPBCPCLPMIMPJAICNPFNKPCHIPPDAEKONKAIENFOKKHDAIPFBIPIMENCFANFAPCGNAIPNPAIFFGEMKKBAAFOMDLKMACDKCNHGFAK
+EIJDFLHMKKNPEOICAFHAJJGMIICAOAGELJNEEMOLBEAKJDKMMBEIAOAICAGKJEIJGCGGOAHCMFDGMMHDOCDHGAOFPEIDJPGAMNIDLGNHFGMNJCHOAGONCCJCIMKFDDGNNJDLOMMCLGPHBOMOIPBMLPFPPFKLFFOHDAINGJPKHPOAMPNLDDAAAAAAAAJEFEOEEEOKCEAG
+CI</imageResource>
+		<imageResource id="imageResource_5" name="interaction">JIAFOEHENAKAKBKAAAAAAANAJEIEEECFAAAAAAABAAAAAAABIAGAAAAAAAPBDPPPBGAAAAAAOPJEEEBEEFIHOFFKDNPKKACMAFEBGAAPFKLAGCLKJMKGCPNAGJGJMCKAGHBDKAGDBGCKBFMMGGNHIADIPGAGCBMGGANLFMIDFGGBNBCCKFMGDPLDONNOCHNDMGDGILAP
+LNBGMNDHOLNNNPDLCMADELKIAFHAEBJCEMAAMDKKMLJCLIJBAHCIILKFJHAPAAKNBMNAOAAFCONMJEIHAEMLANCIFDEJJPAAHJGBAEKBALFIKAPBCCOKAJDAAPIKKOAAMJANCIGIGEHEKKLNJKCLFLCDMFBIGGMPENAIICEMGIDOMFMMKDIDPJCMGCKBECPGIJEKFAAN
+FFLHALKBKINPLIGAGECGHHBENFAELNFFLLIPGPKJBADGIHCEAEDAAPAKAAIOPCFEHLJCFNLOFHCOBMEKAAPNIBELJHDCGILOBFIANOACBDAEPDJFOPENNAFDILDEACDKPCGDNOFDGGBPFKKPCGPMPDBAEFDPAKLCLEDOPJBNBAPPANBAFEMHAANMOIIMKKPDNMDJBBAA
+AAAAAAJEFEOEEEOKCEAGCI</imageResource>
+		<imageResource id="imageResource_1027720" name="histoImage">JIAFOEHENAKAKBKAAAAAAANAJEIEEECFAAAAAAIMAAAAAAIMIAGAAAAAAANKIFOKOJAAAAFBDNJEEEBEEFIHOFNONJLAEHFJFNFJHMBNFIKAIACPKAABMAPIABIAIFCACIIPKIAKAFAFAFGJNFDGBHBCNOCKKCPABIGFIEJBDAKNAKOAFHAHAKCIKEHIHEEBECEEOFCE
+JCIAMCMCACCADMDHEEFMCFJHIACKAKEBEAEMECMLGMBHMGLIALHOOJPEOONGIPPJLJMNHNJNHOMJPOONDPLFLOHLACHOMHHPLNLPLDHGPGOONPCHPGCEFJKCOANCANJLDHEKCFMDPLDMBOLAALAJFHLIJPIDMBGMAMCOELFFMMLNBOAGBALAPMPKCOFHJDMBBHDIFMFJ
+MGCOFPKDMBBBBMCCKEFBBHNBMBOIABIFMCJKOCOKPIDCFABMCKAHGIHBHNNMBJEMAOGOLDDGDBHNDNBJECAOGELDDBDBHNHNBODFAHDGNJKGFMFPGHIPEAMNIEHCPKILOPOALIBMNMDHKOBBHPBMBGJBILBGOEDDCOOLIDMADILBEOELDEMNHCHIGGAHDEMJGHKILPGO
+AGGAHDAMJOPABHPBNBKIBMFAHHKPDFMNHFHICAAHBJNJOPGBHPHNBJAAILILOMEOABHPJNBBHAILIKOMEOCBHPLNBBFCILAJOMEOGBHPPNBFJAILIHJELGEDAODGCJIFMKDAHEIBAHBNMHJKJAADHAPJKIFPAOICHAOCGJPGELBBMMBNHECGNFIDKKIPALJDMPEAGOOO
+DABLODCFGBMFIBLKNEGAAPKJMCHBLOFCFKAMFMALOMEFAAPKJNCEBLOGCFCAMFEALKMEFEAHNAMCDBLOHCJKBMLIHLGEHIMLGCGBJIFHEJEJAOFELFBKDEGAHNIMCBBLOJCJKAMLIFDOKDCCDILGGGBIIFHFJEBAOFEKBFNBBLDILGIGIFMKPCPFDIHBHGMEHECOAOKJ
+KBEBLOMMHJAOFEJBDNBKOAMFLFDICGNLJPOAMLACNOKDIPAMFLGDACGNLJPKAMLIBNOKDIPBMFDHDACGNNJPCAMLIANKKDEPDILHAKJFMKPDLKBMEOFLKOADHAOOFIGGBLOANKEADJGNKKDMMDILHCKJFMKHELOAMEIFLJOALHAMNLBNICGNDKFFAGCLKNEHINHAOOBJ
+GEBLOCNKAADJENCKDMOHAHPMEDJIFPJGEBMEOELIOAPPAILHHKJEMKDFDCAGCFKFELIJDPHOPMDNGKNELJIGKOENJKEPCOLIPCCNKMFJLCJOLJPGOLBMDMEOLGKKMMEGAAPKJEDJIFPKKNBMEIINFLEBBNIBDFGKMEBKEPEPEHKMNMNMFKMLMLMDKHCHEOIEKOFNDKHA
+FNJKNFLJGEPPKPHNEHGPLMPCFOLOJEEFPDBIJLLGABLOFFLCIJMALLGJCPFGAKAPPGPLNPGHKOJNDLHCNHMPOPLPCFONHCPAOBEKPFOAKBEENMKJEDBKHPGDMGAJGOFJJOHAADHGNACGNNKGDADBBGFNCFODJPAPDEKGKJBJBEDJGMNIDJDHGAHFNCJFCENALBEDAKHL
+GBPCGJGOIFELFBMMDJJFMKLFNCAGCBMOKNEMFKMJODPNNLLJCDOKPLOJONICKCCJDPNKAMPDPGJNCENIKBGDEKHHGFMKAJGOIFFLJAMMNEDIIFPLMOAGCAMKKNEMFKMJOMMBNDKENGCLDLJGGGAOOLDEKMHDCILNHNPKHPOJJEGPMGPNOCNMBLKGDBIJLBDLIFPLMKAG
+AHGFNGBKMFOEHBPMOJFKPJMNHHPBNDBDMHILMJPGEJOCKCOCGKGJNCKFAPMNILHECNGBADPCGGBLOIJNAMAMMGKNAAGOEBAHCPEIJAENJDAHDFOHOPENJCJGOCGBDPGINADKPJNDIPAKEDOKNELBAMMJIBFMKDGGBADICLJGKBMMHOCJCOLLEFCOFOBNBONLLHFKJLIF
+NPLFJEJAFLLGLNGDGKLHIBGBNEDIJPADKIFPMKEBMAGMGKJGADPJLEOFIDDHGIOGNOENJIGGPEPJOCNMFMLOOMNKLFNLLJGPPKPANBCJGOELKGKBMMHIBFMKLGFGAGACGDNEBIJHAIDFGCOEEKOBNFLLKEDOJIKDGCPDPJKPPDEPAJEDOGEEDFAGOBMICGNFLCBADIAL
+JGKAMMDAMPKODLPMIKBEKFKBNHKLDHHKEDHJIKPNOJMDJENCKJHDHKNILKGFJEDHGEEDFAGOBMICGNHHCMAGAAGBNEBIJHEIBHAEPPOPEPEPIKBFCNILKCHFMCMFIONNPIMHPHKPELEDHGEEDFAGOBMECGNHHCEAOJMJNEDBAGOABGMNBLJGDJHPGIAOHDHCOEIEDHKC
+NLLLLFHDKHFPHPPLHJGMNIJGCAMMBIBFMKDPILBMDBDLIKLBMIPFJINFLLEHBKCOCMCEJGMFFLLLHLPGHKEPGENIIOMNBLDGCNMJBFFHDIBPJJEMKDPILAMDJCLIKLBMIPFJICODHDFNODHCHMLPOAGBOMBHIDIOBOHIJOPNOJKHKEKBHDOKOGADODDJIFPOBDDIHCEG
+BFHCIBLLCBFEDFIILPCABPBCDEMJDOCPIOOPNPEJGFPLOLHPJAAGMJDDOKOEADGDDJIFPOBDBIHCDGBFHCIBLDCILAGGNMCKLDPOILDEKBHOGHEFOFOJHPOCLDOILFBKOEADGDDJIFHPBFDIHCCGBFHBIBHDCICODGECCODLCFLFGNMKBJGOILNCNPCOLAKKPFPKOBNB
+JNHLPEKJDLCENFAGMFGCBLOODKGAPEEKMFNJAGMOIAKIHHLMLHGHPOOCNILOCPJNHCPJEKBKDAGAIEDOGFIKDBMINMACGNNHEFAOJEIFENFAGMNIAOPDKMKMICDLJFDDPODGJOIDHKLMDNHEOIIHHPCCPFMOJNDCNMJFBKOCADOCDJIFPPBBBMDBICHFBCHDNKACBHBI
+GFLCNFPHEBOPGLAKAIGIINKPMCCCENFAGMFGALKEMKAOJAEJLKAJAGDIIIPDDBFLDOLJPPAKLKLBGGCFLOJILNFKJLIHFBJLJEHNPBFIBMHGBBFBPJMBGGDFHAIBDJBEMKPPKEBMHALCHFBDBMCCEMCMMIHMGGDCGGDFNKOINLEKBPEEEBJLJELGABFOKDIIHPEEGINA
+MBICPDGNGCFHAIBDJBEMODIKABMHAKCHFBDBMCCEMCMMIFNOIPGOJHKLGCNLFCFGPPOGLJEDHJIICCHLIHPKLPENJKDFEFPDAPMCCHEPIOBNPBGAAHNCNGBJLBMIHMACGPBEFIAODAFJKMAEALIABLADDGFLJPIMJHEFDLNHHHJGMDBFFEOGJIADGGMMIBKBBDCGEAOA
+PPAAOKPKJCFHAIBDFBLINHABGBMHAJCHJBIAGBBCGBGGMEOCPLAEHNEGELBKMOHOHDKMDHJAKCCHLEEICJCJCBPOJFEOIPBPDOIDFPPEAHNJNEIMNAGMDGABLPBECAPBAKEFGCCIFEIIFIJBLIJJDKPPAEFDPHEHHKEDOKCEBJLFCKMIKBFDKICPDPDPBHIFGAHNMFHK
+KDAMIJKIFMOHAJAMHAICFJJIAGBBCGBGGENOCPLIEFNKJFLDKGJPLNFLCPMJCAFEOGJICHCOEMJAPOJFEOLOPKPLGMJCJBMFHHNJCHDIBPEBLINPAHJBIHALCHJJIAGBBCGBGGELGLICIFGEFDCLPGDJGMFFJCCHDFBIIPNHPLFAFAFAIDMFBDILOPKDEOGADOBDIINH
+BBCAPAEFOCDBBMCCEMCMMIKMAMDLHEFPMKLJICLOJNPDJMDHKIEBJLJKAEMPOAAGBPMCCFGFGFGIDFFBDILHAKDEOEADGBDIINHBBCAPAEFKCDCBMCCEMCMMIGMMKHKHFCFNIMKOECNILKEFEOGGLLCNOHFCCCHDIBPEBLFFKCCAPAEFKCDCBMCCEMCMMIGMKBNKOGBK
+MKBDLCEKBHFJKIMNCONMPANMJJFPHFKKKFLKODNNILAOELEDHBPKCCHDJGPLCBFJDBMIFKINLMLLCOCBIHAJCHJBJAOGCDOGMHECFMLMKKKOJJNBMLHJJFIDHKCFBJLFMDJPFFEGNPOJDEJCNLPNIFJGMDOFFEOGCNOHFCKCHCIBLIBMLMLLDEMKAFIJDIEJJMJEAOMP
+BMNEGMNIPIEKIHGPIGBFALMFKBHFNKIMNCOJMPKCCDHOFLDMEFFPKLELAMDLIMJCJGOCOBFEOGCNOJJKAJDBMIFKINLMLLDEMKAFIJDIEJJMJMJLIPKBEEMNLHIILJDHOOHGPABKIMNCGNMPCCJJGNLGIBFKHPNHGFKBPIHEBJLJELHGKCEOEADGJCGFPFDHIAJLILEH
+OPAOGCDOGMHFIKIPOMFFLIOIOFDJIEDHMACHEDIEOMMKDCONNLIELPJHFKCNMFMKCLFDIIAJLAMIDMAKOJGABOEOCFMIAOGCDOGMHFEGLIHKGJALOLPOBICHEDIIALBEPOBBENAPHKPEKEDOBLKOLMGABBAGMCFMGKEGDIEHMFGPNDFFLMILBIKFNPLPKDJGOILEOKGA
+JGHPKPJAPOJFEKNNMODGCNMFMCKLGAJAPGKEGDIEDLMLCGGJPEMOGFGCHFDIIALBNDIFAONNPIAOIHMCKLGAJAPKPLLBEKMFMIAOGCDOGMDKNBOPIPPHEHFHKFDFKGNDJONHJGOIDFOMGABBPOHIEFNKNNAJKNGBOBAJGOCKFJFLBEEIMFAGMBFMKPHLJDEAFOCOEAHD
+JBHDOBNLOPBJHBIKOEHOOLCNIDHLMJNACCMMIBAPCBFNJMNODCNIHELKPGLBEEAIBLEBKJCFNACNOHOFJIHPONBELNHFPAKEDHMNCHHDIEHMFCPHDPOHOIODLHCMGFJGOCKBNFDIEIHNPLNACABHCILJMILBPFONELLHPHFENAPPFCPFKBHNBCHHDIIAFMPMDLIIHDOD
+FMPAOHBOMFECJNLBEEIMFAGMBFIGKMEDIMNAPPJLLIOKKKDJOEHDOLBHGEKJDNBKOIGABBOFLHDEHBPOLJABIDOBJEHNACBONENIGAJFOHBJKGGLNLLIKJODOPKJMDHKJENFNACNGGCPOEKLKKOGDOIJPPBCAHNACBONEJIGAJGODCHOGAOFKHMNKBHNLEPAFFKOKGAB
+BGKNNHPIDFKFPOBOCNIHFGKLGAJAPGCNHDIELPJPFGONLELCBPPCLCOMJOEFHGDIIIHGPILKKONFPBDNHLCLNLGAJADLOKKEFOCADOICEDJOLBEKONPIPBJAMNIJPICJGMFHLKDLBEEIJJDKHBDFFPGONOJKDOCNPLLEDHBOEHNACBONEKOGABBPDLOBCOHJAMFHIFMP
+NKEFABKLFNNNACCMKNHLNDABFPPMMIILGAJAPKPDLBEADGMJDJLBEEMHCMFPKKKPJBBHPLPCAKKFDBNACNOGOMHFPDMLMLMHBPDAJGOAFNCNACCEOAADGICEJHLBEILAMIDHOEOGABBPPKHGDKODPLBJKABMEJGCKBEEINCOHDPGCNFDNIDLJKDMPBOLBJGOKMLBKGAJ
+KAGNHFJJMFAGMBFEGCFGDIEDJBCDFNLPOKFFELPKPLFHIGKKBEEICODIMIFHLLOPCEKBPCPKLGAJAPGCNFDIIIPPCLAKKGNJGEEJDDDPLAJKIAMEKGCLBEKDMCJPOMLPJLLPGKDMOFBJGOCIKLGAJAPGCNFDIIILPOIGJDGHNIEFAAGKFDJNACCMGLDDPDHPOOHECLHM
+PGGJGOEIOKBECMLJEDNACNBGBNPPIHLJMJBDAPFGJGDPNGANEHDIIALFNDPPPFOFDJEILPIFMLLGAJAPGCNEDIIIPPAPGMEHBAGFGKNANACCEBPJKCILKLBFLAJOHCABNFDIEIHDJGKBEEMPCOHDLBKAALCCNGJGABBGGMAKJMONPHDPACOHMFHDIDGOKBECMLJEDNAC
+BMNEGMCGALFELJKBEEIHNPDKDJIOKJGMNKMLPNPKFCOLGHNACBOFHNACKJELNKBEEINEPHJPKKHPNENIGDPCNOAHNACFBIMLNACCEOAADGMJDHNACBPKJFPMMLFONPMDLHIKBECMMKNKCFJDAMIBKAFPHGDIIAACOIINMGLBLAADIKNKNACCMPBFBOHCOFOGNPKPFPDK
+CLDMHIFKFLFFGCHBIBHEBKOKBEEDJGDHDIIAFEOGDKHEPIGKEPGENIIKILALAJOCMJJDDCNKBHCMCHBIBHEBKOKBEEDJOHIGABBMPFGLNGDKLLKDHHGKGHNGLNCNCNJPDPFNGDKAHBIBHEBKOKBEEDJOLIGAJCHLOJLKHJOCFKOMHLPNOEJFJJJJEDJGMNIDKDOHAOAI
+ELGOBDLMFAGMBFIKLGABNEKPNKBECIOOINELJIGIOAIBAEFHLOENBPOJJFOHHPMNDHONINHPHKPELEHMGEEJLAMIDKAFHNACKJEPLGDIEANPLHJGJCNLDLCGFANPLODOPIDNNIJDJDEHNGNIKBENFCHDHJCPGINADKJOPCNLEELGHJPCHKPEHHOOEKPGPEOJEJOBLBCJ
+LAMIDKAFHNACKJEPLHDIAKHOOINBDKNELKHFDNENJEDJIGIPAJBCENLKHEPAKMOGJNCJKKHFPKOEFDPKNLGNLHJHGIPIBGDADOICENPLNACCAIIFBMCCEHKNDKJIKDAFJGFBBAOAKCFJDBMIFKKNEFCAPKNFFLMJAGMCFICPHDIIAJLAMIDMBGKCAIHNMMBCHBIBHEBL
+OPOGABBAGMCFNCDDDGHMOIFKNBLDGHAOALOFAPKJFFLMJAGMCFMKLGAJIGEGEKBEDIGAEDHGOMMBMBOABNALBGDMKEHODBGAPKFJDEOEADGJCGNLGABGPGCBOEADGBHJMEEEKGAJPAPDMPAJKEKEKEAHIFNAIHNIMFCHCIBLEBLKHKBEEIMFAGMBOCDBAOOOLLPOGKBP
+DOHMHIOLODGHMOIBFGHGHGDNBODMHINLGABBDHNNLLHHHKKFFLKGBFPOONNLJKELELEDEHMGOGOGOCNCLFGLMCEPHPCKCKCCKHAOBIHAIKOGNNKLEDAHAOAEKLAHBOCEIOINIJBMLGEOCJLAMIDMAKPPLBEEAIBLILMIDJCICICAKGCNEKJEIKIJHCMEIJAENJKDFHCP
+OPOCKBEEMLHHADJGCNECKJODNHKDFNJKDFHOCLGGKCPPMADCOPOFFLKGFFKMPMPMHKJLDHHOKHPNGENNMLJHDHIOINIJAMLGDOCJDBMIFMAKLGAJIFNIDINHLPGPJHFMMLBHDOGEKLIHBPCCFLKGFNKIKALALANLJDBFEPDFGKMEJANBLCOJFBKLFHLOGBKPKBLBECPC
+PCPCEDHNILBHDGKJGDNGKFIOLOIKBMLGCOEJDBMIFMAKOLGABBCHCIBLIDNIDILJPGOLJJGAPAOBMONPLIPFNKKFFDKDDCODFCLECPNDIMEMJIDBJCNCNCNCEPFDGDIEJPDGDLCLCLCGPGABMLGBOEJDBMIFMEGIKBEELEDJAHCIBLIDNIDIJKDFHKCNFHHNNFHONPAF
+CFPPOPNPDEDOIFEPDIGANACKODNHKPEINJHMDGNFDIAPKHJFDHIPOLBEEAIBPILNIBABPNJICBHPPACGJJHDMGINABKBHBFEPCOGKLPMOJNDLEPBNHEPBBFDNGKNEJGGMMIJBHJNMLCJGABMMNJLFOGADOBDIINPBMPNACCEOEADGJOADGAOOPLPPOHKMMMMMEPOODEC
+IIICKPOFNLKHBFNIKBFDIOKILCOKAKOBNDKHIHNMCBEKMPLPACIPOJIIIGABBHDGPBBBMMJFHIMJAGMCGCBLPDMDAPACFOCHDIBPEHIBFCCOODEGMNILBHHJNIJIGGIDPHOPMDNHHPNNHHMDPOHHAGOKKDEOGADOBDIINHBBCAPAEFOCHDIBPEHKFJALFGLMGBKLCPKM
+LCJOIMBJDCIDFMDAGOGKDFOGADOBDIINHBBCAPAEFOKOAADGKOELCAGPPOPNPELOHNPKHMBGOBADHCNJKOAADGCDIINHBBCAPAEGBJLBMIHGCEDBAGOAGCEOGADOBDJINHBHJBIHALCHFHAIBDNEJKDAMIJGKENBAGMEGABLPBECAPBAMCCHDIBPMGBFFAIHOELFEOGA
+DOBDJINPACBIPAAGBFHAIBDNGEDKBAPBDGDKKDAMIJMECGPDEIFAPBEMCKOAADGKDFNLKDAMIJMECGPBEFIAODAJFENFAGMFHKKDFHBIBHJJEMODIKABMHACLJKLAMILOMEMFNFAGMFGEBLPAKCFAPBMMCKOEADGLDDOHFHCIBLJJEMKPPIIAOJAINENFAGMFHGMPKOC
+ADOCDKIFPPBBBMDBALJKDBMINOMINFNJAGMGGEBLOPDKCAPECMGKOEADGLDDKHFHCIBLJBFMKLPIKBMDBBLJKLBMIPOMIMKOGADODDKIFHPBFDIHCCGFFHDIBPNJFBLKLBMIPMMCGNNHMEAOJMIFFDBAGOAOMPHKGCAMMBIJFMKHPIJBMDBCLKGKAMMDMJILCEKPAMMD
+IJFMKHPILAMDJCLKGKAMMDCFJFDFAGOBMMCGNJHMNAOJIJNFDFAGOBJKIKJCADPANACGNJHCEAOJMJFFDNAGODJKAKJGADPBGGBLOLDBGADAALLGKBMMHCJJFDNAGODKBEMKPGFCAGABGHNGAADHKEGCNGAADHCNACGNFLCDADAJGBNGBADPCPDLGLAIJHJGCBLOKFJC
+IBMELIGDBIJLJPJELJAMMNEDJIFPMMCAGAFNCKNEAGOGOHANGCADHDNECGNBDLBIBIFLIGLCIJHKNEKNKAGOJKJEMKDGGFADILGBNPAAGOMKDFPDAIJDLGCBLOHJNBMEAELJOHCADHHOANPEAGOOKBFMKPFNCAGCBKNMEGAAPKJKCDDJBAMLGCNICGNNKGDADBBNKKDM
+PDAOONJGGBLOGFLCIJMIGFNBGPDILHGKJFMKHFNOAGCEGEEHINHAOOBJBCBLOFNIAIJEJBBNBGPAILHDGIEMKDFDKAGCHGEEPBCLBGPOJCKBKFELHJKNMIONCENGGENGBKBMDLGPANKLNLFGIHIJPHAMNDBDECGNHKFBAGCJGEEPBBLBODODFENDGMPHAEDGGJMHOEPK
+PLLFGEFELNKEJGENCKDEENFPJPPAIONONNFKIHILNPAOOFIBCBLOCNKCADJFDCKPEIBCBIHGOIHKHJMBCKPDOOMDHEDLOPLPMAFBOGODNBIPDPEDFONMPDIEPAPMINDIHILNNAOOBIBCBLOBNKDADBGDKKFOIIHJFFONDDHEAKJCOFIHHKMIOJLFFFCEPCMKNCDKHBHN
+OJEKGFJPLJBPAHLDBMFDHDMCGNDKFJAGCNGEFLIBBHPMBFELFLEMLHGOABNMBPEMCNDJBIPDLEJGMPKOPKIKFODBODIGABMFLGDMCGNBKFNAGCPGMFLAJBADDHPAFOHAOOJDEMLMLKJIBMHGAJHHKEJOBLCOPEJOBMJCLLAPAHLHAMFLFLAEMKPDPFAIHBBGMFLMIFNL
+LKEJOOMBHPODFONCIDIONLMKKBPLKPEKHNMBHLOINHPIGOOGLDJIHILNBAOKJKFACGNNJPKAMLIBLCEDIMPPOKLPLANGPLPPBFKJHFLLDDNMJKJJLEDPLFONLEDHCPGCLHPCJKCLCAGONMPHFIOJJFCPDDKBIPKGLDKHEPFJMBKBJDPOBCKJDLFGBBOJGEPDILGIGJII
+FPGOLDAPCIMKCFDDCKJDGBHGEHHPKBEOANIIHCIOAMDCPIBNGMMJOKEDHLGPNGELKOJOCEKJPPOOCAKBJDPLLBNMNNBFAELJPLMCGKFNHAGKBNEJFHDEJGINMKOCEFMGKKJEAHNMMCDBLONMHJAOFEJFHKGCEEDGMGLLLKPANBPCICAKDOPMMDDEHEGEMIAKDANLKHBN
+KLEPMBKJNNEPOBKBNLALPBFBNLLJPELLPMNKEKPDHJNLJELFOIMMFKFLHAGGANEOHLHADNIIHNLPCOJOIHBMFDCLAFMKDDPFDIHBHGFKMMEBHFPLFIGPONLPDBKPLOALBGEHEGIPAHKPMPHOPDHKNHHHMNBEPOHDJMCKJNHFHHCKHELADHCAPMKBDFJONNDBLAJGLOHJ
+DPJGNPBKCCKFNLPLAJGBNOIPPAKHIHKHLFMDNBPAILGCGJKIFPFJEBAOFEKFLCDBDLPKJLJJGHGLLOEEPJEHPOOEHAOOJLHIGPFOGOCNOOGNNKJONLGAJBEDLPKKLJIOBJCMGLELMGHNECKFHHAHGBNLDPJNMEKFDPJMLCEPHKPIHKJOJGABMFDALIFMKLKEKCAPCGNK
+GFBDCOFCGNKNKHNKJGHFLMGJELLKFFLCKPIKJHDHKNJJOJOEPGHNMMEPGOCPGOEPFKJMLGPBDKFFLPGKHAKBDGKDNLFLHHKKHOLELGGABNDOFMMEPCBLAPKJNCHBLOJCJCBMLIGPNIJACCOGCNPFPKJHLANLNFLCANABFPLBDNGPKLNICANMBNMJKIPKNLFMLJLCKNEL
+IIGIGAOGIMPFOAMNDHIIHGNIFEPBMDPOFDHMAJHNKLANEJFLPGAOJOCODAPKJMHECGNBFCFDIHBPOLDDOECIPNGOFBPCJKEICOPOCGMCIMMKNILAJGIHAOGIMFMLEKCBOPKGGHPFKHJHNMCICHHGIIDAMMNNHICGNPEKEAILIAOLFNGEADHEPBLIFHDJCFAOCGECFIGC
+AMMBCJEEMKHJEJFAHBGCFCMIGAMHMEKIIIFPBOIKCJCKNECOEJEMKLAHEJDAHBLMJJKFCGNDIDCMAILIGOMENABLOAMBFJAILIHOMEOGBHPPNBBFCILAJOMEOCBHPLNBBHAILIKOMEOABHPJNBJAAILILOEPHLILPLOAFAAOCCLDNPJCOOLKDEBDILAOOEPHIILPIOAG
+GAHDAMJGHKILPGOANMAOGIIDNOABHPJMBGIBMNACHKJBBHPFMBGJBILBGOENDCOODIDMCGAHDPMJMLCOKPLDMHCAOGEKDFNKILONOAPJCILBLOMEMEMFPFHECJAILBNOMINEMFPEHECBDILJPOMAPCOKLJDCFABMCKIEFHBHNHMBOIABIFMCJKCCOKDIDMBBBBMCCKEG
+DBPKHNBOIILBMCOCPLKIHNFOAHALAIFIHGLKIJHLDCKHOPPBPDDBBBDLCGLHHDKGAAAAAAAAJEFEOEEEOKCEAGCI</imageResource>
+	</resources>
+</visualization></chart></chartTitle><pivotTable subType="CovariancesOfFixedCoefficients" text="Covariances of Fixed Coefficients"><footnote><note text="Target: ybin"/></footnote><caption text="Probability distribution: BinomialLink function: Logit"/><dimension axis="row" text="Model Term"><category text="Intercept"><dimension axis="column" text="Model Term"><category text="Intercept"><cell decimals="5" format="g" number="0.0034950224976194" text=".00350"/></category><category text="x1"><cell decimals="5" format="g" number="-0.0001147012851295" text="-.00011"/></category><category text="x2"><cell decimals="5" format="g" number="1.505766864891e-05" text="1.5058E-005"/></category></dimension></category><category text="x1"><dimension axis="column" text="Model Term"><category text="Intercept"><cell decimals="5" format="g" number="-0.0001147012851295" text="-.00011"/></category><category text="x1"><cell decimals="5" format="g" number="0.0023914615942119" text=".00239"/></category><category text="x2"><cell decimals="5" format="g" number="-0.00051066952898292" text="-.00051"/></category></dimension></category><category text="x2"><dimension axis="column" text="Model Term"><category text="Intercept"><cell decimals="5" format="g" number="1.505766864891e-05" text="1.5058E-005"/></category><category text="x1"><cell decimals="5" format="g" number="-0.00051066952898292" text="-.00051"/></category><category text="x2"><cell decimals="5" format="g" number="0.0028816609739873" text=".00288"/></category></dimension></category></dimension></pivotTable><pivotTable subType="CorrelationsOfFixedCoefficients" text="Correlations of Fixed Coefficients"><footnote><note text="Target: ybin"/></footnote><caption text="Probability distribution: BinomialLink function: Logit"/><dimension axis="row" text="Model Term"><category text="Intercept"><dimension axis="column" text="Model Term"><category text="Intercept"><cell decimals="3" number="1" text="1.000"/></category><category text="x1"><cell decimals="3" number="-0.039674511730367" text="-.040"/></category><category text="x2"><cell decimals="3" number="0.0047447278358836" text=".005"/></category></dimension></category><category text="x1"><dimension axis="column" text="Model Term"><category text="Intercept"><cell decimals="3" number="-0.039674511730367" text="-.040"/></category><category text="x1"><cell decimals="3" number="1" text="1.000"/></category><category text="x2"><cell decimals="3" number="-0.19453009415501" text="-.195"/></category></dimension></category><category text="x2"><dimension axis="column" text="Model Term"><category text="Intercept"><cell decimals="3" number="0.0047447278358836" text=".005"/></category><category text="x1"><cell decimals="3" number="-0.19453009415501" text="-.195"/></category><category text="x2"><cell decimals="3" number="1" text="1.000"/></category></dimension></category></dimension></pivotTable><heading text="Random Effect Covariances"><pivotTable subType="RandomEffects" text="Random Effect Block 1"><caption text="Covariance Structure: Variance componentsSubject Specification: id"/><dimension axis="row" text="Random Effect Block"><category text="Intercept"><dimension axis="column" text="Random Effect Block Column"><category text="Intercept"><cell decimals="3" number="0.0960181447148" text=".096"/></category></dimension></category></dimension></pivotTable></heading><heading text="Covariance Parameters"><pivotTable subType="CovarianceParametersSummary" text="Covariance Parameters Summary"><caption text="Common subjects are based on the subject specifications for the residual and random effects and are used to chunk the data for better performance."/><dimension axis="row" text="Content"><group text="Covariance Parameters"><category text="Residual Effect"><cell number="0" text="0"/></category><category text="Random Effects"><cell number="1" text="1"/></category></group><group text="Design Matrix Columns"><category text="Fixed Effects"><cell number="3" text="3"/></category><category text="Random Effects"><cell number="1" text="1"><footnote><note text="This is the number of columns per common subject."/></footnote></cell></category></group><category text="Common Subjects"><cell number="100" text="100"/></category></dimension></pivotTable><pivotTable subType="ResidualEffect" text="Residual Effect"><caption text="Covariance Structure: Scaled IdentitySubject Specification: (None)"/><dimension axis="row" text="Residual Effect"><category text="Variance"><dimension axis="column" text="Residual Effect Covariance Column"><category text="Estimate"><cell decimals="3" format="g" number="1" text="1.000"/></category><category text="Std. Error"><cell format="g" null="true" text="."/></category><category text="Z"><cell format="g" null="true" text="."/></category><category text="Sig."><cell null="true" text="."/></category><group text="95% Confidence Interval"><category text="Lower"><cell format="g" null="true" text="."/></category><category text="Upper"><cell format="g" null="true" text="."/></category></group></dimension></category></dimension></pivotTable><pivotTable subType="CovarianceParameters" text="Random Effect"><caption text="Covariance Structure: Variance componentsSubject Specification: id"/><dimension axis="row" text="Random Effect Covariance"><category text="Var(Intercept)"><dimension axis="column" text="Random Effect Covariance Column"><category text="Estimate"><cell decimals="3" format="g" number="0.0960181447148" text=".096"/></category><category text="Std. Error"><cell decimals="3" format="g" number="0.05087028408876" text=".051"/></category><category text="Z"><cell decimals="3" format="g" number="1.8875095045128" text="1.888"/></category><category text="Sig."><cell decimals="3" number="0.059091829185595" text=".059"/></category><group text="95% Confidence Interval"><category text="Lower"><cell decimals="3" format="g" number="0.033992873335421" text=".034"/></category><category text="Upper"><cell decimals="3" format="g" number="0.27121814691862" text=".271"/></category></group></dimension></category></dimension></pivotTable></heading></command><textBlock text="Log"><line>OMSEND TAG='glmm2'.</line></textBlock></outputTree>

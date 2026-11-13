@@ -46,3 +46,12 @@ button {
 button:disabled { opacity: .5; cursor: default; }
 .msg { margin-top: 14px; }
 .msg.bad { color: var(--bad); }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.tabs button {
+  margin: 0; padding: 6px 14px; background: transparent; color: var(--ink);
+  border: 1px solid var(--line); border-radius: 999px;
+}
+.tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.tabs button:hover, .tabs button:focus-visible { border-color: var(--accent); }
+.pane > p:first-child { margin-top: 0; }
+.pane pre + p { margin-top: 14px; }

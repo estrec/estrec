@@ -28,14 +28,65 @@
   </ul>
 
   <h2>Write a record</h2>
-  <p>Python, the reference validator, writer and redactor:</p>
-  <pre>pip install "estrec[jsonschema] @ git+https://github.com/estrec/estrec"
+  <div class="tabs" role="tablist" aria-label="Install estrec for">
+    <button type="button" role="tab" id="tab-python" aria-controls="pane-python" aria-selected="true">Python</button>
+    <button type="button" role="tab" id="tab-r" aria-controls="pane-r" aria-selected="false" tabindex="-1">R</button>
+    <button type="button" role="tab" id="tab-stata" aria-controls="pane-stata" aria-selected="false" tabindex="-1">Stata</button>
+    <button type="button" role="tab" id="tab-other" aria-controls="pane-other" aria-selected="false" tabindex="-1">Other tools</button>
+  </div>
+  <section class="pane" role="tabpanel" id="pane-python" aria-labelledby="tab-python">
+    <p>The reference validator, writer and redactor:</p>
+    <pre>pip install "estrec[jsonschema] @ git+https://github.com/estrec/estrec"
 estrec validate model.estrec.json</pre>
-  <p>Without git (the command above needs it on your PATH):</p>
-  <pre>pip install "estrec[jsonschema] @ https://github.com/estrec/estrec/archive/refs/heads/main.zip"</pre>
-  <p>R, from fixest fits:</p>
-  <pre>remotes::install_github("estrec/estrec", subdir = "r")
+    <p>Without git (the command above needs it on your PATH):</p>
+    <pre>pip install "estrec[jsonschema] @ https://github.com/estrec/estrec/archive/refs/heads/main.zip"</pre>
+  </section>
+  <section class="pane" role="tabpanel" id="pane-r" aria-labelledby="tab-r">
+    <p>From fixest fits (<code>feols</code>, <code>feglm</code>, <code>fepois</code>):</p>
+    <pre>remotes::install_github("estrec/estrec", subdir = "r")
 estrec::write_estimation(fit, "fit.estrec.json")</pre>
+  </section>
+  <section class="pane" role="tabpanel" id="pane-stata" aria-labelledby="tab-stata">
+    <p>Stata 16 or later. Run <code>estrec write</code> right after an estimation command
+    (<code>regress</code>, <code>reghdfe</code>, <code>ivreghdfe</code>, <code>logit</code> and
+    <a href="https://github.com/estrec/estrec/tree/main/stata">others</a>):</p>
+    <pre>net install estrec, from("https://raw.githubusercontent.com/estrec/estrec/main/stata") replace
+regress price mpg weight, vce(cluster rep78)
+estrec write using "price.estrec.json", replace</pre>
+  </section>
+  <section class="pane" role="tabpanel" id="pane-other" aria-labelledby="tab-other">
+    <p>SPSS, SAS, Julia and other tools don't have a writer yet. A record is plain JSON, so any
+    tool can write one by following the
+    <a href="https://github.com/estrec/estrec/blob/main/spec/estrec.md">specification</a>; the
+    <a href="https://github.com/estrec/estrec/tree/main/converters">converters</a> are short
+    worked examples, and the Python validator checks the result. If you'd like a writer for
+    your tool, say so on <a href="https://github.com/estrec/estrec/issues">GitHub</a>.</p>
+  </section>
+  <script>
+  (function () {
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('.tabs [role=tab]'));
+    function show(tab, focus) {
+      tabs.forEach(function (t) {
+        var on = t === tab;
+        t.setAttribute('aria-selected', on ? 'true' : 'false');
+        t.tabIndex = on ? 0 : -1;
+        document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+      });
+      if (focus) tab.focus();
+      try { localStorage.setItem('estrec-tool', tab.id); } catch (e) {}
+    }
+    tabs.forEach(function (t, i) {
+      t.addEventListener('click', function () { show(t, false); });
+      t.addEventListener('keydown', function (e) {
+        var k = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+        if (k) { e.preventDefault(); show(tabs[(i + k + tabs.length) % tabs.length], true); }
+      });
+    });
+    var saved = null;
+    try { saved = document.getElementById(localStorage.getItem('estrec-tool')); } catch (e) {}
+    show(tabs.indexOf(saved) >= 0 ? saved : tabs[0], false);
+  })();
+  </script>
 
   <h2>Published tables</h2>
   <p>A table published from the viewer gets an unlisted link at <code>estrec.org/t/…</code>.

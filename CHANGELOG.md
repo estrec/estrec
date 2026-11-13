@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- R: models fixest couldn't estimate (NA models, kept in `split`/multiple-outcome fits, e.g. a
+  logit subsample whose outcome is all 0) are skipped with a warning, and fail clearly on
+  their own. A variance matrix without fixest's `vcov_type` label now stops with a message
+  naming the fixest version, instead of "subscript out of bounds" in the cluster parser
+  (reported by a beta tester with a logit).
 - Table reference / omitted rows (Ted 2026-11-08, for an event study's reference period or a
   term a model leaves out): a row's `"reference": true` (or the text to show, `"(omitted)"`)
   shows `—` where a column lacks the term, blanks its other lines, and draws a hollow dot at

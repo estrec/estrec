@@ -134,7 +134,7 @@ as_estimation_test.data.frame <- function(x, record = NULL, call = NULL, ...)
 .est_wald_vcov <- function(label) {
   type <- .fx_vcov_type(label)
   cl <- regmatches(label, regexpr("(?<=\\().*(?=\\))", label, perl = TRUE))
-  if (type == "CRV1" && length(cl)) list(type = type, cluster = I(trimws(strsplit(cl, "&", fixed = TRUE)[[1]])))
+  if (identical(type, "CRV1") && length(cl)) list(type = type, cluster = I(trimws(strsplit(cl, "&", fixed = TRUE)[[1]])))
   else type
 }
 

@@ -7,7 +7,14 @@
 # methods do. Without it, the drops are recorded as `other`.
 
 to_estimation.fixest_multi <- function(fit, ...) {
-  lapply(as.list(fit), to_estimation.fixest, ...)
+  fits <- as.list(fit)
+  failed <- vapply(fits, function(f) isTRUE(f$NA_model), logical(1))
+  if (all(failed)) stop("fixest couldn't estimate any of the models", call. = FALSE)
+  if (any(failed))
+    warning("fixest couldn't estimate model", if (sum(failed) > 1) "s", " ",
+            paste(which(failed), collapse = ", "), " of ", length(fits), " (no coefficients); ",
+            "no record is written for ", if (sum(failed) > 1) "them" else "it", call. = FALSE)
+  lapply(fits[!failed], to_estimation.fixest, ...)
 }
 
 to_estimation.fixest <- function(fit, data = NULL, vcov = NULL, conf_level = 0.95,
@@ -20,6 +27,9 @@ to_estimation.fixest <- function(fit, data = NULL, vcov = NULL, conf_level = 0.9
   is_glm <- fit$method %in% c("feglm", "fepois")
   if (!is_glm && fit$method != "feols")
     stop("estrec writes feols, feglm and fepois fits; ", fit$method, " isn't supported yet",
+         call. = FALSE)
+  if (isTRUE(fit$NA_model))
+    stop("fixest couldn't estimate this model (no coefficients), so there's nothing to record",
          call. = FALSE)
   is_iv <- isTRUE(fit$is_iv)
   if (is_iv && !identical(fit$iv_stage, 2))
@@ -301,6 +311,7 @@ to_estimation.fixest <- function(fit, data = NULL, vcov = NULL, conf_level = 0.9
 }
 
 .fx_vcov_type <- function(label) {
+  if (!.fx_is_label(label)) return(NULL)
   if (grepl("^IID", label, ignore.case = TRUE)) return("iid")
   if (grepl("^Heteroskedasticity", label)) return("HC1")
   if (grepl("^Clustered|^Twoway|^Multiway", label)) return("CRV1")
@@ -310,11 +321,15 @@ to_estimation.fixest <- function(fit, data = NULL, vcov = NULL, conf_level = 0.9
   label
 }
 
+# fixest labels the vcov in attr "vcov_type"; an unlabeled one stops in .fx_vcov with a clear error
+.fx_is_label <- function(label) is.character(label) && length(label) == 1L && !is.na(label) && nzchar(label)
+
 .fx_cluster_vars <- function(fit, label) {
   flag <- fit$summary_flags$vcov
   if (inherits(flag, "formula")) return(all.vars(flag))
   if (is.null(fit$summary_flags) && !is.null(fit$call$cluster))
     return(tryCatch(all.vars(as.formula(fit$call$cluster)), error = function(e) character(0)))
+  if (!.fx_is_label(label)) return(character(0))
   m <- regmatches(label, regexec("^Clustered \\((.+)\\)$", label))[[1]]  # the default: first FE
   if (length(m) == 2L) return(trimws(strsplit(m[2], "&", fixed = TRUE)[[1]]))
   character(0)
@@ -323,6 +338,10 @@ to_estimation.fixest <- function(fit, data = NULL, vcov = NULL, conf_level = 0.9
 .fx_vcov <- function(f, data, used, default) {
   vc <- vcov(f, attr = TRUE)
   label <- attr(vc, "vcov_type")
+  if (!.fx_is_label(label))
+    stop("fixest returned the variance matrix without its type label (fixest ",
+         as.character(utils::packageVersion("fixest")), "); estrec is written against fixest 0.14. ",
+         "Please update fixest, or report this with the model call", call. = FALSE)
   clusters <- .fx_cluster_vars(f, label)
   out <- list(kind = "matrix", labels = I(colnames(vc)),
               data = lapply(seq_len(nrow(vc)), function(i) I(unname(vc[i, ]))),

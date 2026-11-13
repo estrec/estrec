@@ -239,6 +239,24 @@ check(r, "quasipoisson")
 stopifnot(isTRUE(r$meta$estimator$quasi), r$structures$vcov[[1]]$df_t == df.residual(q),
           is.null(r$metrics$log_lik), !identical(r$metrics$dispersion, 1))
 
+# fixest keeps models it couldn't estimate in multiple estimations (NA models, no coefficients):
+# no record for those, with a warning; one alone fails clearly
+d$y0 <- 0L
+m <- suppressMessages(feglm(c(I(y > 0), y0) ~ x | yr, d, family = binomial, cluster = ~id))
+w <- NULL
+rs <- withCallingHandlers(to_estimation(m), warning = function(e) { w <<- conditionMessage(e); invokeRestart("muffleWarning") })
+stopifnot(length(rs) == 1L, grepl("couldn't estimate model 2 of 2", w, fixed = TRUE))
+e <- try(to_estimation(m[[2]]), silent = TRUE)
+stopifnot(inherits(e, "try-error"), grepl("couldn't estimate this model", e, fixed = TRUE))
+# a vcov without fixest's "vcov_type" label stops with a clear message, not in the label parser
+vcov.estrec_bare <- function(object, ...) {
+  v <- fixest:::vcov.fixest(object, ...); attributes(v) <- attributes(v)[c("dim", "dimnames")]; v
+}
+registerS3method("vcov", "estrec_bare", vcov.estrec_bare)
+lg <- m[[1]]; class(lg) <- c("estrec_bare", class(lg))
+e <- try(to_estimation(lg), silent = TRUE)
+stopifnot(inherits(e, "try-error"), grepl("without its type label", e, fixed = TRUE))
+
 # Unsupported fits fail clearly
 stopifnot(inherits(try(to_estimation(fenegbin(cnt ~ x | id, d)), silent = TRUE), "try-error"),
           inherits(try(to_estimation(lm(y ~ x, d)), silent = TRUE), "try-error"))

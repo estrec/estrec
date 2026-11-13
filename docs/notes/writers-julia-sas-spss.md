@@ -21,7 +21,10 @@ MixedModels.jl.
 - **Julia** on valiant: Julia under `/opt`, packages in `/srv/dfeols/.julia` (owned by
   dfclaude, added by Ted; the sandbox has no package registry). Tests in `julia/test/` and a
   Python test like `tests/test_stata.py` that validates every record.
-- **SAS and SPSS** on university machines (Ted or a colleague): neither runs on valiant.
+- **SAS** on valiant (Ted installing SAS 9.4 for Linux, 2026-11-13): Claude runs the probe
+  and the tests in batch, with WORK under `tmp/` and modest MEMSIZE/CPUCOUNT (shared machine).
+- **SPSS** on Ted's laptop (no Linux licence): Ted runs the probe and the test programs.
+  For both:
   1. **Probe** (`sas/dev/probe.sas`, `spss/dev/probe.sps`): runs every target procedure on
      `tests/data/writers_probe.csv` and saves all output tables (SAS: ODS OUTPUT to CSV at
      best32.; SPSS: OMS OXML). The writers are built against that real output.

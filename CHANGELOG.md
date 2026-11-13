@@ -3,7 +3,8 @@
 ## Unreleased
 
 - SAS: `sas/estrec.sas`, `%estrec_begin` / `%estrec_end(out=)`: one record per REG, GLM,
-  SURVEYREG, LOGISTIC, SURVEYLOGISTIC or GENMOD (incl. GEE) run in between, read from an
+  SURVEYREG, LOGISTIC, SURVEYLOGISTIC, GENMOD (incl. GEE), MIXED, GLIMMIX, PANEL or SYSLIN
+  run in between, read from an
   ODS document; JSON and the RFC 8785 digest written in a DATA step (15 significant
   digits). Tested in SAS 9.4M9 (`tests/test_sas.py`); numbers checked against R. Front page:
   a SAS tab.

@@ -203,7 +203,7 @@ options append=(cmplib=work._estrec_f);
 %macro _er_write(data, file, pretty=1);
   data _null_;
     set &data end=last;
-    file "&file" recfm=n encoding='utf-8' lrecl=32767;
+    file "&file" recfm=n lrecl=32767;   /* bytes as written: text is converted to UTF-8 below */
     length piece $ 32767 c $ 200 val $ 32767;
     array comp{0:40} $ 200 _temporary_;
     array isarr{0:40} _temporary_;
@@ -233,7 +233,9 @@ options append=(cmplib=work._estrec_f);
       used{j - 1} = 1;
       if &pretty then do; piece = cat(nl, repeat(' ', j - 2)); if j = 1 then piece = nl; len = j; put piece $varying32767. len @; end;
       if not isarr{j - 1} then do;
-        piece = cats('"', er_str(c), '":'); if &pretty then piece = catt(piece, ' ');
+        piece = cats('"', er_str(c), '":');
+        %if %qupcase(&sysencoding) ne %str(UTF-8) %then %do; piece = kcvt(piece, "&sysencoding", 'utf-8'); %end;
+        if &pretty then piece = catt(piece, ' ');
         len = lengthn(piece) + &pretty; put piece $varying32767. len @;
       end;
       isarr{j} = (substr(scan(path, j + 1, '/'), 1, 1) = '#');
@@ -247,11 +249,16 @@ options append=(cmplib=work._estrec_f);
     if &pretty then do; piece = cat(nl, repeat(' ', n - 2)); if n = 1 then piece = nl; len = n; put piece $varying32767. len @; end;
     c = scan(path, n, '/');
     if not isarr{depth} then do;
-      piece = cats('"', er_str(c), '":'); if &pretty then piece = catt(piece, ' ');
+      piece = cats('"', er_str(c), '":');
+      %if %qupcase(&sysencoding) ne %str(UTF-8) %then %do; piece = kcvt(piece, "&sysencoding", 'utf-8'); %end;
+      if &pretty then piece = catt(piece, ' ');
       len = lengthn(piece) + &pretty; put piece $varying32767. len @;
     end;
     if kind = 's' then val = cats('"', er_str(sval), '"');
     else val = strip(sval);
+    %if %qupcase(&sysencoding) ne %str(UTF-8) %then %do;
+      if kind = 's' then val = kcvt(val, "&sysencoding", 'utf-8');
+    %end;
     len = lengthn(val); put val $varying32767. len @;
     if last then do;
       do j = depth to 1 by -1;
@@ -841,11 +848,14 @@ options append=(cmplib=work._estrec_f);
     dropped = ifc((missing(StdErr) or StdErr = 0) and Estimate = 0, 'reference', '');
     keep term est se stat p lo hi df dropped var1 lev1 var2 lev2;
   run;
+  %if not %_er_has(_er_cb) %then %do; data work._er_cov; stop; run; %end;
+  %else %do;
   data work._er_cov; set work._er_cb;
     array v{*} _numeric_; array c{200}; _j = 0;
     do _i = 1 to dim(v); if upcase(vname(v{_i})) not in ('_RUN_') then do; _j + 1; c{_j} = v{_i}; end; end;
     keep c:;
   run;
+  %end;
   %let _er_ncl =; %let _er_nstr =; %let _er_sw =; %let _er_dfr =;
   data _null_; set work._er_ds;
     if Label1 = 'Number of Observations' then call symputx('_er_nobs', nValue1);
@@ -915,11 +925,14 @@ options append=(cmplib=work._estrec_f);
     dropped = '';
     keep term est se stat p lo hi df dropped var1 lev1 var2 lev2;
   run;
+  %if not %_er_has(_er_cb) %then %do; data work._er_cov; stop; run; %end;
+  %else %do;
   data work._er_cov; set work._er_cb;
     array v{*} _numeric_; array c{200}; _j = 0;
     do _i = 1 to dim(v); if upcase(vname(v{_i})) not in ('_RUN_') then do; _j + 1; c{_j} = v{_i}; end; end;
     keep c:;
   run;
+  %end;
   data _null_; set work._er_no;
     if Label =: 'Number of Observations Read' then call symputx('_er_rows', N);
     if Label =: 'Number of Observations Used' then call symputx('_er_nobs', N);
@@ -956,6 +969,423 @@ options append=(cmplib=work._estrec_f);
   %_er_endpart(num)
 %mend;
 
+
+/* variance components from work._er_vc (term, est, se, stat, p, grp, vterm, vtype) */
+%macro _er_vcrows;
+  %_er_part(vcrows)
+    set work._er_vc;
+    length base $ 60;
+    _k = &_er_npar + _n_;
+    base = cats('parameters/#', put(_k, z4.));
+    %_er_s(cats(base, '/term'), term);
+    %_er_n(cats(base, '/estimate'), est);
+    if not missing(se) then do; %_er_n(cats(base, '/std_error'), se); end;
+    if not missing(stat) then do; %_er_n(cats(base, '/statistic'), stat); end;
+    if not missing(p) then do; %_er_n(cats(base, '/p_value'), p); end;
+    %_er_s(cats(base, '/component'), 'random');
+    %_er_s(cats(base, '/group'), grp);
+    %_er_s(cats(base, '/vc/group'), grp);
+    %_er_s(cats(base, '/vc/terms/#0001'), vterm);
+    %_er_s(cats(base, '/vc/type'), vtype);
+  %_er_endpart(vcrows)
+%mend;
+
+/* terms of a fixed-effects solution with class columns: Effect plus the class levels.
+   %_er_classcols(ds) (outside a DATA step) finds the columns; %_er_effect_terms (inside one)
+   builds term. */
+%macro _er_classcols(ds);
+  %global _er_ccols;
+  %let _er_ccols =;
+  proc sql noprint;
+    select name into :_er_ccols separated by ' ' from dictionary.columns
+    where libname = 'WORK' and memname = upcase("&ds") and type = 'char'
+      and upcase(name) not in ('EFFECT', '_RUN_', 'ROW');
+  quit;
+%mend;
+%macro _er_effect_terms;
+  length _lv $ 200;
+  _lv = '';
+  %local q;
+  %do q = 1 %to %sysfunc(countw(&_er_ccols, %str( )));
+    if strip(%scan(&_er_ccols, &q, %str( ))) not in ('', '_') then _lv = catx(' ', _lv, %scan(&_er_ccols, &q, %str( )));
+  %end;
+  term = catx(' ', Effect, _lv);
+%mend;
+
+/* ---- MIXED */
+%macro _er_mixed(dir);
+  %_er_classvars(&dir)
+  %_er_get(&dir, SolutionF, _er_pe)
+  %_er_get(&dir, CovB, _er_cb)
+  %_er_get(&dir, CovParms, _er_cp)
+  %_er_get(&dir, FitStatistics, _er_fs)
+  %_er_get(&dir, Dimensions, _er_dm)
+  %_er_get(&dir, NObs, _er_no)
+  %_er_get(&dir, ModelInfo, _er_mi)
+  %_er_get(&dir, ConvergenceStatus, _er_cs)
+  %if not %_er_has(_er_pe) %then %do; %let _er_skip = MIXED printed no fixed-effects solution (add SOLUTION to MODEL); %return; %end;
+  %_er_classcols(_er_pe)
+  data work._er_par; set work._er_pe;
+    length term var1 lev1 var2 lev2 $ 200 dropped $ 12;
+    %_er_effect_terms
+    %_er_split(term, )
+    est = Estimate; se = StdErr; stat = tValue; p = Probt; df = DF; lo = .; hi = .;
+    dropped = ifc(missing(StdErr) and Estimate = 0, 'reference', '');
+    keep term est se stat p lo hi df dropped var1 lev1 var2 lev2;
+  run;
+  data work._er_cov; set work._er_cb;
+    array v{*} Col:; array c{200}; do _i = 1 to dim(v); c{_i} = v{_i}; end; keep c:;
+  run;
+  %let _er_meth = reml; %let _er_ddfm = containment; %let _er_subj =; %let _er_nsub =;
+  data _null_; set work._er_mi;
+    if Descr = 'Dependent Variable' then call symputx('_er_resp', Value);
+    if Descr = 'Data Set' then call symputx('_er_dataset', Value);
+    if Descr = 'Estimation Method' then call symputx('_er_meth', lowcase(Value));
+    if Descr = 'Subject Effect' then call symputx('_er_subj', Value);
+    if Descr = 'Fixed Effects SE Method' and index(Value, 'Kenward') then call symputx('_er_ddfm', 'kenward_roger');
+  run;
+  data _null_; set work._er_dm; if Descr = 'Subjects' then call symputx('_er_nsub', Value); run;
+  data _null_; set work._er_no;
+    if Label =: 'Number of Observations Read' then call symputx('_er_rows', N);
+    if Label =: 'Number of Observations Used' then call symputx('_er_nobs', N);
+  run;
+  %let _er_m2ll =; %let _er_aic =; %let _er_bic =;
+  data _null_; set work._er_fs;
+    if index(Descr, 'Log Likelihood') then call symputx('_er_m2ll', put(Value, hex16.));
+    if Descr =: 'AIC ' then call symputx('_er_aic', put(Value, hex16.));
+    if Descr =: 'BIC ' then call symputx('_er_bic', put(Value, hex16.));
+  run;
+  %let _er_conv = 1;
+  data _null_; set work._er_cs; call symputx('_er_conv', Status = 0); run;
+  data work._er_vc; set work._er_cp;
+    length term grp vterm $ 200 vtype $ 4;
+    est = Estimate;
+    se = %if %_er_hasvar(_er_cp, StdErr) %then StdErr; %else .;;
+    stat = %if %_er_hasvar(_er_cp, ZValue) %then ZValue; %else .;;
+    p = %if %_er_hasvar(_er_cp, ProbZ) %then ProbZ; %else .;;
+    if upcase(CovParm) = 'RESIDUAL' then do; grp = 'Residual'; vterm = '(Residual)'; term = 'Residual'; end;
+    else do;
+      grp = strip(%if %_er_hasvar(_er_cp, Subject) %then Subject; %else ''; );
+      vterm = ifc(upcase(CovParm) = 'INTERCEPT', '(Intercept)', strip(CovParm));
+      term = catx(' ', CovParm, grp);
+    end;
+    vtype = ifc(index(upcase(CovParm), 'UN(') and scan(CovParm, 2, '(,)') ne scan(CovParm, 3, '(,)'), 'cov', 'var');
+    keep term est se stat p grp vterm vtype;
+  run;
+  proc sql noprint;
+    select count(*) into :_er_npar trimmed from work._er_par;
+    select count(*) into :_er_vcnose trimmed from work._er_vc where missing(se);
+  quit;
+  %let _er_family = mixed; %let _er_method = &_er_meth; %let _er_dist =; %let _er_link =;
+  %if &_er_vcnose = 0 %then %let _er_profiles = inference/0.1 mixed/0.1;
+  %else %let _er_profiles = mixed/0.1;
+  %if not &_er_conv %then %let _er_status = warning;
+  %_er_common
+  %_er_spec_sample(&_er_rows, &_er_nobs)
+  %_er_terms_rows
+  %_er_part(re)
+    %_er_s('specification/random_effects/#0001/group', "&_er_subj");
+    %_er_s('specification/random_effects/#0001/terms/#0001', '(Intercept)');
+    %_er_s('specification/options/df_method', "&_er_ddfm");
+    %_er_s('structures/random_effects/#0001/kind', 'object');
+    %_er_s('structures/random_effects/#0001/group', "&_er_subj");
+    %if %length(&_er_nsub) %then %_er_i('structures/random_effects/#0001/levels', &_er_nsub);;
+    %_er_s('structures/random_effects/#0001/terms/#0001', '(Intercept)');
+  %_er_endpart(re)
+  %_er_part(metrics)
+    %_er_i('metrics/nobs', &_er_nobs);
+    %if %length(&_er_m2ll) %then %do;
+      _m = input("&_er_m2ll", hex16.); _ll = -_m / 2;
+      %_er_nn('metrics/log_lik', _ll);
+      %if &_er_meth = reml %then %_er_nn('metrics/reml_criterion', _m);;
+    %end;
+    %if %length(&_er_aic) %then %_er_nn('metrics/aic', input("&_er_aic", hex16.));;
+    %if %length(&_er_bic) %then %_er_nn('metrics/bic', input("&_er_bic", hex16.));;
+    %_er_n('metrics/conf_level', 0.95);
+  %_er_endpart(metrics)
+  %_er_params
+  %_er_vcrows
+  %_er_vcov(type=iid, convention=SAS MIXED, formula=%str(model-based covariance of the fixed effects (DDFM=&_er_ddfm)), tooltype=model-based)
+  %_er_part(num)
+    %_er_s('structures/numerics/kind', 'object');
+    %_er_b('structures/numerics/iterative', 1);
+    %_er_s('structures/numerics/algorithm', 'newton_raphson');
+    %_er_b('structures/numerics/converged', &_er_conv);
+  %_er_endpart(num)
+  %if &_er_vcnose > 0 %then %let _er_msgs = &_er_msgs|vc_no_se;
+%mend;
+
+/* ---- GLIMMIX */
+%macro _er_glimmix(dir);
+  %_er_classvars(&dir)
+  %_er_get(&dir, ParameterEstimates, _er_pe)
+  %_er_get(&dir, CovB, _er_cb)
+  %_er_get(&dir, CovParms, _er_cp)
+  %_er_get(&dir, FitStatistics, _er_fs)
+  %_er_get(&dir, Dimensions, _er_dm)
+  %_er_get(&dir, NObs, _er_no)
+  %_er_get(&dir, ModelInfo, _er_mi)
+  %_er_get(&dir, ConvergenceStatus, _er_cs)
+  %if not %_er_has(_er_pe) %then %do; %let _er_skip = GLIMMIX printed no Parameter Estimates (add SOLUTION to MODEL); %return; %end;
+  %_er_classcols(_er_pe)
+  data work._er_par; set work._er_pe;
+    length term var1 lev1 var2 lev2 $ 200 dropped $ 12;
+    %_er_effect_terms
+    %_er_split(term, )
+    est = Estimate; se = StdErr; stat = tValue; p = Probt; df = DF; lo = .; hi = .;
+    dropped = ifc(missing(StdErr) and Estimate = 0, 'reference', '');
+    keep term est se stat p lo hi df dropped var1 lev1 var2 lev2;
+  run;
+  data work._er_cov; set work._er_cb;
+    array v{*} Col:; array c{200}; do _i = 1 to dim(v); c{_i} = v{_i}; end; keep c:;
+  run;
+  %let _er_meth = rspl; %let _er_subj =; %let _er_nsub =;
+  data _null_; set work._er_mi;
+    if Descr = 'Response Variable' then call symputx('_er_resp', Value);
+    if Descr = 'Data Set' then call symputx('_er_dataset', Value);
+    if Descr = 'Response Distribution' then call symputx('_er_dist',
+      ifc(lowcase(Value) in ('binary', 'binomial'), 'binomial', lowcase(compress(Value, ' '))));
+    if Descr = 'Link Function' then call symputx('_er_link', lowcase(Value));
+    if Descr = 'Variance Matrix Blocked By' then call symputx('_er_subj', Value);
+    if Descr = 'Likelihood Approximation' then call symputx('_er_meth', lowcase(compress(Value, ' ')));
+    if Descr = 'Estimation Technique' and index(Value, 'Pseudo') then call symputx('_er_meth', 'rspl');
+  run;
+  data _null_; set work._er_dm; if Descr =: 'Subjects' then call symputx('_er_nsub', Value); run;
+  data _null_; set work._er_no;
+    if Label =: 'Number of Observations Read' then call symputx('_er_rows', N);
+    if Label =: 'Number of Observations Used' then call symputx('_er_nobs', N);
+  run;
+  %let _er_m2ll =; %let _er_aic =; %let _er_bic =;
+  data _null_; set work._er_fs;
+    if Descr = '-2 Log Likelihood' then call symputx('_er_m2ll', put(Value, hex16.));
+    if Descr =: 'AIC ' then call symputx('_er_aic', put(Value, hex16.));
+    if Descr =: 'BIC ' then call symputx('_er_bic', put(Value, hex16.));
+  run;
+  %let _er_conv = 1;
+  data _null_; set work._er_cs; call symputx('_er_conv', Status = 0); run;
+  data work._er_vc; set work._er_cp;
+    length term grp vterm $ 200 vtype $ 4;
+    est = Estimate; se = %if %_er_hasvar(_er_cp, StdErr) %then StdErr; %else .;; stat = .; p = .;
+    grp = strip(%if %_er_hasvar(_er_cp, Subject) %then Subject; %else ''; );
+    if upcase(CovParm) = 'RESIDUAL' or upcase(CovParm) = 'SCALE' then do; grp = 'Residual'; vterm = '(Residual)'; end;
+    else vterm = ifc(upcase(CovParm) = 'INTERCEPT', '(Intercept)', strip(CovParm));
+    term = catx(' ', CovParm, grp);
+    vtype = 'var';
+    keep term est se stat p grp vterm vtype;
+  run;
+  proc sql noprint;
+    select count(*) into :_er_npar trimmed from work._er_par;
+    select count(*) into :_er_vcnose trimmed from work._er_vc where missing(se);
+    select max(df) into :_er_dfr trimmed from work._er_par;
+  quit;
+  %let _er_family = mixed; %let _er_method = &_er_meth;
+  %if &_er_vcnose = 0 %then %let _er_profiles = inference/0.1 mixed/0.1;
+  %else %let _er_profiles = mixed/0.1;
+  %if not &_er_conv %then %let _er_status = warning;
+  %_er_common
+  %_er_spec_sample(&_er_rows, &_er_nobs)
+  %_er_terms_rows
+  %_er_part(re)
+    %_er_s('specification/random_effects/#0001/group', "&_er_subj");
+    %_er_s('specification/random_effects/#0001/terms/#0001', '(Intercept)');
+    %_er_s('specification/options/df_method', 'containment');
+    %_er_s('structures/random_effects/#0001/kind', 'object');
+    %_er_s('structures/random_effects/#0001/group', "&_er_subj");
+    %if %length(&_er_nsub) %then %_er_i('structures/random_effects/#0001/levels', &_er_nsub);;
+    %_er_s('structures/random_effects/#0001/terms/#0001', '(Intercept)');
+  %_er_endpart(re)
+  %_er_part(metrics)
+    %_er_i('metrics/nobs', &_er_nobs);
+    %if %length(&_er_m2ll) %then %do; _ll = -input("&_er_m2ll", hex16.) / 2; %_er_nn('metrics/log_lik', _ll); %end;
+    %if %length(&_er_aic) %then %_er_nn('metrics/aic', input("&_er_aic", hex16.));;
+    %if %length(&_er_bic) %then %_er_nn('metrics/bic', input("&_er_bic", hex16.));;
+    %_er_n('metrics/conf_level', 0.95);
+  %_er_endpart(metrics)
+  %_er_params
+  %_er_vcrows
+  %_er_vcov(type=iid, convention=SAS GLIMMIX, formula=%str(model-based covariance of the fixed effects), tooltype=model-based)
+  %_er_part(num)
+    %_er_s('structures/numerics/kind', 'object');
+    %_er_b('structures/numerics/iterative', 1);
+    %_er_s('structures/numerics/algorithm', "&_er_meth");
+    %_er_b('structures/numerics/converged', &_er_conv);
+  %_er_endpart(num)
+  %if &_er_vcnose > 0 %then %let _er_msgs = &_er_msgs|vc_no_se;
+%mend;
+
+/* ---- PANEL (SAS/ETS) */
+%macro _er_panel(dir);
+  %_er_get(&dir, ParameterEstimates, _er_pe)
+  %_er_get(&dir, FitStatistics, _er_fs)
+  %_er_get(&dir, ModelDescription, _er_md)
+  %_er_get(&dir, FixedEffectsTest, _er_ft)
+  %_er_get(&dir, VarianceComponents, _er_vcm)
+  %_er_get(&dir, CovB, _er_cb)
+  %_er_get(&dir, NObs, _er_no)
+  %if not %_er_has(_er_pe) %then %do; %let _er_skip = PANEL printed no Parameter Estimates; %return; %end;
+  data work._er_par; set work._er_pe;
+    length term var1 lev1 var2 lev2 $ 200 dropped $ 12;
+    term = strip(VarName);
+    var1 = ifc(upcase(term) = 'INTERCEPT', '(Intercept)', term); lev1 = ''; var2 = ''; lev2 = '';
+    est = Estimate; se = StdErr; stat = tValue; p = Probt; lo = .; hi = .; df = .;
+    dropped = ifc(DF = 0, 'collinear', '');
+    keep term est se stat p lo hi df dropped var1 lev1 var2 lev2;
+  run;
+  %if not %_er_has(_er_cb) %then %do; data work._er_cov; stop; run; %end;
+  %else %do;
+  data work._er_cov; set work._er_cb;
+    array v{*} _numeric_; array c{200}; _j = 0;
+    do _i = 1 to dim(v); if upcase(vname(v{_i})) not in ('_RUN_') then do; _j + 1; c{_j} = v{_i}; end; end;
+    keep c:;
+  run;
+  %end;
+  %let _er_pm =; %let _er_ncs =; %let _er_nts =; %let _er_vu =; %let _er_ve =;
+  data _null_; set work._er_md;
+    if Label1 = 'Estimation Method' then call symputx('_er_pm', upcase(cValue1));
+    if Label1 = 'Number of Cross Sections' then call symputx('_er_ncs', nValue1);
+    if Label1 = 'Time Series Length' then call symputx('_er_nts', nValue1);
+  run;
+  data _null_; set work._er_fs;
+    if Label1 = 'SSE' then call symputx('_er_rss', put(nValue1, hex16.));
+    if Label2 = 'DFE' then call symputx('_er_dfr', nValue2);
+    if Label2 = 'Root MSE' then call symputx('_er_sigma', put(nValue2, hex16.));
+    if Label1 = 'R-Square' then call symputx('_er_r2', put(nValue1, hex16.));
+  run;
+  %if %_er_has(_er_vcm) %then %do;
+    data _null_; set work._er_vcm;
+      if index(Label1, 'Cross Sections') then call symputx('_er_vu', put(nValue1, hex16.));
+      if index(Label1, 'Error') then call symputx('_er_ve', put(nValue1, hex16.));
+    run;
+  %end;
+  %let _er_nobs =;
+  %if %_er_has(_er_no) %then %do;
+    data _null_; set work._er_no; if Label =: 'Number of Observations Used' then call symputx('_er_nobs', N); run;
+  %end;
+  %if not %length(&_er_nobs) %then %do;
+    proc sql noprint; select count(*) into :_er_np2 trimmed from work._er_par where dropped = ''; quit;
+    %let _er_nobs = %eval(&_er_dfr + &_er_np2);
+    %if &_er_pm = FIXONE %then %let _er_nobs = %eval(&_er_nobs + &_er_ncs - 1);
+    %if &_er_pm = FIXTWO %then %let _er_nobs = %eval(&_er_nobs + &_er_ncs + &_er_nts - 2);
+  %end;
+  %let _er_family = linear; %let _er_dist =; %let _er_link =;
+  %let _er_method = %sysfunc(ifc(%index(&_er_pm, RAN), gls, ols));
+  %let _er_profiles = inference/0.1;
+  %_er_common
+  %_er_part(sample)
+    %_er_z('specification/sample/restriction');
+    %_er_eo('specification/sample/dropped');
+  %_er_endpart(sample)
+  %_er_terms_rows
+  %_er_part(opts)
+    %_er_s('specification/options/panel_method', "&_er_pm");
+    %if %index(&_er_pm, FIX) %then %do;
+      %_er_s('structures/fixed_effects/#0001/kind', 'object');
+      %_er_s('structures/fixed_effects/#0001/name', '(cross section)');
+      %_er_i('structures/fixed_effects/#0001/levels', &_er_ncs);
+      %if &_er_pm = FIXTWO %then %do;
+        %_er_s('structures/fixed_effects/#0002/kind', 'object');
+        %_er_s('structures/fixed_effects/#0002/name', '(time period)');
+        %_er_i('structures/fixed_effects/#0002/levels', &_er_nts);
+      %end;
+    %end;
+  %_er_endpart(opts)
+  %_er_part(metrics)
+    %_er_i('metrics/nobs', &_er_nobs);
+    %_er_i('metrics/df_residual', &_er_dfr);
+    %_er_nn('metrics/r2', input("&_er_r2", hex16.));
+    %_er_nn('metrics/rss', input("&_er_rss", hex16.));
+    %_er_nn('metrics/sigma', input("&_er_sigma", hex16.));
+    %if %length(&_er_vu) %then %_er_nn('metrics/variance_cross_section', input("&_er_vu", hex16.));;
+    %if %length(&_er_ve) %then %_er_nn('metrics/variance_error', input("&_er_ve", hex16.));;
+    %_er_n('metrics/conf_level', 0.95);
+  %_er_endpart(metrics)
+  %_er_params
+  %_er_vcov(type=iid, convention=SAS PANEL, formula=%str(OLS or GLS model-based covariance; K counts the absorbed effects (&_er_pm)), dft=&_er_dfr)
+  %if %_er_has(_er_ft) %then %do;
+    %_er_part(tests)
+      set work._er_ft;
+      %_er_s('tests/#0001/id', 't1');
+      %_er_s('tests/#0001/category', 'fixed_effects');
+      %_er_s('tests/#0001/name', 'f');
+      %_er_s('tests/#0001/origin', 'estimation');
+      %_er_n('tests/#0001/statistic', FValue);
+      %_er_s('tests/#0001/distribution', 'F');
+      %_er_i('tests/#0001/df1', NumDF);
+      %_er_i('tests/#0001/df2', DenDF);
+      %_er_n('tests/#0001/p_value', Prob);
+    %_er_endpart(tests)
+  %end;
+  %let _er_msgs = &_er_msgs|panel_ids;
+%mend;
+
+/* ---- SYSLIN (SAS/ETS): 2SLS and OLS equations; the first MODEL */
+%macro _er_syslin(dir);
+  %_er_get(&dir, ParameterEstimates, _er_pe)
+  %_er_get(&dir, FitStatistics, _er_fs)
+  %_er_get(&dir, ANOVA, _er_an)
+  %_er_get(&dir, ModelVars, _er_mv)
+  %_er_get(&dir, CovB, _er_cb)
+  %if not %_er_has(_er_pe) %then %do; %let _er_skip = SYSLIN printed no Parameter Estimates; %return; %end;
+  data work._er_par; set work._er_pe;
+    length term var1 lev1 var2 lev2 $ 200 dropped $ 12;
+    term = strip(Variable);
+    var1 = ifc(upcase(term) = 'INTERCEPT', '(Intercept)', term); lev1 = ''; var2 = ''; lev2 = '';
+    est = Estimate; se = StdErr; stat = tValue; p = Probt; lo = .; hi = .; df = .;
+    dropped = ifc(DF = 0, 'collinear', '');
+    keep term est se stat p lo hi df dropped var1 lev1 var2 lev2;
+  run;
+  %if not %_er_has(_er_cb) %then %do; data work._er_cov; stop; run; %end;
+  %else %do;
+  data work._er_cov; set work._er_cb;
+    array v{*} _numeric_; array c{200}; _j = 0;
+    do _i = 1 to dim(v); if upcase(vname(v{_i})) not in ('_RUN_') then do; _j + 1; c{_j} = v{_i}; end; end;
+    keep c:;
+  run;
+  %end;
+  data _null_; set work._er_an;
+    if Source = 'Error' then do; call symputx('_er_dfr', DF); call symputx('_er_rss', put(SS, hex16.)); end;
+    if Source = 'Corrected Total' then do; call symputx('_er_tss', put(SS, hex16.)); call symputx('_er_nobs', DF + 1); end;
+    if Source = 'Model' then do; call symputx('_er_F', put(FValue, hex16.)); call symputx('_er_Fp', put(ProbF, hex16.)); call symputx('_er_dfm', DF); end;
+  run;
+  data _null_; set work._er_fs;
+    if Label1 = 'Root MSE' then call symputx('_er_sigma', put(nValue1, hex16.));
+    if Label2 = 'R-Square' then call symputx('_er_r2', put(nValue2, hex16.));
+    if Label2 = 'Adj R-Sq' then call symputx('_er_ar2', put(nValue2, hex16.));
+  run;
+  %let _er_endo =; %let _er_inst =;
+  %if %_er_has(_er_mv) %then %do;
+    data _null_; set work._er_mv;
+      length _t $ 400;
+      array cv{*} _character_;
+      _t = '';
+      do _i = 1 to dim(cv); if vname(cv{_i}) ne 'Label1' then _t = catx(' ', _t, cv{_i}); end;
+      _l = lowcase(cats(of _character_));
+      if index(_l, 'endogenous') then call symputx('_er_endo', scan(_t, -1, ' '));
+      if index(_l, 'instrument') then call symputx('_er_inst', _t);
+    run;
+  %end;
+  %let _er_family = linear; %let _er_method = 2sls; %let _er_dist =; %let _er_link =;
+  %let _er_profiles = inference/0.1;
+  %_er_common
+  %_er_part(sample)
+    %_er_z('specification/sample/restriction');
+    %_er_eo('specification/sample/dropped');
+  %_er_endpart(sample)
+  %_er_terms_rows
+  %_er_part(metrics)
+    %_er_i('metrics/nobs', &_er_nobs);
+    %_er_i('metrics/df_residual', &_er_dfr);
+    %_er_nn('metrics/r2', input("&_er_r2", hex16.));
+    %_er_nn('metrics/adj_r2', input("&_er_ar2", hex16.));
+    %_er_nn('metrics/sigma', input("&_er_sigma", hex16.));
+    %_er_nn('metrics/rss', input("&_er_rss", hex16.));
+    %_er_n('metrics/conf_level', 0.95);
+  %_er_endpart(metrics)
+  %_er_params
+  %_er_vcov(type=iid, convention=SAS SYSLIN, formula=%str(2SLS: sigma^2 (Xhat%'Xhat)^-1, sigma^2 = RSS / (N - K)), dft=&_er_dfr)
+  %let _er_msgs = &_er_msgs|syslin_iv;
+%mend;
+
 /* ------------------------------------------------------------------ end */
 %macro estrec_end(out=, title=, identifying=NO);
   %local nproc i dir proc file nrec k stem ext;
@@ -963,7 +1393,8 @@ options append=(cmplib=work._estrec_f);
           _er_cmd _er_dataset _er_rows _er_nobs _er_status _er_skip _er_msgs _er_identifying
           _er_dfr _er_rss _er_tss _er_F _er_Fp _er_dfm _er_sigma _er_r2 _er_ar2 _er_full
           _er_m2ll _er_aic _er_bic _er_conv _er_ll _er_dev _er_pear _er_qic _er_disp _er_ncl
-          _er_subj _er_isgee _er_hcm _er_digest _er_strat _er_clv _er_wv _er_nstr _er_sw _er_pos;
+          _er_subj _er_isgee _er_hcm _er_digest _er_strat _er_clv _er_wv _er_nstr _er_sw _er_pos _er_npar _er_vcnose
+          _er_meth _er_ddfm _er_nsub _er_pm _er_ncs _er_nts _er_vu _er_ve _er_np2 _er_endo _er_inst;
   %if %length(&out) = 0 %then %do; %put ERROR: estrec: %nrstr(%estrec_end) needs OUT=; %return; %end;
   ods document close;
   %if not %sysfunc(exist(work._estrec, itemstor)) %then %do;
@@ -977,7 +1408,7 @@ options append=(cmplib=work._estrec_f);
   data work._er_procs; set work._er_list;
     where type = 'Dir' and countc(path, '\') = 1;
     length proc $ 32; proc = upcase(scan(path, 1, '\#'));
-    supported = proc in ('REG', 'GLM', 'SURVEYREG', 'LOGISTIC', 'SURVEYLOGISTIC', 'GENMOD');
+    supported = proc in ('REG', 'GLM', 'SURVEYREG', 'LOGISTIC', 'SURVEYLOGISTIC', 'GENMOD', 'MIXED', 'GLIMMIX', 'PANEL', 'SYSLIN');
   run;
   proc sql noprint;
     select count(*) into :nrec trimmed from work._er_procs where supported;
@@ -1007,6 +1438,10 @@ options append=(cmplib=work._estrec_f);
       %else %if &_er_cmd = GLM %then %_er_glm(&_er_dir);
       %else %if &_er_cmd = SURVEYREG %then %_er_surveyreg(&_er_dir);
       %else %if &_er_cmd = SURVEYLOGISTIC %then %_er_surveylogistic(&_er_dir);
+      %else %if &_er_cmd = MIXED %then %_er_mixed(&_er_dir);
+      %else %if &_er_cmd = GLIMMIX %then %_er_glimmix(&_er_dir);
+      %else %if &_er_cmd = PANEL %then %_er_panel(&_er_dir);
+      %else %if &_er_cmd = SYSLIN %then %_er_syslin(&_er_dir);
       %if %length(&_er_skip) %then %do;
         %put WARNING: estrec: no record for PROC &_er_cmd: &_er_skip..;
       %end;
@@ -1026,14 +1461,24 @@ options append=(cmplib=work._estrec_f);
 
 /* messages, digest (canonical form of the core sections, sha256), then the file */
 %macro _er_finish(file);
-  %if %index(&_er_msgs, no_vcov_matrix) %then %do;
-    %_er_part(msg)
-      %_er_s('meta/messages/#0001/level', 'info');
-      %_er_s('meta/messages/#0001/code', 'no_vcov_matrix');
-      %_er_s('meta/messages/#0001/source', 'estrec');
-      %_er_s('meta/messages/#0001/message', 'the procedure printed no covariance matrix of the estimates: the record has the variances (squared standard errors) and null covariances; ask for COVB to record it');
-    %_er_endpart(msg)
-    data work._er_rec; set work._er_rec; if path =: 'meta/messages' then part = 1.5; run;
+  %local m nm code text;
+  %let nm = 0;
+  %do m = 1 %to %sysfunc(countw(&_er_msgs, |));
+    %let code = %scan(&_er_msgs, &m, |);
+    %if &code = no_vcov_matrix %then %let text = the procedure printed no covariance matrix of the estimates: the record has the variances (squared standard errors) and null covariances, ask for COVB to record it;
+    %else %if &code = vc_no_se %then %let text = the variance components have no standard errors (add COVTEST), so the record claims mixed/0.1 but not inference/0.1;
+    %else %if &code = panel_ids %then %let text = PANEL reports the number of cross sections and time periods but not the ID variable names: the fixed effects are named (cross section) and (time period);
+    %else %if &code = syslin_iv %then %let text = SYSLIN prints no list of endogenous variables and instruments: the record has the structural equation only;
+    %else %let text =;
+    %if %length(&text) %then %do;
+      %let nm = %eval(&nm + 1);
+      %_er_part(msg&m)
+        %_er_s("meta/messages/#%sysfunc(putn(&nm, z4.))/level", 'info');
+        %_er_s("meta/messages/#%sysfunc(putn(&nm, z4.))/code", "&code");
+        %_er_s("meta/messages/#%sysfunc(putn(&nm, z4.))/source", 'estrec');
+        %_er_s("meta/messages/#%sysfunc(putn(&nm, z4.))/message", "&text");
+      %_er_endpart(msg&m)
+    %end;
   %end;
   /* canonical form: core sections, keys in code-unit order ('/' -> '01'x keeps parents first) */
   data work._er_canon; set work._er_rec;
@@ -1055,10 +1500,14 @@ options append=(cmplib=work._estrec_f);
       %_er_s('meta/core_digest/canonicalization', 'RFC8785');
       %_er_s('meta/core_digest/value', "&_er_digest");
     %_er_endpart(digest)
-    data work._er_rec; set work._er_rec; if path =: 'meta/core_digest' then part = 1.9; run;
   %end;
   %else %put NOTE: estrec: no core digest (SAS could not load OpenSSL for HASHING_FILE), estrec digest (Python) can add it.;
-  proc sort data=work._er_rec; by part seq; run;
+  /* sections in the format's order; within a section, the order the rows were built */
+  data work._er_rec; set work._er_rec;
+    _rank = whichc(scan(path, 1, '/'), 'schema', 'meta', 'specification', 'metrics', 'parameters',
+                   'structures', 'tests', 'provenance', 'history');
+  run;
+  proc sort data=work._er_rec; by _rank part seq; run;
   %_er_write(work._er_rec, &file, pretty=1)
   %put NOTE: estrec: wrote &file (PROC &_er_cmd).;
 %mend;

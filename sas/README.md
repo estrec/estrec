@@ -28,8 +28,10 @@ procedures it skipped. Options: `TITLE=`, `IDENTIFYING=YES` (also records the da
 | LOGISTIC | inference, glm | `MODEL / COVB` | iid |
 | SURVEYLOGISTIC | inference, glm | `MODEL / COVB` | cluster only: CRV1; strata or weights: Taylor |
 | GENMOD | inference, glm | `MODEL / COVB`; with `REPEATED ... / COVB` (GEE) | iid; GEE: cluster sandwich, no G/(G-1) |
-
-MIXED, GLIMMIX, PANEL and SYSLIN are next.
+| MIXED | mixed (and inference with `COVTEST`) | `MODEL / SOLUTION COVB`, `COVTEST` | model-based; per-coefficient df (DDFM) |
+| GLIMMIX | mixed (and inference when the variance components have SEs) | `MODEL / SOLUTION COVB` | model-based |
+| PANEL (SAS/ETS) | inference | | model-based; FIXONE/FIXTWO levels recorded as (cross section), (time period) |
+| SYSLIN (SAS/ETS) | inference | `2SLS` | 2SLS; the record has no list of endogenous variables or instruments |
 
 Notes:
 
@@ -40,6 +42,8 @@ Notes:
   says "no core digest", start SAS with `LD_LIBRARY_PATH` including the system library
   folder (e.g. `/usr/lib/x86_64-linux-gnu`), or add the digest later with the Python
   `estrec` package.
+- **Text.** Records are UTF-8; in a non-UTF-8 session (Windows SAS is often WLATIN1) text
+  is converted with KCVT.
 - **Convergence.** LOGISTIC's default criterion (GCONV=1E-8) stops earlier than R's glm;
   its estimates differ from glm's around the 4th or 5th significant digit. The record keeps
   SAS's numbers.

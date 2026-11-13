@@ -28,7 +28,7 @@ SAS = os.environ.get("ESTREC_SAS") or shutil.which("sas")
 
 pytestmark = pytest.mark.skipif(not SAS, reason="needs SAS ($ESTREC_SAS or sas on PATH)")
 
-INF, GLM = "inference/0.1", "glm/0.1"
+INF, GLM, MIX = "inference/0.1", "glm/0.1", "mixed/0.1"
 
 # (procedure step, profiles, vcov type, known warnings)
 CASES = [
@@ -42,6 +42,13 @@ CASES = [
     ("proc genmod data=probe; model cnt = x1 x2 / dist=poisson link=log; run;", [INF, GLM], "iid", []),
     # GEE reports QIC, not a likelihood
     ("proc genmod data=probe; class grp; model cnt = x1 x2 / dist=poisson link=log; repeated subject=grp / type=ind covb; run;", [INF, GLM], "CRV0", ["metrics.log_lik"]),
+    # no COVTEST: variance components without standard errors, so mixed/0.1 only
+    ("proc mixed data=probe method=reml; class id cat; model y = cat x1 x2 / solution covb ddfm=kr; random intercept / subject=id; run;", [MIX], "iid", []),
+    ("proc mixed data=probe method=reml covtest; class id cat; model y = cat x1 x2 / solution covb; random intercept / subject=id; run;", [INF, MIX], "iid", []),
+    ("proc glimmix data=probe method=laplace; class id; model ybin(event='1') = x1 x2 / dist=binary link=logit solution covb; random intercept / subject=id; run;", [INF, MIX], "iid", []),
+    ("proc panel data=probe; id id year; model y = x1 x2 / fixtwo; run;", [INF], "iid", []),
+    ("proc panel data=probe; id id year; model y = x1 x2 / ranone; run;", [INF], "iid", []),
+    ("proc syslin data=probe 2sls; endogenous x1; instruments z x2; model y = x1 x2; run;", [INF], "iid", []),
 ]
 
 
@@ -55,6 +62,7 @@ def records(tmp_path_factory):
     prog.write_text(f"""%include "{ROOT / 'sas' / 'estrec.sas'}";
 data probe; infile "{DATA}" dsd firstobs=2 truncover;
   input id year grp stratum psu cat x1 x2 z w y ybin cnt; run;
+proc sort data=probe; by id year; run;
 %estrec_begin;
 {steps}
 proc means data=probe; var y; run;
@@ -111,6 +119,26 @@ def test_numbers(records):
     gee = json.loads((out / "fit-9.estrec.json").read_text())
     v = gee["structures"]["vcov"][0]
     assert v["cluster"] == ["grp"] and v["n_clusters_min"] == 20 and gee["meta"]["estimator"]["method"] == "gee"
+
+
+def test_mixed_panel_syslin(records):
+    out, _ = records
+    mixed = json.loads((out / "fit-11.estrec.json").read_text())
+    p = {x["canonical"]["name"]: x for x in mixed["parameters"] if "canonical" in x and not x.get("dropped")}
+    assert p["x1"]["std_error"] == pytest.approx(0.022530760605352, rel=1e-5)   # SPSS MIXED, same model
+    vc = {x["vc"]["group"]: x["estimate"] for x in mixed["parameters"] if x.get("component") == "random"}
+    assert vc["id"] == pytest.approx(0.970729, rel=1e-4) and vc["Residual"] == pytest.approx(1.327431, rel=1e-4)
+    assert mixed["structures"]["random_effects"][0] == {"kind": "object", "group": "id", "levels": 100,
+                                                       "terms": ["(Intercept)"]}
+    kr = json.loads((out / "fit-10.estrec.json").read_text())
+    assert kr["specification"]["options"]["df_method"] == "kenward_roger"
+    assert any(m["code"] == "vc_no_se" for m in kr["meta"]["messages"])
+    fe = json.loads((out / "fit-13.estrec.json").read_text())
+    assert [f["levels"] for f in fe["structures"]["fixed_effects"]] == [100, 20]
+    assert {x["term"]: x["estimate"] for x in fe["parameters"]}["x1"] == pytest.approx(0.5476586219312, rel=1e-12)  # fixest
+    iv = json.loads((out / "fit-15.estrec.json").read_text())
+    assert iv["meta"]["estimator"]["method"] == "2sls"
+    assert {x["term"]: x["estimate"] for x in iv["parameters"]}["x1"] == pytest.approx(0.46541595892874, rel=1e-12)
 
 
 def test_numbers_text_is_canonical(records):

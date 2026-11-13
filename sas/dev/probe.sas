@@ -10,8 +10,9 @@
    A procedure your site doesn't license (e.g. SAS/ETS for PANEL) just logs an error; the
    rest still run. */
 
-%let csv = C:\temp\writers_probe.csv;   /* the data file */
-%let out = C:\temp\estrec_probe_sas;    /* created if missing; results go here */
+%global csv out;
+%if %length(&csv) = 0 %then %do; %let csv = C:\temp\writers_probe.csv; %end;  /* the data file */
+%if %length(&out) = 0 %then %do; %let out = C:\temp\estrec_probe_sas; %end;   /* created if missing; results go here */
 
 options dlcreatedir nonotes;
 libname _mk "&out"; libname _mk clear;
@@ -31,10 +32,11 @@ data probe_ts; set probe; run;   /* PANEL needs sorted cross-section/time */
 /* ods output for a list of table names, each to work.p_<tag>_<name> */
 %macro grab(tag, names);
   %local i n;
+  ods output clear;
   ods output
   %do i = 1 %to %sysfunc(countw(&names));
     %let n = %scan(&names, &i);
-    &n.(persist=proc)=p_&tag._&n
+    &n.(persist=run)=p_&tag._&n
   %end;
   ;
 %mend;

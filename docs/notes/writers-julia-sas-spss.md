@@ -83,3 +83,31 @@ subject variable's measurement level nominal (`probe2.sps`); it then gives pivot
   BIC). With TARGET_CATEGORY_ORDER=ASCENDING its signs are the opposite of LOGISTIC
   REGRESSION's: it models the other category, so the writer must record the modelled
   category (from the target's reference setting).
+
+## SAS probe findings (2026-11-13, SAS 9.4M9 on valiant, batch as dfclaude)
+
+SAS is at `/usr/local/SASHome/SASFoundation/9.4/sas` (licence to 30JUN2027: Base, STAT, ETS,
+IML, ...). Run batch with `-nodms -work tmp/sas/work -memsize 4G -cpucount 4`. The probe
+(`sas/dev/probe.sas`, paths settable before `%include`) runs clean; output in
+`tmp/sas/probe/` (one CSV per ODS table, `p_<model>_<table>.csv`, plus probe.log with the
+ODS trace).
+
+- ODS OUTPUT requests need `persist=run` (REG's run groups) and `ods output clear;` between
+  procedures: `persist=proc` carries a request into later procedures, which overwrite it.
+- Tables per procedure (as created): REG NObs ANOVA FitStatistics ParameterEstimates (with
+  HCStdErr/HCCMethod under `hcc`) CovB (model-based; the HC matrix needs `acov`: ACovEst);
+  GLM NObs OverallANOVA FitStatistics ModelANOVA ParameterEstimates (no CovB); SURVEYREG
+  DataSummary DesignSummary FitStatistics Effects ParameterEstimates CovB; LOGISTIC ModelInfo
+  NObs ResponseProfile ConvergenceStatus FitStatistics GlobalTests ModelANOVA (was Type3)
+  ParameterEstimates OddsRatios CovB; GENMOD ModelInfo NObs ClassLevels ModelFit
+  ConvergenceStatus ParameterEstimates CovB, with REPEATED GEEModInfo GEEEmpPEst GEERCov
+  (robust) GEENCov GEEFitCriteria; PANEL ModelDescription FitStatistics FixedEffectsTest /
+  VarianceComponents ParameterEstimates (covariance needs its option); SYSLIN ANOVA
+  FitStatistics ParameterEstimates; MIXED ModelInfo Dimensions NObs CovParms FitStatistics
+  SolutionF CovB Tests3; GLIMMIX the same with ParameterEstimates.
+- **Precision**: PROC JSON writes 12 significant digits, so the writer can't use it: it
+  writes the JSON in a DATA step. PROC EXPORT CSV keeps ~16 characters (10 significant
+  digits for small numbers), so the probe's CSVs are for layout, not values. No SAS format
+  prints all 17 digits: E32 gives 14, fixed w.d about 15 (10,000 random doubles: worst
+  relative error 1.5e-13 with one fixed rule). The writer picks, per number, the candidate
+  text (BEST32, E32, fixed w.d) that reads back closest to the double.

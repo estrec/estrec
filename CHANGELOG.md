@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Julia: EstRec.jl (`julia/`) writes records from FixedEffectModels.jl `reg` (OLS, IV, fixed
+  effects; iid, robust, clustered) and GLM.jl `lm`/`glm`, as package extensions. Tests in
+  `julia/test/` and `tests/test_julia.py` on the shared `tests/data/writers_probe.csv`.
+  Front page: a Julia tab.
 - Collections have no size limits of their own (Ted 2026-11-13): the 16 MB error and the
   1 MB / 10,000-element warnings applied to a collection's index are gone from the spec
   (11.7), the collection schema's `x-size-limits`, the Python writer and validator, and the R

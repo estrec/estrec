@@ -32,6 +32,7 @@
     <button type="button" role="tab" id="tab-python" aria-controls="pane-python" aria-selected="true">Python</button>
     <button type="button" role="tab" id="tab-r" aria-controls="pane-r" aria-selected="false" tabindex="-1">R</button>
     <button type="button" role="tab" id="tab-stata" aria-controls="pane-stata" aria-selected="false" tabindex="-1">Stata</button>
+    <button type="button" role="tab" id="tab-julia" aria-controls="pane-julia" aria-selected="false" tabindex="-1">Julia</button>
     <button type="button" role="tab" id="tab-other" aria-controls="pane-other" aria-selected="false" tabindex="-1">Other tools</button>
   </div>
   <section class="pane" role="tabpanel" id="pane-python" aria-labelledby="tab-python">
@@ -54,8 +55,14 @@ estrec::write_estimation(fit, "fit.estrec.json")</pre>
 regress price mpg weight, vce(cluster rep78)
 estrec write using "price.estrec.json", replace</pre>
   </section>
+  <section class="pane" role="tabpanel" id="pane-julia" aria-labelledby="tab-julia">
+    <p>From FixedEffectModels.jl (<code>reg</code>) and GLM.jl (<code>lm</code>, <code>glm</code>) fits:</p>
+    <pre>using Pkg; Pkg.add(url = "https://github.com/estrec/estrec", subdir = "julia")
+using EstRec
+write_estimation(m, "fit.estrec.json"; data = df)</pre>
+  </section>
   <section class="pane" role="tabpanel" id="pane-other" aria-labelledby="tab-other">
-    <p>SPSS, SAS, Julia and other tools don't have a writer yet. A record is plain JSON, so any
+    <p>Writers for SAS and SPSS are in progress. Other tools don't have one yet. A record is plain JSON, so any
     tool can write one by following the
     <a href="https://github.com/estrec/estrec/blob/main/spec/estrec.md">specification</a>; the
     <a href="https://github.com/estrec/estrec/tree/main/converters">converters</a> are short

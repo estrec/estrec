@@ -583,6 +583,15 @@ function addColumn(it) {
   // and each equation's F test, when the record has one
   const hasF = (it.record.tests || []).some((t) => t.name === "f" && t.response);
   if (add.length > 1 && hasF && !(s.stats || []).some((x) => x.test === "f")) (s.stats = s.stats || []).push({ test: "f", label: "F" });
+  if (add.length > 1 && first === 1) {
+    // a new table: no std. errors row for a record without a vcov; a pseudo-R² row for a logistic equation
+    if (!E.vcovs(it.record).length) s.stats = (s.stats || []).filter((x) => x.vcov !== "type");
+    const eqs = ((it.record.structures || {}).equations || {}).per_response || [];
+    if (eqs.some((e) => e && "pseudo_r2" in e) && !s.stats.some((x) => x.metric === "pseudo_r2")) {
+      const at = s.stats.findIndex((x) => x.metric === "r2");
+      s.stats.splice(at < 0 ? s.stats.length : at + 1, 0, { metric: "pseudo_r2" });
+    }
+  }
   renderAll();
   showTab("table");
   toast(add.length === 1 ? `Added ${recordName(it)} as column ${first}`
@@ -813,6 +822,13 @@ function statCandidates(idx) {
       if (["vcov_type", "fixed_effects"].includes(k) || metrics.includes(k)) continue;
       const v = k in g ? g[k] : t[k];
       if (typeof v === "number" || typeof v === "string") metrics.push(k);
+    }
+  }
+  // and each equation's (structures.equations: PROCESS's R², MSE, ...), shown in its column
+  for (const r of recs) {
+    const eq = (r.structures || {}).equations;
+    for (const e of (eq && Array.isArray(eq.per_response) ? eq.per_response : [])) {
+      for (const [k, v] of Object.entries(e || {})) if (!["response", "component"].includes(k) && !metrics.includes(k) && (typeof v === "number" || (v && typeof v === "object" && "value" in v))) metrics.push(k);
     }
   }
   for (const m of metrics) push({ metric: m }, `${E.STAT_LABELS[m] || m}${E.STAT_LABELS[m] ? ` (${m})` : ""}`);

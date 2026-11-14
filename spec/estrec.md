@@ -290,6 +290,12 @@ Registered names (profiles define their required shape):
 - `hyperparameters`: for machine-learning estimators, with tuning results if any.
 - `first_stage`: instrumental-variables first-stage summaries that aren't tests (R²s; see the `iv`
   profile). The first-stage F and the identification tests are in `tests` (4.8).
+- `equations`: for a model of several equations (PROCESS, a path model, a system), each
+  equation's fit statistics: `{kind: "object", per_response: [{response, nobs, r2, mse, ...}]}`,
+  one entry per equation, named by its response as in `parameters[*].response` (and
+  `component` where its rows have one), with metrics named as in `metrics`. The equations' own
+  tests (their F) are in `tests` with `response`. Table renderers show these in a column of
+  one equation (spec/table.md 6).
 
 A structure that is spilled to an attachment keeps its non-data fields (a vcov keeps `type`,
 `ssc`, `cluster`, `default`) and becomes `{kind: "link", attachment, spilled_kind, ...}`.
@@ -443,7 +449,7 @@ record, not a degraded one. Each level includes everything in the levels below i
 | Level | Adds |
 |---|---|
 | 1 | `parameters` (estimates, standard errors, test statistics, p-values, intervals), `metrics.nobs`, `df_residual` and `conf_level`; `meta.id`, `created`, `status`, `parent`, `profiles`, `title`, `tags`, `notes`, `disclosure`, `core_digest`; `publication`; `history` without `by` |
-| 2 | the model's diagnostic and summary measures: the other `metrics`, `meta.estimator`, `responses` and `messages`, `structures.vcov` (without cluster names and counts), `random_effects`, `first_stage`, and `tests` (without `source`); `attachments` |
+| 2 | the model's diagnostic and summary measures: the other `metrics`, `meta.estimator`, `responses` and `messages`, `structures.vcov` (without cluster names and counts), `random_effects`, `first_stage`, `equations`, and `tests` (without `source`); `attachments` |
 | 3 | `specification`; the other structures (`fixed_effects`, `hyperparameters`, ...) and the vcov's `cluster` and `n_clusters` (and a test's `vcov.cluster`) |
 | 4 | `provenance.software`: the components with `role` `language`, `estimator` or `writer` only, with a `lock` pointer's `format` and `sha256` (which commit to the full environment without listing it); the writer in `meta.producer` and `history[*].by`, so a writer's version can be traced; `provenance.data` without `location`; `structures.numerics`; `validation`; `extensions`; a test's `source` |
 | 5 | every other software component (dependencies), a `lock`'s `path`, `container`; `provenance.environment`, `execution` (except `execution.session`, the session id, at 4) and `agent`; data `location`; any other `provenance` member |

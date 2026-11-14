@@ -477,7 +477,28 @@
         "numerics": {"$ref": "#/$defs/numerics", "x-level": 4},
         "random_effects": {"$ref": "#/$defs/structure_or_list", "x-level": 2},
         "hyperparameters": {"$ref": "#/$defs/structure_or_list", "x-level": 3},
-        "first_stage": {"$ref": "#/$defs/structure_or_list", "x-level": 2}
+        "first_stage": {"$ref": "#/$defs/structure_or_list", "x-level": 2},
+        "equations": {
+          "description": "Fit statistics of each equation of a model with several (PROCESS, path models, systems): per_response, one entry per equation, named by its response as parameters[*].response, with metrics named as in `metrics` (nobs, r2, adj_r2, mse, sigma, df_residual, log_lik, deviance, pseudo_r2, ...). The equations' tests (their F) are in `tests` with `response`.",
+          "x-level": 2,
+          "allOf": [{"$ref": "#/$defs/structure"}],
+          "properties": {
+            "kind": {"const": "object"},
+            "per_response": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["response"],
+                "properties": {
+                  "response": {"type": "string"},
+                  "component": {"description": "As in parameters (PROCESS's total-effect model: \"total_effect_model\").", "type": "string"}
+                },
+                "additionalProperties": {"$ref": "#/$defs/metric"}
+              }
+            }
+          },
+          "required": ["kind", "per_response"]
+        }
       },
       "additionalProperties": {"$ref": "#/$defs/structure_or_list", "x-level": 3}
     },

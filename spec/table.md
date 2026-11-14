@@ -183,7 +183,7 @@ Each entry of `stats` is one row, of one of these kinds:
 
 | Kind | Fields | Shows |
 |---|---|---|
-| metric | `metric` (the record's name: `nobs`, `r2`, `r2_within`, `aic`, ...; `rmse` is `sqrt(rss / nobs)` when the record has no `rmse`) | the value; blank when the record hasn't got it |
+| metric | `metric` (the record's name: `nobs`, `r2`, `r2_within`, `aic`, ...; `rmse` is `sqrt(rss / nobs)` when the record has no `rmse`) | the value; blank when the record hasn't got it. In a column with `response`, the equation's own value from `structures.equations` (spec/estrec.md 4.5) comes first, matched on `response` and `component`; else the record's |
 | vcov | `vcov`: `"type"` or `"n_clusters"` | the column's vcov as `by: firm` or its type; or its cluster counts |
 | fixed effect | `fixed_effect` (a name in `specification.fixed_effects`) | `format.fe_yes` (default `"Y"`) when the record has it, else `format.fe_no` (default `"N"`) |
 | test | `test` (a `tests[*].label`, else `name`), `value`: `"statistic"` (default) or `"p_value"` | the test's value; in a column with `response`, tests of other responses are passed over (so `"f"` gives each equation's own F); blank in a `mediation: true` column |

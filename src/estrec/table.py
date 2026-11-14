@@ -28,7 +28,7 @@ from typing import Any
 
 from .collection import is_collection, iter_members, loads_collection, member_sha256
 from .records import PACKAGED_SCHEMAS, Issue, jsonschema_check, loads
-from .views import _num, glance, pick_vcov, tidy, vcov_label
+from .views import _metric, _num, glance, pick_vcov, tidy, vcov_label
 
 TABLE_SCHEMA = "estrec-table/0.1"
 DEFAULT_STARS = [0.1, 0.05, 0.01]
@@ -431,6 +431,7 @@ def validate_table(
             m = s["metric"]
             ok = any(
                 m in (r.get("metrics") or {}) or (m == "rmse" and "rss" in (r.get("metrics") or {}))
+                or any(m in e for e in _equations(r))
                 for r in have
             )
             if not ok:
@@ -451,6 +452,23 @@ def validate_table(
 # ---------------------------------------------------------------- the table
 
 
+def _equations(rec: dict) -> list[dict]:
+    eq = (rec.get("structures") or {}).get("equations")
+    return [e for e in (eq or {}).get("per_response") or [] if isinstance(e, dict)] if isinstance(eq, dict) else []
+
+
+def _equation_fit(rec: dict, col: dict) -> dict | None:
+    """The fit statistics of a column's equation (`structures.equations`): the entry with the
+    column's `response` and `component`; None for a column without `response`."""
+    if not col.get("response") or col.get("mediation") is True:
+        return None
+    for e in _equations(rec):
+        if e.get("response") == col["response"] and e.get("component") == col.get("component"):
+            return {k: _metric(v) for k, v in e.items()
+                    if k not in ("response", "component") and not (isinstance(v, dict) and "value" not in v)}
+    return None
+
+
 def _find_test(rec: dict, key: str, col: dict | None = None) -> dict | None:
     """The test labelled `key`, else the first named `key`. For a column of one equation
     (`response`), tests of another equation are passed over; a column of effect rows
@@ -460,7 +478,8 @@ def _find_test(rec: dict, key: str, col: dict | None = None) -> dict | None:
         return None
     tests = rec.get("tests") or []
     if col.get("response"):
-        tests = [t for t in tests if t.get("response") in (None, col["response"])]
+        tests = [t for t in tests if t.get("response") in (None, col["response"])
+                 and (t.get("response") is None or t.get("component") == col.get("component"))]
     return next((t for t in tests if t.get("label") == key), None) or next(
         (t for t in tests if t.get("name") == key), None
     )
@@ -951,7 +970,8 @@ def build_table(spec: dict, *, base_dir: str | os.PathLike | None = None, record
                 g = glance(c["found"].record, vcov=c["spec"].get("vcov"), metrics="all")
                 if m == "rmse" and "rmse" not in g:
                     g["rmse"] = glance(c["found"].record, metrics="table").get("rmse")
-                v = g.get(m)
+                eq = _equation_fit(c["found"].record, c["spec"])
+                v = eq[m] if eq is not None and m in eq else g.get(m)
                 cells.append(missing if v is None else _stat_value(v, d, thousands))
         elif "vcov" in s:
             label = s.get("label") or ("Std. errors" if s["vcov"] == "type" else "Clusters")

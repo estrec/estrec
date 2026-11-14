@@ -68,7 +68,8 @@ each equation's coefficients (`response` names the equation's outcome; a `total=
 effects, contrasts and indices of moderated mediation as rows tagged `mediation`, and the
 model and interaction tests. The seed, bootstrap draws and interval type are in
 `specification.mediation.inference`. Not recorded: standardized effects and the
-Johnson-Neyman region bounds (the conditional effects table is). `ESTREC WRITE` (the menu item)
+Johnson-Neyman region bounds (the conditional effects table is). Each equation's Model
+Summary (R², MSE, or -2LL and pseudo-R²s) is in `structures.equations`, its F in `tests`. `ESTREC WRITE` (the menu item)
 doesn't re-run PROCESS.
 
 Complex Samples procedures (CSGLM, CSLOGISTIC) aren't covered yet.

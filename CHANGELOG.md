@@ -8,6 +8,11 @@
   A `test` statistics row in a column with `response` shows that equation's own test
   (`{"test": "f"}`: each equation's F). The viewer's **+ Table** does this for a record with
   effect rows and several equations, and adds the F row.
+- Core: `structures.equations`, each equation's fit statistics in a model of several
+  (`per_response`: `{response, component, nobs, r2, mse, ...}`, metric names as in `metrics`),
+  as `first_stage` does for IV. Table metric rows read a column's equation from it, so a
+  PROCESS table has each equation's R². The SPSS PROCESS writer fills it from each Model
+  Summary (R², MSE, df; -2LL, McFadden, Cox-Snell and Nagelkerke R² for a dichotomous Y).
 - SPSS: PROCESS (Hayes) runs between `ESTREC BEGIN` and `ESTREC END` are recorded
   (`mediation/0.1` with mediators): each equation's coefficients, the direct, indirect, total,
   conditional and relative effects, contrasts, indices of moderated mediation, the model tests

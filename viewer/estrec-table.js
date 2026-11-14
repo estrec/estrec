@@ -359,11 +359,34 @@
 
   // the test labelled key, else the first named key; for a column of one equation (response),
   // tests of another equation are passed over; a column of effect rows (mediation) has none
+  function equations(rec) {
+    const eq = (rec.structures || {}).equations;
+    return isObj(eq) && Array.isArray(eq.per_response) ? eq.per_response.filter(isObj) : [];
+  }
+
+  // the fit statistics of a column's equation (structures.equations): the entry with the
+  // column's response and component; null for a column without response
+  function equationFit(rec, col) {
+    if (!col.response || col.mediation === true) return null;
+    const comp = col.component === undefined ? null : col.component;
+    const e = equations(rec).find((x) => x.response === col.response && (x.component === undefined ? null : x.component) === comp);
+    if (!e) return null;
+    const out = {};
+    for (const [k, v] of Object.entries(e)) {
+      if (k === "response" || k === "component" || (isObj(v) && !("value" in v))) continue;
+      out[k] = metricValue(v);
+    }
+    return out;
+  }
+
   function findTest(rec, key, col) {
     col = col || {};
     if (col.mediation === true) return null;
     let tests = rec.tests || [];
-    if (col.response) tests = tests.filter((t) => t.response === undefined || t.response === null || t.response === col.response);
+    if (col.response) {
+      tests = tests.filter((t) => t.response === undefined || t.response === null ||
+        (t.response === col.response && (t.component === undefined ? null : t.component) === (col.component === undefined ? null : col.component)));
+    }
     return tests.find((t) => t.label === key) || tests.find((t) => t.name === key) || null;
   }
 
@@ -476,7 +499,7 @@
     });
     (spec.stats || []).forEach((s, j) => {
       if ("metric" in s) {
-        const ok = recs.some((r) => s.metric in (r.metrics || {}) || (s.metric === "rmse" && "rss" in (r.metrics || {})));
+        const ok = recs.some((r) => s.metric in (r.metrics || {}) || (s.metric === "rmse" && "rss" in (r.metrics || {})) || equations(r).some((e) => s.metric in e));
         if (!ok) out.push(issue("warning", `stats[${j}]`, `no record has metric '${s.metric}'`));
       } else if ("fixed_effect" in s) {
         if (!recs.some((r) => ((r.specification || {}).fixed_effects || []).includes(s.fixed_effect))) out.push(issue("warning", `stats[${j}]`, `no record has fixed effect '${s.fixed_effect}'`));
@@ -833,7 +856,8 @@
         for (const c of cols) {
           const g = glance(c.found.record, { vcov: c.spec.vcov, metrics: "all" });
           if (m === "rmse" && !("rmse" in g)) g.rmse = glance(c.found.record, { metrics: "table" }).rmse;
-          const v = g[m];
+          const eq = equationFit(c.found.record, c.spec);
+          const v = eq && m in eq ? eq[m] : g[m];
           cells.push(v === undefined || v === null ? missing : statValue(v, d, thousands));
         }
       } else if ("vcov" in s) {
@@ -1415,7 +1439,7 @@ ${table}</div>
     TABLE_SCHEMA, DEFAULT_STARS, DEFAULT_HEAD, HEAD_KINDS, TABLE_METRICS, STAT_LABELS,
     twoSidedP, criticalValue, erfc, qnorm,
     NAMED_LINES, PLACEHOLDERS, publishSpec, REFERENCE_TEXT, SPARK_COLOR, SPARK_SCALES, SPARK_PLACES, SPARK_ALIGNS, sparkSVG, sparkTikz, uncertaintyLines, pValue,
-    num, vcovs, vcovLabel, pickVcov, tidy, glance, findTest,
+    num, vcovs, vcovLabel, pickVcov, tidy, glance, findTest, equationFit,
     canonicalJSON, sha256Hex, recordSha256,
     indexRecords, validateTable, checkPins, columnResponse, columnRows, mediationColumns, buildTable, render, renderers: RENDERERS,
     redactRecord, renderWebPage,

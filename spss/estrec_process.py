@@ -255,7 +255,7 @@ _EFF = r"effects?(?:\(s\))?"
 def interpret(sections) -> dict:
     """Header, per-equation results, effects and tests, from PROCESS's output in order."""
     h = header(sections)
-    eqs, effects, tests, skipped = [], [], [], []
+    eqs, effects, tests, skipped, fits = [], [], [], [], []
     keys, contrasts, products = {}, {}, {}
     outcome, path, total_model, await_outcome, ind_ctx = None, None, False, False, ""
     seen_outcomes: list = []
@@ -304,13 +304,17 @@ def interpret(sections) -> dict:
             k_ctx = k
         if k == "model summary":
             for row in s.rows:
+                fits.append(R.compact({
+                    "response": outcome, "component": "total_effect_model" if total_model else None,
+                    **{name: R.num(s.col(row, *cols)) for name, cols in _FIT.items()}}))
                 f = s.col(row, "f")
                 tests.append(R.compact({
                     "category": "model", "name": "f" if f is not None else "likelihood_ratio",
                     "label": f"Model summary, {outcome}" + (" (total effect model)" if total_model else ""),
                     "statistic": R.num(f if f is not None else s.col(row, "modelll", "-2ll")),
                     "df": R.num(s.col(row, "df1", "df")), "df2": R.num(s.col(row, "df2")),
-                    "p_value": R.num(s.col(row, "p")), "origin": "estimation", "response": outcome}))
+                    "p_value": R.num(s.col(row, "p")), "origin": "estimation", "response": outcome,
+                    "component": "total_effect_model" if total_model else None}))
             continue
         if k == "model":
             for row in s.rows:
@@ -393,7 +397,7 @@ def interpret(sections) -> dict:
             lab = med.pop("_label", "")
             d = contrasts.get(lab.strip("()"))
             e["term"] = f"contrast {lab}" + (f": {d}" if d else "")
-    return {"header": h, "equations": eqs, "effects": effects, "tests": tests,
+    return {"header": h, "equations": eqs, "effects": effects, "tests": tests, "fits": fits,
             "products": products, "skipped": skipped,
             "conf": _value_after(lines_all, r"level of confidence"),
             "reps": _value_after(lines_all, r"number of bootstrap")}
@@ -429,6 +433,12 @@ def _indirect(s, row, mod, path, relative=False):
         term += f" | {mv}"
     return _row(s, row, term, mediation=R.compact({
         "effect": eff, "mediator": med, "treatment": treat, "moderator_value": mv, **extra}))
+
+
+# Model Summary columns -> metric names (spec/estrec.md 4.5 `equations`): OLS (R, R-sq, MSE, F,
+# df1, df2, p) and, for a dichotomous Y, logistic (-2LL, ModelLL, df, p, McFadden, CoxSnell, Nagelkrk)
+_FIT = {"r2": ("r-sq",), "mse": ("mse",), "df_residual": ("df2",), "deviance": ("-2ll",),
+        "pseudo_r2": ("mcfadden",), "cox_snell_r2": ("coxsnell",), "nagelkerke_r2": ("nagelkrk",)}
 
 
 def _moderator_cols(s):
@@ -566,6 +576,9 @@ def build(info, cmd, nt, hints, precision=None, identifying=False):
         structures=None, tests=[_test(t) for t in info["tests"]], messages=messages,
         responses=responses or None, title=f"PROCESS model {model}", identifying=identifying)
     rec["structures"].pop("vcov", None)
+    if info.get("fits"):
+        rec["structures"]["equations"] = {"kind": "object", "per_response": [
+            R.compact(dict(f, nobs=f.get("nobs", h.get("nobs")))) for f in info["fits"] if f.get("response")]}
     if not rec["structures"]:
         rec.pop("structures")
     sw = rec["provenance"]["software"]

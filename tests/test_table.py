@@ -661,19 +661,29 @@ def process_like_record():
          "p_value": 0.001, "response": "m", "distribution": "F", "df1": 2.0, "df2": 97.0},
         {"id": "t2", "category": "model", "name": "f", "label": "Model summary, y", "statistic": 40.25,
          "p_value": 0.0, "response": "y", "distribution": "F", "df1": 3.0, "df2": 96.0},
+        {"id": "t3", "category": "model", "name": "f", "label": "Model summary, y (total effect model)",
+         "statistic": 30.5, "p_value": 0.0, "response": "y", "component": "total_effect_model",
+         "distribution": "F", "df1": 2.0, "df2": 97.0},
     ]
+    equations = {"kind": "object", "per_response": [
+        {"response": "m", "nobs": 100, "r2": 0.205, "mse": 1.5, "df_residual": 97},
+        {"response": "y", "nobs": 100, "r2": 0.557, "mse": 2.25, "df_residual": 96},
+        {"response": "y", "component": "total_effect_model", "nobs": 100, "r2": 0.386, "mse": 3.0, "df_residual": 97},
+    ]}
     return {"schema": "estrec/0.1",
             "meta": {"id": "5b0e3c2a-1f4d-4e8b-9a6c-2d7e8f9a0b1c", "created": "2026-11-14T00:00:00Z",
                      "status": "ok", "estimator": {"family": "mediation", "method": "ols"},
                      "responses": ["m", "y"], "profiles": ["mediation/0.1"], "title": "PROCESS model 4"},
-            "parameters": params, "metrics": {"nobs": 100, "conf_level": 0.95}, "tests": tests}
+            "parameters": params, "metrics": {"nobs": 100, "conf_level": 0.95}, "tests": tests,
+            "structures": {"equations": equations}}
 
 
 def process_spec(rec):
     return {"schema": et.TABLE_SCHEMA, "meta": {"id": "0d5a7c1e-2b3f-4a6d-8e9f-1a2b3c4d5e6f",
                                                 "created": "2026-11-14T00:00:00Z"},
             "columns": et.mediation_columns(rec), "uncertainty": "std_error",
-            "stats": [{"metric": "nobs"}, {"test": "f", "label": "F"}, {"test": "f", "value": "p_value", "label": "p"}]}
+            "stats": [{"metric": "nobs"}, {"metric": "r2"}, {"metric": "mse"}, {"test": "f", "label": "F"},
+                      {"test": "f", "value": "p_value", "label": "p"}]}
 
 
 def test_mediation_columns():
@@ -703,6 +713,16 @@ def test_mediation_table():
     stats = {r["label"]: r["cells"] for r in t["rows"] if r["kind"] == "stat"}
     assert stats["F"] == ["12.500", "40.250", ""]
     assert stats["N"] == ["100", "100", "100"]
+    assert stats["R²"] == ["0.205", "0.557", ""]           # structures.equations, per column
+    assert stats["mse"] == ["1.500", "2.250", ""]
+    assert not [i for i in ef.validate(rec) if i.level == "error" and i.path.startswith("structures")]
+    # the total-effect model as its own column: its R² and its F
+    spec = process_spec(rec)
+    spec["columns"].insert(2, {"record": rec["meta"]["id"], "response": "y", "component": "total_effect_model"})
+    t = et.build_table(spec, records=[rec])
+    stats = {r["label"]: r["cells"] for r in t["rows"] if r["kind"] == "stat"}
+    assert stats["R²"] == ["0.205", "0.557", "0.386", ""]
+    assert stats["F"] == ["12.500", "40.250", "30.500", ""]
     assert not [i for i in et.validate_table(process_spec(rec)) if i.level == "error"]
     bad = process_spec(rec)
     bad["columns"][0]["mediation"] = "yes"

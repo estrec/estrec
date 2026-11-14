@@ -1544,6 +1544,7 @@ DEFAULT_LEVEL_MARKS = {
     "specification": (3, ()),
     "structures": (2, ()),
     "structures.*": (3, ()),
+    "structures.equations": (2, ()),
     "structures.first_stage": (2, ()),
     "structures.fixed_effects": (3, ()),
     "structures.hyperparameters": (3, ()),

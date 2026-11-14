@@ -110,6 +110,17 @@ mediator (two with `mediate multiple`, not mapped here):
 `mediator` names which mediator a specific indirect effect goes through; `path` lists a serial
 path in order; `moderator_value` marks a conditional indirect effect.
 
+## Equations
+
+When the effects come from regressions the writer can see (PROCESS, path models), each
+equation's coefficients are `parameters` rows with `response` (the mediator or outcome it
+predicts; PROCESS's total-effect model with `component: "total_effect_model"`), its F or
+likelihood-ratio test is a `model` test with the same `response`, and its fit statistics
+(PROCESS's Model Summary: `r2`, `mse`, `df_residual`; for a dichotomous outcome `deviance`
+(-2LL), `pseudo_r2` (McFadden), `cox_snell_r2`, `nagelkerke_r2`) are in
+`structures.equations` (spec/estrec.md 4.5). A table then shows a column per equation and one
+of the effects (spec/table.md 3).
+
 ## `indirect_boot` (Stata)
 
 `indirect_boot` 1.0.1 (Matherly) bootstraps the effects of a parallel-mediation path model fit

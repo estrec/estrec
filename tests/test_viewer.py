@@ -366,6 +366,7 @@ def test_mediation_table_matches_python():
 
     rec = process_like_record()
     spec = process_spec(rec)
+    spec["columns"].insert(2, {"record": rec["meta"]["id"], "response": "y", "component": "total_effect_model"})
     script = (
         "const E=require(process.argv[1]+'/estrec-table.js');const x=JSON.parse(require('fs').readFileSync(0,'utf8'));"
         "const idx=E.indexRecords([{record:x.rec}]);"

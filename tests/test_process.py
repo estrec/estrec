@@ -186,6 +186,10 @@ def test_spss(name):
     codes = [m["code"] for m in rec["meta"].get("messages", [])]
     assert ("printed_precision" in codes) == name.startswith("p_")
     assert rec["provenance"]["software"][1]["name"] == "PROCESS"
+    eqs = rec["structures"]["equations"]["per_response"]
+    assert [e["response"] for e in eqs if "component" not in e] == rec["meta"]["responses"]
+    for e in eqs:
+        assert ("pseudo_r2" in e) == (e["response"] == "ybin") and ("r2" in e) != ("pseudo_r2" in e)
 
 
 def test_spss_tables_full_precision():
@@ -194,6 +198,9 @@ def test_spss_tables_full_precision():
     y = {p["term"]: p["estimate"] for p in rec["parameters"] if p.get("response") == "y" and "mediation" not in p}
     for term, b in LM_Y.items():
         assert y[term] == pytest.approx(b, rel=1e-12)
+    y_fit = next(e for e in rec["structures"]["equations"]["per_response"] if e["response"] == "y")
+    assert y_fit["r2"] == pytest.approx(0.283701119257509, rel=1e-12)    # summary(lm)$r.squared
+    assert y_fit["mse"] == pytest.approx(2.24149715083227, rel=1e-12)    # sigma^2
     assert rec["specification"]["mediation"]["inference"] == {
         "method": "bootstrap", "reps": 5000, "ci_type": "percentile", "seed": 20261114}
 

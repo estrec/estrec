@@ -312,6 +312,11 @@
    "if": []
   },
   {
+   "path": "structures.equations",
+   "level": 2,
+   "if": []
+  },
+  {
    "path": "structures.first_stage",
    "level": 2,
    "if": []

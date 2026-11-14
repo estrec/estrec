@@ -124,3 +124,12 @@ ODS trace).
   as `BEGIN PROGRAM PYTHON2` with warning 8502.
 - Hand-copied commands must sit directly in the EXTPATHS EXTENSIONS folder, not a subfolder.
 - `spss.GetDefaultPlugInVersion()` gives `spss320`; the writer records it as 32.0.
+
+## PROCESS (2026-11-14)
+
+Ted: PROCESS models must be recordable. No writer produces them yet; `mediation/0.1` already
+maps PROCESS's options and effect rows. In SPSS, PROCESS runs inside MATRIX, so its output is
+text, not pivot tables: the writer parses that text from the OMS capture (ESTREC BEGIN/END
+already captures it). PROCESS for R and SAS print the same text, so the parser can serve those
+later. First step: `spss/dev/probe_process.sps` (models 1, 4 with covariates/contrasts/HC3/
+binary Y/multicategorical X/saved draws, 6, 7, 14), outputs to `raw/estrec_probe_process/`.

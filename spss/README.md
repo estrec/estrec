@@ -35,10 +35,17 @@ restores your setting.
 | MIXED | inference, mixed | `/PRINT=SOLUTION TESTCOV COVB` | per-coefficient df (Satterthwaite by default) |
 | GENLINMIXED | inference, mixed | (subject variable nominal) | its default reference is the last target category |
 
-**From the menus:** after running a model from the dialogs, **File > Export > Save estimation
-record** writes a record of the last supported procedure in the Viewer. It runs
-`ESTREC WRITE OUTFILE='...'`, which re-runs that procedure's syntax (from its Notes table)
-quietly and records the result, so the record reflects the active dataset at that moment.
+**From the menus:** after running a model from the dialogs, **Utilities > Save estimation
+record** (below OMS Identifiers) writes a record of the last supported procedure run. It runs
+`ESTREC WRITE OUTFILE='...'`, which finds that procedure's syntax in the journal (or, failing
+that, the Viewer's Notes tables), re-runs it quietly and records the result, so the record
+reflects the active dataset at that moment. The journal must be on (Edit > Options > File
+Locations > Record syntax in journal; it is by default).
+
+The dialog's source is `ESTREC_WRITE.spd` (SPSS's Custom Dialog Builder); the bundle carries
+`ESTREC_WRITE.cfe`, the compiled form SPSS makes when the builder installs it, taken from a
+bundle SPSS exported. After editing the dialog, install it from the builder, export a bundle,
+and replace `ESTREC_WRITE.cfe` with the `.cfe` inside it.
 
 Complex Samples procedures (CSGLM, CSLOGISTIC) aren't covered yet.
 

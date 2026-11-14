@@ -11,7 +11,8 @@ VERSION = "0.1.0"
 SPECS = ["ESTREC_BEGIN.xml", "ESTREC_END.xml", "ESTREC_WRITE.xml"]
 CODE = ["ESTREC_BEGIN.py", "ESTREC_END.py", "ESTREC_WRITE.py", "estrec_session.py", "estrec_oxml.py",
         "estrec_procedures.py", "estrec_record.py"]
-DIALOGS = ["ESTREC_WRITE.spd"]  # File > Export > Save estimation record (built in SPSS's dialog builder)
+DIALOGS = ["ESTREC_WRITE.cfe"]  # Utilities > Save estimation record: SPSS's compiled form of
+# ESTREC_WRITE.spd, taken from a bundle SPSS built (the builder installs, then exports, a .cfe)
 MISC: list = []  # SPSS's own bundles carry no Misc-Files
 
 FIELDS = [
@@ -19,7 +20,7 @@ FIELDS = [
     ("Display-Name", "estrec"),
     ("Command-Specs", ",".join(SPECS)),
     ("Code-Files", ",".join(CODE)),
-    ("Custom-Dialogs", ",".join(DIALOGS)),
+    ("Dialog-Specs", ",".join(DIALOGS)),
     ("Summary", "Write estrec estimation records (JSON) from SPSS procedures"),
     ("Description", "ESTREC BEGIN starts capturing output (with OMS); ESTREC END OUTFILE= writes one "
                     "estrec record per REGRESSION, UNIANOVA, LOGISTIC REGRESSION, GENLIN, MIXED or "

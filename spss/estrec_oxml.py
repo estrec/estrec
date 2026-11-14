@@ -128,8 +128,10 @@ def parse(path_or_text) -> list[Command]:
                 _walk(el, (), (), t.cells)
                 c.tables.append(t)
             elif tag == "textBlock":
-                txt = el.get("text") or "".join(el.itertext())
+                # a text block's lines (MATRIX output, warnings); its text attribute is only a title
+                lines = [ln.text or "" for ln in el.iter() if _local(ln.tag) == "line"]
+                txt = "\n".join(lines) if lines else (el.get("text") or "".join(el.itertext()))
                 if txt.strip():
-                    c.texts.append(txt.strip())
+                    c.texts.append(txt.strip("\n"))
         commands.append(c)
     return commands

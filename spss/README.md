@@ -48,6 +48,29 @@ The dialog's source is `ESTREC_WRITE.spd` (SPSS's Custom Dialog Builder); the bu
 bundle SPSS exported. After editing the dialog, install it from the builder, export a bundle,
 and replace `ESTREC_WRITE.cfe` with the `.cfe` inside it.
 
+**PROCESS** (Andrew F. Hayes's macro for mediation, moderation and conditional process
+models) is recorded too, between `ESTREC BEGIN` and `ESTREC END` like any procedure. estrec
+doesn't include PROCESS: get it from https://www.afhayes.com/download.html. To run it from
+syntax without opening its dialog first, define the macro at the top of the file:
+
+```
+INSERT FILE='/path/to/process51.sps'.
+ESTREC BEGIN.
+PROCESS y=y /x=x1 /m=x2 /model=4 /seed=20261114 /display=tables.
+ESTREC END OUTFILE='mediation.estrec.json'.
+```
+
+Add `/display=tables` (PROCESS 5): PROCESS then prints its results as tables, which carry
+full precision. Without it PROCESS prints text, and the record has its printed decimals (4 by
+default; the record says so). The record claims `mediation/0.1` when the model has mediators:
+each equation's coefficients (`response` names the equation's outcome; a `total=1` model's are
+`component: total_effect_model`), the direct, indirect, total, conditional and relative
+effects, contrasts and indices of moderated mediation as rows tagged `mediation`, and the
+model and interaction tests. The seed, bootstrap draws and interval type are in
+`specification.mediation.inference`. Not recorded: standardized effects and the
+Johnson-Neyman region bounds (the conditional effects table is). `ESTREC WRITE` (the menu item)
+doesn't re-run PROCESS.
+
 Complex Samples procedures (CSGLM, CSLOGISTIC) aren't covered yet.
 
 ## Development

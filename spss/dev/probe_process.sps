@@ -1,15 +1,17 @@
 * Encoding: UTF-8.
 * estrec for SPSS: probe of PROCESS (Hayes) output, to build the PROCESS writer against.
-* 1. PROCESS must be installed (its custom dialog, or run process.sps once this session).
+* 1. Get PROCESS (v5.1 or later) from https://www.afhayes.com/download.html; set its path below.
+*    INSERT runs its macro definition file, so PROCESS works without opening its dialog.
 * 2. Set the two paths below (the out folder must exist), Run All. Takes a minute or two.
 * 3. Copy the out folder (p_*.xml, t_*.xml, p_m4save_boot.csv) and the Viewer exported as probe_process.pdf
 *    (all items) to valiant raw/estrec_probe_process/. Note your PROCESS version (first line
 *    of its output).
 * Each model is captured on its own with OMS (all output, as OXML), the way ESTREC BEGIN does.
-* PROCESS v5.1 or later (the t_ runs use its display=tables option).
+* The t_ runs use PROCESS 5's display=tables option.
 
 FILE HANDLE csv /NAME='/Users/you/Desktop/spss/writers_probe.csv'.
 FILE HANDLE out /NAME='/Users/you/Desktop/spss/estrec_probe_process'.
+INSERT FILE='/Users/you/Desktop/spss/process51.sps'.
 
 GET DATA /TYPE=TXT /FILE=csv /ENCODING='UTF8' /DELIMITERS=',' /QUALIFIER='"'
   /ARRANGEMENT=DELIMITED /FIRSTCASE=2

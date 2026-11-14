@@ -177,3 +177,5 @@ def test_last_in_journal():
     assert estrec_session.last_in_journal(j.split("LOGISTIC")[0]) == (
         "Regression", "REGRESSION /STATISTICS COEFF OUTS CI(95) R ANOVA BCOV\n  /DEPENDENT y /METHOD=ENTER x1 x2.")
     assert estrec_session.last_in_journal("LOGISTIC VARIABLES=y.\nDESCRIPTIVES y.\n") == (None, None)
+    # a PROCESS run after the regression: not the regression
+    assert estrec_session.last_in_journal(j + "PROCESS y=y /x=x1 /m=x2 /model=4.\n") == ("PROCESS", None)

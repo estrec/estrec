@@ -776,8 +776,15 @@ def genlinmixed(cmd, nt, hints, identifying=False):
                    responses=[dep] if dep else None, identifying=identifying)
 
 
+def process(cmd, nt, hints, identifying=False):
+    """PROCESS (Hayes), which runs as a MATRIX procedure (estrec_process.py)."""
+    import estrec_process
+    return estrec_process.record(cmd, nt, hints, identifying=identifying)
+
+
 BUILDERS = {"Regression": regression, "UNIANOVA": unianova, "Logistic Regression": logistic,
-            "Generalized Linear Models": genlin, "Mixed": mixed, "Generalized Linear Mixed Models": genlinmixed}
+            "Generalized Linear Models": genlin, "Mixed": mixed, "Generalized Linear Mixed Models": genlinmixed,
+            "Matrix": process}
 
 
 def records(commands, hints: dict | None = None, identifying: bool = False) -> tuple[list, list]:

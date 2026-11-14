@@ -174,6 +174,10 @@ def last_procedure_syntax():
     if path:
         try:
             cmd, syntax = last_in_journal(_tail(path))
+            if cmd == "PROCESS":
+                print("ESTREC WRITE: the last procedure was PROCESS, which ESTREC WRITE doesn't re-run "
+                      "(its bootstrap would draw again); put ESTREC BEGIN and ESTREC END around it instead")
+                return None, None
             if syntax:
                 print(f"ESTREC WRITE: found the last {cmd} in the journal ({path})")
                 return cmd, syntax
@@ -267,6 +271,8 @@ def last_in_journal(text):
             cmd = _cmd_of(rest)
             if cmd:
                 return cmd, rest
+            if rest.split(None, 1)[0].upper().startswith("PROCESS") and not line[:1].isspace():
+                return "PROCESS", None   # a later PROCESS run: don't record the model before it
     return None, None
 
 

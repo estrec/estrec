@@ -159,3 +159,18 @@ Writer plan: one reader of PROCESS's text (sections, labels, which row is which)
 `save=2` matrix in R and SAS for precision; SPSS from OMS, `display=tables` pivot tables at full
 precision where PROCESS 5 provides them (probe `t_*` runs), else the printed decimals with a
 precision message.
+
+### PROCESS writers for R and SAS (2026-11-14)
+
+- R (`r/R/process.R`, 6520cf2): `record_process(process(...))` adds `save = 2` (which also sets
+  `intprobe = 1`), prints PROCESS's output and ports the Python reader. Matrix rows follow the
+  printed rows except "Coding of" tables (not in the matrix), blank rows at section breaks and
+  the closing error-count row, so each printed row takes the next matrix row that agrees to its
+  printed decimals.
+- SAS (`sas/estrec.sas`, bd06fb2): PROCESS for SAS's IML matrices reach the ODS document at full
+  precision: character matrices hold its text, numeric ones its tables, titled as printed (an
+  untitled table's title is the `_LIT` line above it); column labels keep PROCESS's headings
+  (`R-sq`, `-2LL`, `F(HC3)`). Ported to one DATA step. PROCESS for SAS prints `{C1)` for `(C1)`
+  and `Ind1 : X1 -> ...` keys.
+- `tests/test_process.py` checks both against the Python reader on 7 models (R: its printed
+  text; SAS: its listing).

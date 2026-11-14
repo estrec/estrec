@@ -32,6 +32,12 @@
   for SPSS, with full-precision numbers from PROCESS's `save = 2` matrix matched row by row to
   its printed output. `tests/test_process.py` checks it against the Python reader on 7 models.
 - R: `print()` of a record whose software list names no language (SPSS, SAS) no longer fails.
+- SAS: `%estrec_begin` / `%estrec_end` around `%process` records a PROCESS for SAS run, read
+  from its IML matrices in the ODS document at full precision; the same record as SPSS and R
+  write. `tests/test_process.py` checks it against the Python reader on 7 models.
+- PROCESS readers: a conditional table's moderator columns aren't read as values (a moderator
+  named z was taken as the z statistic); PROCESS for SAS's `{C1)` contrast labels are read as
+  `(C1)`; moderator values in row names round in integers, the same in Python, R and SAS.
 - SAS: `sas/estrec.sas`, `%estrec_begin` / `%estrec_end(out=)`: one record per REG, GLM,
   SURVEYREG, LOGISTIC, SURVEYLOGISTIC, GENMOD (incl. GEE), MIXED, GLIMMIX, PANEL or SYSLIN
   run in between, read from an

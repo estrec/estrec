@@ -11,6 +11,7 @@ reads their output too.
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field
 
@@ -39,13 +40,15 @@ class Section:
     def key(self) -> str:
         return _key(self.title)
 
-    def col(self, row, *names):
-        """The value in `row` (a (label, values) pair) under the first heading in `names`."""
+    def col(self, row, *names, skip=0):
+        """The value in `row` (a (label, values) pair) under the first heading in `names`, past
+        the first `skip` columns (a conditional table's moderator values: a moderator named z
+        isn't the z statistic)."""
         heads = [_key(c) for c in self.columns]
         for n in names:
             n = _key(n)
             for i, h in enumerate(heads):
-                if (h == n or re.sub(r"\(.*\)$", "", h) == n) and i < len(row[1]):
+                if i >= skip and (h == n or re.sub(r"\(.*\)$", "", h) == n) and i < len(row[1]):
                     return row[1][i]
         return None
 
@@ -239,12 +242,11 @@ def _term(label):
     return "(Intercept)" if lab.lower() == "constant" else lab
 
 
-def _row(sec, row, term, **extra):
-    r = {"term": term, "estimate": R.num(sec.col(row, "coeff", "effect", "index")),
-         "std_error": R.num(sec.col(row, "se", "bootse"))}
-    r.update(R.compact({"statistic": R.num(sec.col(row, "t", "z")), "p_value": R.num(sec.col(row, "p")),
-                        "conf_low": R.num(sec.col(row, "llci", "bootllci")),
-                        "conf_high": R.num(sec.col(row, "ulci", "bootulci"))}))
+def _row(sec, row, term, skip=0, **extra):
+    c = lambda *n: R.num(sec.col(row, *n, skip=skip))      # noqa: E731
+    r = {"term": term, "estimate": c("coeff", "effect", "index"), "std_error": c("se", "bootse")}
+    r.update(R.compact({"statistic": c("t", "z"), "p_value": c("p"),
+                        "conf_low": c("llci", "bootllci"), "conf_high": c("ulci", "bootulci")}))
     r.update({k: v for k, v in extra.items() if v is not None})
     return r
 
@@ -284,12 +286,12 @@ def interpret(sections) -> dict:
             if re.match(rf"(?i)^(relative )?(conditional )?indirect {_EFF}", v):
                 ind_ctx = _key(v)        # a table after its path line has no title of its own
             if "->" in v:
-                toks = [t for t in v.split() if t != "->"]
+                toks = [t for t in v.split() if t not in ("->", ":")]   # SAS: "Ind1 : X1 -> M -> Y"
                 if toks and re.fullmatch(r"Ind\d+", toks[0]):
                     keys[toks[0]] = toks[1:]
                 else:
                     path = toks
-            m = re.match(r"^\((C\d+)\)\s+(.*)$", v)
+            m = re.match(r"^[({](C\d+)\)\s+(.*)$", v)
             if m:
                 contrasts[m[1]] = " ".join(m[2].split())
             m = re.match(r"(?i)^(Int_\d+)\s*:?\s*(.*)$", v)
@@ -340,7 +342,7 @@ def interpret(sections) -> dict:
             mod = _moderator_cols(s)
             for row in s.rows:
                 mv = _mod_value(s, row, mod)
-                effects.append(_row(s, row, _eff_term("direct", row[0], mv, mod), mediation=R.compact(
+                effects.append(_row(s, row, _eff_term("direct", row[0], mv, mod), skip=len(mod), mediation=R.compact(
                     {"effect": "direct", "treatment": row[0], "moderator_value": mv})))
             continue
         if re.match(rf"(relative )?(conditional )?indirect {_EFF} of x on y", k) or (not k and path):
@@ -387,7 +389,7 @@ def interpret(sections) -> dict:
             mod = _moderator_cols(s)
             for row in s.rows:
                 mv = _mod_value(s, row, mod)
-                effects.append(_row(s, row, f"{h.get('x')}" + (_at(mod, mv) if mv is not None else ""),
+                effects.append(_row(s, row, f"{h.get('x')}" + (_at(mod, mv) if mv is not None else ""), skip=len(mod),
                                     response=outcome, component="conditional"))
             continue
         if s.rows:
@@ -419,7 +421,7 @@ def interpret(sections) -> dict:
 
 
 def _indirect(s, row, mod, path, relative=False):
-    lab = row[0]
+    lab = re.sub(r"^\{(C\d+\))$", r"(\1", row[0]) if row[0] else row[0]   # PROCESS for SAS prints {C1)
     mv = _mod_value(s, row, mod)
     med, treat, eff, extra = None, None, "indirect", {}
     if lab and lab.upper() == "TOTAL":
@@ -446,7 +448,7 @@ def _indirect(s, row, mod, path, relative=False):
             term += f" [{treat}]"
     if mv is not None:
         term += _at(mod, mv)
-    return _row(s, row, term, mediation=R.compact({
+    return _row(s, row, term, skip=len(mod), mediation=R.compact({
         "effect": eff, "mediator": med, "treatment": treat, "moderator_value": mv, **extra}))
 
 
@@ -484,15 +486,22 @@ def _eff_term(eff, label, mv=None, mod=None):
 
 
 def _fmt_mv(v):
-    """A moderator value for a row's name: 3 decimals (3 significant digits below 0.01), from
-    the value at PROCESS's 4 printed decimals, so printed and full-precision values name the
-    row alike (-2.69446 and the printed -2.6945 both give -2.695)."""
+    """A moderator value for a row's name: rounded (half away from zero) to PROCESS's 4 printed
+    decimals, then to 3 (below 0.01 the 4 decimals, trailing zeros dropped), in integers so
+    the Python, R and SAS readers agree and printed and full-precision values name the row
+    alike (-2.69446 and the printed -2.6945 both give -2.695)."""
     if not isinstance(v, (int, float)):
         return str(v)
     if v == int(v):
         return str(int(v))
-    v = round(v, 4)          # PROCESS prints 4 decimals: round as it did first, then to 3
-    return f"{v:.3f}" if abs(v) >= 0.01 else f"{v:.3g}"
+    n4 = int(math.floor(abs(v) * 10000 + 0.5))
+    if n4 == 0:
+        return "0"
+    sign = "-" if v < 0 else ""
+    if n4 < 100:
+        return sign + "0.00" + f"{n4:02d}".rstrip("0")
+    n3 = (n4 + 5) // 10
+    return f"{sign}{n3 // 1000}.{n3 % 1000:03d}"
 
 
 def _at(mod, mv):

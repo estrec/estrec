@@ -8,7 +8,8 @@
    %estrec_begin opens an ODS document; the procedures' output goes to it as well as to
    your usual destinations. %estrec_end closes it and writes one record per supported
    procedure run in between (numbered fit-1, fit-2, ... when there are several):
-   REG, GLM, SURVEYREG, LOGISTIC, SURVEYLOGISTIC and GENMOD (including GEE).
+   REG, GLM, SURVEYREG, LOGISTIC, SURVEYLOGISTIC, GENMOD (including GEE), MIXED, GLIMMIX,
+   PANEL, SYSLIN, and PROCESS (Hayes's macro, which runs in IML; not part of estrec).
 
    Options of %estrec_end: OUT= (required), TITLE=, IDENTIFYING=NO (YES also records the
    data set name).
@@ -103,6 +104,37 @@ proc fcmp outlib=work._estrec_f.f;
       if r not in (9, 10, 13) and index(o, byte(r)) then o = tranwrd(o, byte(r), cats('\u00', put(r, hex2.)));
     end;
     return (trim(o));
+  endsub;
+  /* the value under the first column heading in NAMES ('|'-separated, lowercase) */
+  /* the same, past the first SKIP columns (a conditional table's moderator values) */
+  function er_pcol2(names $, cn[*] $, v[*], skip);
+    length n h $ 200;
+    do i = 1 to countw(names, '|');
+      n = scan(names, i, '|');
+      do j = skip + 1 to dim(cn);
+        h = cn[j];
+        if h ne '' then do;
+          if h = n or prxchange('s/\(.*\)$//', 1, trim(h)) = n then return (v[j]);
+        end;
+      end;
+    end;
+    return (.);
+  endsub;
+  function er_pcol(names $, cn[*] $, v[*]);
+    return (er_pcol2(names, cn, v, 0));
+  endsub;
+  /* a moderator value for a row's name: to 4 decimals (half away from zero), then 3, as the
+     Python and R readers do */
+  function er_mvfmt(v) $ 40;
+    length s $ 40;
+    if missing(v) then return ('');
+    if v = round(v) then return (strip(put(v, 32.)));
+    n4 = floor(abs(v) * 10000 + 0.5);
+    if n4 = 0 then return ('0');
+    s = ifc(v < 0, '-', '');
+    if n4 < 100 then return (cats(s, '0.00', prxchange('s/0+$//', 1, put(n4, z2.))));
+    n3 = floor((n4 + 5) / 10);
+    return (cats(s, put(floor(n3 / 1000), 32.), '.', put(mod(n3, 1000), z3.)));
   endsub;
 quit;
 options append=(cmplib=work._estrec_f);
@@ -309,9 +341,16 @@ options append=(cmplib=work._estrec_f);
     %_er_s('provenance/software/#0001/purl', "pkg:generic/sas@&sysvlong");
     %_er_s('provenance/software/#0001/role', 'estimator');
     %_er_s('provenance/software/#0001/command', "&_er_cmd");
-    %_er_s('provenance/software/#0002/name', 'estrec for SAS');
-    %_er_s('provenance/software/#0002/version', "&_er_version");
-    %_er_s('provenance/software/#0002/role', 'writer');
+    %if &_er_pisproc %then %do;   /* PROCESS (Hayes) ran in IML */
+      %_er_s('provenance/software/#0002/name', 'PROCESS');
+      %if %length(&_er_pver) %then %_er_s('provenance/software/#0002/version', "&_er_pver");;
+      %_er_s('provenance/software/#0002/role', 'estimator');
+      %_er_s('provenance/software/#0002/url', 'https://www.afhayes.com/download.html');
+      %_er_s('provenance/software/#0002/command', "PROCESS model &_er_pmodel");
+    %end;
+    %_er_s("provenance/software/#000%eval(2 + &_er_pisproc)/name", 'estrec for SAS');
+    %_er_s("provenance/software/#000%eval(2 + &_er_pisproc)/version", "&_er_version");
+    %_er_s("provenance/software/#000%eval(2 + &_er_pisproc)/role", 'writer');
     %_er_s('provenance/data/#0001/role', 'estimation');
     %if %length(&_er_rows) %then %_er_i('provenance/data/#0001/rows', &_er_rows);;
     %if %upcase(&_er_identifying) = YES and %length(&_er_dataset) %then
@@ -1386,6 +1425,611 @@ options append=(cmplib=work._estrec_f);
   %let _er_msgs = &_er_msgs|syslin_iv;
 %mend;
 
+/* ---- IML: a record only for PROCESS runs (its banner names it) */
+%macro _er_iml(dir);
+  %let _er_pisproc = 1;
+  %_er_process(&dir)
+  %if %length(&_er_skip) %then %let _er_pisproc = 0;
+%mend;
+
+/* ---- PROCESS (Andrew F. Hayes's macro for mediation, moderation and conditional process
+   models, https://www.afhayes.com/download.html; not part of estrec). PROCESS for SAS prints
+   with PROC IML, so its output is an IML directory of matrices: character ones hold its text
+   (banners, "Model and Variables", OUTCOME VARIABLE:, paths, keys), numeric ones its tables at
+   full precision, titled as printed. They are read in order into the items the Python reader
+   (spss/estrec_process.py) reads: text lines, banner headings and table rows, and interpreted
+   the same way; tests/test_process.py checks that the records agree. */
+
+%macro _er_process(dir);
+  %local n i p nm k;
+  /* 1. every table of the IML directory, in order, as (table, row, column) cells */
+  ods exclude all;
+  proc document name=work._estrec; ods output Properties=work._er_pprops; list &dir / levels=all details; run; quit;
+  ods exclude none;
+  data work._er_ptabs; set work._er_pprops; where type = 'Table'; tno = _n_;
+    length tname $ 32; tname = scan(scan(path, -1, '\'), 1, '#'); run;
+  proc sql noprint; select count(*) into :n trimmed from work._er_ptabs; quit;
+  proc datasets lib=work nolist nowarn; delete _er_pc; quit;
+  %do i = 1 %to &n;
+    data _null_; set work._er_ptabs(firstobs=&i obs=&i);
+      call symputx('p', cats("&dir", '\', scan(path, -1, '\'))); call symputx('nm', tname);
+    run;
+    proc datasets lib=work nolist nowarn; delete _er_pt; quit;
+    ods exclude all;
+    proc document name=work._estrec; ods output &nm = work._er_pt; replay &p; run; quit;
+    ods exclude none;
+    %if %sysfunc(exist(work._er_pt)) %then %do;
+      data work._er_pl1;
+        set work._er_pt end=_last;
+        retain _er_dn . _er_dc ' ';
+        array _nv{*} _numeric_; array _cv{*} _character_;
+        length tname $ 32 label cvar $ 200 cname $ 200 chr $ 1000;
+        retain _dsid 0;
+        if _n_ = 1 then _dsid = open('work._er_pt');
+        tno = &i; rno = _n_; tname = "&nm"; label = '';
+        do _j = 1 to dim(_cv);
+          if upcase(vname(_cv{_j})) = 'ROWNAME' then label = strip(_cv{_j});
+        end;
+        do _j = 1 to dim(_nv);
+          cvar = vname(_nv{_j});
+          if cvar not in ('_er_dn', '_dsid', 'tno', 'rno', '_j', '_rc') then do;
+            cno = varnum(_dsid, cvar); cname = varlabel(_dsid, cno); if cname = '' then cname = cvar;
+            isnum = 1; num = _nv{_j}; chr = ''; output;
+          end;
+        end;
+        do _j = 1 to dim(_cv);
+          cvar = vname(_cv{_j});
+          if upcase(cvar) not in ('ROWNAME', '_ER_DC', 'TNAME', 'LABEL', 'CVAR', 'CNAME', 'CHR') then do;
+            cno = varnum(_dsid, cvar); cname = varlabel(_dsid, cno); if cname = '' then cname = cvar;
+            isnum = 0; num = .; chr = strip(_cv{_j}); output;
+          end;
+        end;
+        if _last then _rc = close(_dsid);
+        keep tno rno cno tname label cvar cname isnum num chr;
+      run;
+      proc append base=work._er_pc data=work._er_pl1 force; run;
+    %end;
+  %end;
+  %if not %_er_has(_er_pc) %then %do; %let _er_skip = PROCESS printed nothing it could read; %return; %end;
+  proc sort data=work._er_pc; by tno rno cno; run;
+  proc sql;
+    create table work._er_pc2 as select c.*, t.label as title length=400,
+      (select count(*) from work._er_pc d where d.tno = c.tno and not prxmatch('/^Col\d+$/i', strip(d.cvar))) = 0 as generic
+    from work._er_pc c left join work._er_ptabs t on c.tno = t.tno order by c.tno, c.rno, c.cno;
+  quit;
+
+  /* 2. items in output order: (itype 'line' or 'heading', text) and (itype 'row', table) */
+  data work._er_pitems;
+    set work._er_pc2; by tno rno;
+    length itype $ 8 text ttl $ 2000 tok $ 2000 rlabel $ 200 cn1-cn20 cr1-cr20 $ 200 prevline $ 2000;
+    array cn{20} $ cn1-cn20; array cr{20} $ cr1-cr20; array v{20} v1-v20;
+    retain tok cn1-cn20 cr1-cr20 v1-v20 ncol prevline ttl;
+    keep ino itype text ttl rlabel ncol cn1-cn20 cr1-cr20 v1-v20 tfirst tname;
+    retain ino 0;
+    if first.rno then do;
+      tok = ''; ncol = 0;
+      do _j = 1 to 20; cn{_j} = ''; cr{_j} = ''; v{_j} = .; end;
+    end;
+    if first.tno then do;
+      ttl = strip(title);
+      if generic and ttl ne '' and substr(ttl, 1, 1) ne '*' then do;
+        itype = 'line'; text = ttl; ino + 1; output; prevline = '';
+      end;
+      if not generic and ttl = '' then ttl = prevline;   /* the title printed above an untitled table */
+    end;
+    if generic then do;
+      if isnum then do;
+        if missing(num) then tok = catx(' ', tok, '.');
+        else if num = round(num) then tok = catx(' ', tok, strip(put(num, 32.)));
+        else tok = catx(' ', tok, er_num(num));
+      end;
+      else if chr ne '' then tok = catx(' ', tok, chr);
+    end;
+    else do;
+      ncol + 1;
+      if ncol <= 20 then do; cr{ncol} = strip(cname); cn{ncol} = lowcase(compbl(strip(cname))); v{ncol} = num; end;
+    end;
+    if last.rno then do;
+      if generic then do;
+        text = catx(' ', ifc(prxmatch('/^row\d+$/i', strip(label)), '', strip(label)), tok);
+        if text ne '' then do;
+          if substr(text, 1, 1) = '*' then do;
+            if index(text, 'PROCESS Procedure for') then do;
+              itype = 'line'; text = prxchange('s/^[* ]+|[* ]+$//', -1, trim(text)); ino + 1; output;
+            end;
+            else if prxmatch('/\*\s*([A-Za-z][A-Za-z ,()]+[A-Za-z)])\s*\*/', text) then do;
+              itype = 'heading'; text = prxchange('s/.*?\*\s*([A-Za-z][A-Za-z ,()]+[A-Za-z)])\s*\*.*/$1/', 1, trim(text));
+              ino + 1; output;
+            end;
+            prevline = '';
+          end;
+          else do;
+            itype = 'line'; ino + 1; output;
+            prevline = ifc(upcase(substr(tname, 1, 4)) = '_LIT' and not index(text, '->'), text, '');
+          end;
+        end;
+      end;
+      else do;
+        itype = 'row'; text = ''; rlabel = ifc(prxmatch('/^row\d+$/i', strip(label)), '', strip(label));
+        rlabel = prxchange('s/^\{(C\d+\))$/($1/', 1, trim(rlabel));   /* PROCESS for SAS prints {C1) */
+        tfirst = (rno = 1);
+        ino + 1; output;
+        prevline = '';
+      end;
+    end;
+  run;
+  /* the last row of each table */
+  data work._er_pitems;
+    merge work._er_pitems work._er_pitems(firstobs=2 keep=itype tfirst rename=(itype=_nt tfirst=_nf));
+    tlast = (itype = 'row' and (_nt ne 'row' or _nf = 1));
+    drop _nt _nf;
+  run;
+
+  %if %symexist(_er_debug) %then %do; data work.dbg_items; set work._er_pitems; run; %end;
+  /* 3. interpret, in order (spss/estrec_process.py interpret()) */
+  data work._er_peq(keep=pno term resp comp est se stat p lo hi)
+       work._er_pef(keep=pno term resp comp est se stat p lo hi m_effect m_med m_treat m_mvn m_mvs m_path m_ind m_lab)
+       work._er_pts(keep=tsn cat name label stat df df2 p resp comp est se dist fitno)
+       work._er_pfit(keep=fitno resp comp r2 adj_r2 mse dfr dev pr2 csr2 nkr2)
+       work._er_pan(keep=fitno resp a_mse a_dfr a_dfreg)
+       work._er_pkey(keep=kname kpath) work._er_pctr(keep=kname kpath) work._er_pprod(keep=kname kpath)
+       work._er_pskip(keep=label);
+    set work._er_pitems end=_e;
+    array cn{20} $ cn1-cn20; array cr{20} $ cr1-cr20; array v{20} v1-v20;
+    length _t2 $ 2000 outcome $ 200 path $ 2000 ind_ctx k k_ctx $ 400 seen $ 2000 hy hx hw hz $ 200 hm hcov $ 2000
+           hver hplat $ 40 term label $ 2000 resp comp $ 200 m_effect m_med m_treat $ 200 m_mvs $ 400
+           m_path $ 2000 m_ind m_lab $ 40 cat name dist $ 40 kname $ 40 kpath $ 2000 atx $ 400 _t $ 2000
+           mods $ 2000;
+    retain outcome path ind_ctx seen hy hx hw hz hm hcov hver hplat '' total_model await hdr_done want_cov want_seed 0
+           hmodel hnobs hseed hconf hreps . pno tsn fitno 0 mres_mse mres_dfr mreg_df . nmod 0 mods '';
+    if itype = 'heading' then do;
+      if prxmatch('/total effect model/i', text) then total_model = 1;
+      goto next;
+    end;
+    if itype = 'line' then do;
+      _t = strip(text);
+      /* header fields (before the first OUTCOME VARIABLE), and values anywhere */
+      if want_cov then do; hcov = _t; want_cov = 0; end;
+      if want_seed then do; if prxmatch('/^\d+$/', trim(_t)) then hseed = input(_t, 32.); want_seed = 0; end;
+      if prxmatch('/^outcome variable\s*:?\s*(\S*)\s*$/i', _t) then hdr_done = 1;
+      if not hdr_done and prxmatch('/^(Model|Y|X|M\d*|W|Z|Covariates?)\s*:\s*(.*)$/i', _t) then do;
+        k = lowcase(prxchange('s/^(Model|Y|X|M\d*|W|Z|Covariates?)\s*:\s*(.*)$/$1/i', 1, _t));
+        label = strip(prxchange('s/^(Model|Y|X|M\d*|W|Z|Covariates?)\s*:\s*(.*)$/$2/i', 1, _t));
+        if substr(k, 1, 3) = 'cov' then do; if label ne '' then hcov = catx(' ', hcov, label); else want_cov = 1; end;
+        else if k = 'model' and label ne '' then hmodel = int(input(scan(label, 1, ' '), ?? 32.));
+        else if substr(k, 1, 1) = 'm' and label ne '' then hm = catx(' ', hm, label);
+        else if k = 'y' then hy = label; else if k = 'x' then hx = label;
+        else if k = 'w' then hw = label; else if k = 'z' then hz = label;
+      end;
+      if missing(hnobs) and prxmatch('/sample\s*size\s*:?\s*(\d+)/i', _t) then
+        hnobs = input(prxchange('s/.*sample\s*size\s*:?\s*(\d+).*/$1/i', 1, _t), 32.);
+      if missing(hseed) and prxmatch('/custom\s*seed/i', _t) then do;
+        if prxmatch('/custom\s*seed\s*:?\s*(\d+)/i', _t) then hseed = input(prxchange('s/.*custom\s*seed\s*:?\s*(\d+).*/$1/i', 1, _t), 32.);
+        else want_seed = 1;
+      end;
+      if hver = '' and prxmatch('/PROCESS Procedure for (\w+) Version\s+([\d.]+)/', _t) then do;
+        hplat = prxchange('s/.*PROCESS Procedure for (\w+) Version\s+([\d.]+).*/$1/', 1, _t);
+        hver = prxchange('s/.*PROCESS Procedure for (\w+) Version\s+([\d.]+).*/$2/', 1, _t);
+      end;
+      if missing(hconf) and prxmatch('/level of confidence/i', _t) and prxmatch('/:\s*[-+]?\d*\.?\d+\s*$/', _t) then
+        hconf = input(prxchange('s/.*:\s*([-+]?\d*\.?\d+)\s*$/$1/', 1, _t), 32.);
+      if missing(hreps) and prxmatch('/number of bootstrap/i', _t) and prxmatch('/:\s*[-+]?\d*\.?\d+\s*$/', _t) then
+        hreps = input(prxchange('s/.*:\s*([-+]?\d*\.?\d+)\s*$/$1/', 1, _t), 32.);
+      /* outcome, paths and keys */
+      if prxmatch('/^outcome variable\s*:?\s*(\S*)\s*$/i', _t) then do;
+        outcome = prxchange('s/^outcome variable\s*:?\s*(\S*)\s*$/$1/i', 1, _t);
+        await = (outcome = ''); path = '';
+        goto next;
+      end;
+      if await then do;
+        outcome = scan(_t, 1, ' '); await = 0;
+        if findw(seen, strip(outcome), ' ', 'e') and outcome = hy then total_model = 1;
+        seen = catx(' ', seen, outcome);
+        goto next;
+      end;
+      if outcome ne '' and seen = '' then seen = outcome;
+      if prxmatch('/^(relative )?(conditional )?indirect effects?(\(s\))?/i', _t) then
+        ind_ctx = lowcase(compbl(prxchange('s/:+\s*$//', 1, _t)));
+      if index(_t, '->') then do;
+        _t2 = tranwrd(tranwrd(cat(' ', _t, ' '), ' -> ', ' '), ' : ', ' ');
+        _t2 = compbl(strip(_t2));
+        if prxmatch('/^Ind\d+$/', trim(scan(_t2, 1, ' '))) then do;
+          kname = scan(_t2, 1, ' '); kpath = substr(_t2, length(kname) + 2); output work._er_pkey;
+        end;
+        else path = _t2;
+      end;
+      if prxmatch('/^[({](C\d+)\)\s+(.*)$/', _t) then do;
+        kname = prxchange('s/^[({](C\d+)\)\s+(.*)$/$1/', 1, _t);
+        kpath = compbl(prxchange('s/^[({](C\d+)\)\s+(.*)$/$2/', 1, trim(_t))); output work._er_pctr;
+      end;
+      if prxmatch('/^(Int_\d+)\s*:?\s*(.*)$/i', _t) then do;
+        kname = lowcase(prxchange('s/^(Int_\d+)\s*:?\s*(.*)$/$1/i', 1, _t));
+        kpath = '';
+        _t2 = prxchange('s/^(Int_\d+)\s*:?\s*(.*)$/$2/i', 1, _t);
+        do _j = 1 to countw(_t2, ' ');
+          if scan(_t2, _j, ' ') not in ('x', ':') then kpath = catx(' ', kpath, scan(_t2, _j, ' '));
+        end;
+        output work._er_pprod;
+      end;
+      goto next;
+    end;
+    /* a table row */
+    k = lowcase(compbl(prxchange('s/:+\s*$//', 1, strip(ttl))));
+    if k = '' and path ne '' and ind_ctx ne '' then k_ctx = ind_ctx; else k_ctx = k;
+    resp = outcome; comp = ifc(total_model, 'total_effect_model', '');
+    est = .; se = .; stat = .; p = .; lo = .; hi = .;
+    m_effect = ''; m_med = ''; m_treat = ''; m_mvn = .; m_mvs = ''; m_path = ''; m_ind = ''; m_lab = '';
+    /* moderator columns: those before effect / index / coeff */
+    if tfirst then do;
+      nmod = 0; mods = '';
+      do _j = 1 to ncol;
+        if cn{_j} in ('effect', 'index', 'coeff') then leave;
+        nmod + 1; mods = catx('|', mods, cr{_j});
+      end;
+      if _j > ncol then do; nmod = 0; mods = ''; end;
+    end;
+    atx = '';
+    if nmod = 1 then do; m_mvn = v{1}; atx = cat(', at ', strip(scan(mods, 1, '|')), ' = ', strip(er_mvfmt(v{1}))); end;
+    else if nmod > 1 then do;
+      atx = ', at';
+      do _j = 1 to nmod;
+        m_mvs = catx(', ', m_mvs, cats(scan(mods, _j, '|'), '=', er_num(v{_j})));
+        atx = catx(' ', atx, strip(scan(mods, _j, '|')), '=', cats(er_mvfmt(v{_j}), ifc(_j < nmod, ',', '')));
+      end;
+    end;
+    est = er_pcol2('coeff|effect|index', cn, v, nmod); se = er_pcol2('se|bootse', cn, v, nmod);
+    stat = er_pcol2('t|z', cn, v, nmod); p = er_pcol2('p', cn, v, nmod);
+    lo = er_pcol2('llci|bootllci', cn, v, nmod); hi = er_pcol2('ulci|bootulci', cn, v, nmod);
+    if k = 'model summary' then do;
+      fitno + 1;
+      r2 = er_pcol('r-sq', cn, v); adj_r2 = er_pcol('adj r-sq|adj_r-sq', cn, v); mse = er_pcol('mse', cn, v);
+      dfr = er_pcol('df2', cn, v); dev = er_pcol('-2ll', cn, v); pr2 = er_pcol('mcfadden', cn, v);
+      csr2 = er_pcol('coxsnell', cn, v); nkr2 = er_pcol('nagelkrk', cn, v);
+      output work._er_pfit;
+      tsn + 1; cat = 'model'; dist = '';
+      _f = er_pcol('f', cn, v);
+      name = ifc(missing(_f), 'likelihood_ratio', 'f');
+      label = cat('Model summary, ', strip(outcome));
+      if total_model then label = cat(strip(label), ' (total effect model)');
+      stat = ifn(missing(_f), er_pcol('modelll|-2ll', cn, v), _f);
+      df = er_pcol('df1|df', cn, v); df2 = er_pcol('df2', cn, v); p = er_pcol('p', cn, v); est = .; se = .;
+      output work._er_pts;
+      goto next;
+    end;
+    if k = 'model' then do;
+      pno + 1;
+      term = ifc(lowcase(rlabel) = 'constant', '(Intercept)', rlabel);
+      output work._er_peq;
+      goto next;
+    end;
+    if k =: 'test(s) of highest order' or k =: 'omnibus test' then do;
+      tsn + 1; cat = 'restriction'; dist = ''; fitno_t = .;
+      _f = er_pcol('f', cn, v);
+      name = ifc(missing(_f), 'chi2', 'f');
+      label = catx(' ', prxchange('s/:+\s*$//', 1, strip(ttl)), rlabel);
+      stat = ifn(missing(_f), er_pcol('chi-sq', cn, v), _f);
+      df = er_pcol('df1|df', cn, v); df2 = er_pcol('df2', cn, v); comp = ''; est = .; se = .;
+      _keepfit = fitno; fitno = .; output work._er_pts; fitno = _keepfit;
+      goto next;
+    end;
+    if prxmatch('/^(relative )?total effects?(\(s\))? of x on y/', k) then do;
+      pno + 1; resp = ''; comp = ''; m_effect = 'total'; m_treat = rlabel;
+      term = 'total effect'; if rlabel ne '' then term = catx(' ', 'total effect:', rlabel);
+      output work._er_pef;
+      goto next;
+    end;
+    if prxmatch('/^(relative )?(conditional )?direct effects?(\(s\))? of x on y/', k) then do;
+      pno + 1; resp = ''; comp = ''; m_effect = 'direct'; m_treat = rlabel;
+      term = 'direct effect'; if rlabel ne '' then term = catx(' ', 'direct effect:', rlabel);
+      term = catt(term, atx);
+      output work._er_pef;
+      goto next;
+    end;
+    if prxmatch('/^(relative )?(conditional )?indirect effects?(\(s\))? of x on y/', k) or (k = '' and path ne '') then do;
+      pno + 1; resp = ''; comp = ''; m_effect = 'indirect';
+      _rel = (substr(k_ctx, 1, 8) = 'relative');
+      if upcase(rlabel) = 'TOTAL' then m_effect = 'total_indirect';
+      else if prxmatch('/^\(C\d+\)$/', trim(rlabel)) then do; m_effect = 'contrast'; m_lab = rlabel; end;
+      else if prxmatch('/^Ind\d+$/', trim(rlabel)) then m_ind = rlabel;
+      else if _rel and rlabel ne '' then m_treat = rlabel;
+      else if rlabel ne '' and nmod = 0 then m_med = rlabel;
+      if m_effect = 'indirect' and m_med = '' and m_ind = '' and path ne '' then do;
+        if countw(path, ' ') = 3 then m_med = scan(path, 2, ' '); else m_path = path;
+      end;
+      if m_effect = 'total_indirect' then term = 'total indirect effect';
+      else if m_effect = 'contrast' then term = catx(' ', 'contrast', rlabel);
+      else do;
+        if path ne '' and (_rel or nmod > 0 or rlabel = '') then term = cat('indirect: ', tranwrd(strip(path), ' ', ' -> '));
+        else term = cat('indirect: ', strip(coalescec(m_med, rlabel)));
+        if m_treat ne '' then term = cat(strip(term), ' [', strip(m_treat), ']');
+      end;
+      term = catt(term, atx);
+      output work._er_pef;
+      goto next;
+    end;
+    if (cn{1} = 'ss' and cn{2} = 'df' and cn{3} = 'ms' and ncol = 3) then do;
+      if tfirst then do; mres_mse = .; mres_dfr = .; mreg_df = .; end;
+      if substr(lowcase(rlabel), 1, 5) = 'resid' then do; mres_mse = er_pcol('ms', cn, v); mres_dfr = er_pcol('df', cn, v); end;
+      if substr(lowcase(rlabel), 1, 5) = 'regre' then mreg_df = er_pcol('df', cn, v);
+      if tlast and not missing(mres_dfr) then do;
+        a_mse = mres_mse; a_dfr = mres_dfr; a_dfreg = mreg_df; output work._er_pan;
+      end;
+      goto next;
+    end;
+    if k =: 'coding of' or k =: 'anova summary' then goto next;
+    if prxmatch('/index of (partial |conditional )?moderated mediation/', k) then do;
+      pno + 1; resp = ''; comp = ''; m_effect = 'index_moderated_mediation';
+      term = 'index of moderated mediation';
+      if rlabel ne '' then term = cat(strip(term), ' (', strip(rlabel), ')');
+      if path ne '' then term = cat(strip(term), ': ', tranwrd(strip(path), ' ', ' -> '));
+      if countw(path, ' ') = 3 then m_med = scan(path, 2, ' ');
+      else if countw(path, ' ') > 3 then m_path = path;
+      m_mvn = .; m_mvs = '';
+      output work._er_pef;
+      goto next;
+    end;
+    if k =: 'normal theory test' then do;
+      tsn + 1; cat = 'linear_combination'; name = 'wald'; dist = 'normal';
+      label = catx(' ', 'Normal theory (Sobel) test of the indirect effect through', rlabel);
+      est = er_pcol('effect', cn, v); se = er_pcol('se', cn, v); stat = er_pcol('z', cn, v); p = er_pcol('p', cn, v);
+      df = .; df2 = .; resp = ''; comp = ''; _keepfit = fitno; fitno = .; output work._er_pts; fitno = _keepfit;
+      goto next;
+    end;
+    if prxmatch('/^conditional effects? of (the )?focal predictor/', k) then do;
+      pno + 1; comp = 'conditional'; term = catt(hx, atx); m_mvn = .; m_mvs = '';
+      output work._er_pef;
+      goto next;
+    end;
+    if tfirst then do;
+      label = prxchange('s/:+\s*$//', 1, strip(ttl)); if label = '' then label = '(untitled table)';
+      output work._er_pskip;
+    end;
+    next:
+    if _e then do;
+      call symputx('_er_pmodel', hmodel, 'G'); call symputx('_er_py', hy, 'G'); call symputx('_er_px', hx, 'G');
+      call symputx('_er_pm', hm, 'G'); call symputx('_er_pw', hw, 'G'); call symputx('_er_pz', hz, 'G');
+      call symputx('_er_pcov', hcov, 'G'); call symputx('_er_pnobs', hnobs, 'G'); call symputx('_er_pseed', hseed, 'G');
+      call symputx('_er_pver', hver, 'G'); call symputx('_er_pconf', hconf, 'G'); call symputx('_er_preps', hreps, 'G');
+    end;
+  run;
+  %if %length(&_er_pver) = 0 %then %do; %let _er_skip = %str(IML output that isn%'t PROCESS); %return; %end;
+  /* 4. what the order alone doesn't settle: keys, contrasts, product terms, the ANOVA table's df */
+  proc sql;
+    create table work._er_pfit2 as select f.*, a.a_mse, a.a_dfr
+      from work._er_pfit f left join work._er_pan a on f.fitno = a.fitno and f.resp = a.resp order by f.fitno;
+    create table work._er_pts2 as select t.*, a.a_dfr, a.a_dfreg
+      from work._er_pts t left join work._er_pan a on t.fitno = a.fitno and t.resp = a.resp and t.name = 'f' order by t.tsn;
+  quit;
+  data work._er_pfit2; set work._er_pfit2; mse = coalesce(mse, a_mse); dfr = coalesce(dfr, a_dfr); run;
+  data work._er_pts2; set work._er_pts2; if name = 'f' then do; df = coalesce(df, a_dfreg); df2 = coalesce(df2, a_dfr); end; run;
+  data work._er_pef2;
+    if 0 then set work._er_pkey work._er_pctr;
+    length short $ 400;
+    if _n_ = 1 then do;
+      declare hash hk(dataset: 'work._er_pkey'); hk.definekey('kname'); hk.definedata('kpath'); hk.definedone();
+      declare hash hc(dataset: 'work._er_pctr(rename=(kpath=cdef))'); hc.definekey('kname'); hc.definedata('cdef'); hc.definedone();
+    end;
+    length cdef $ 2000;
+    set work._er_pef;
+    if m_ind ne '' then do;
+      kname = m_ind;
+      if hk.find() = 0 then do;
+        if countw(kpath, ' ') = 3 then m_med = scan(kpath, 2, ' '); else m_path = kpath;
+        term = cat('indirect: ', tranwrd(strip(kpath), ' ', ' -> '));
+      end;
+    end;
+    else if m_effect = 'indirect' and m_med ne '' and "&_er_px" ne '' and "&_er_py" ne '' then do;
+      short = cat('indirect: ', strip(m_med));
+      if term = short or substr(term, 1, length(short) + 1) = cat(strip(short), ' ') then
+        term = cat('indirect: ', "&_er_px", ' -> ', strip(m_med), ' -> ', "&_er_py", substr(term, length(short) + 1));
+    end;
+    if m_effect = 'contrast' then do;
+      kname = compress(m_lab, '()'); cdef = '';
+      _rc = hc.find();
+      term = cat('contrast ', strip(m_lab), ifc(cdef ne '', cat(': ', strip(cdef)), ''));
+    end;
+    if resp = '' then resp = "&_er_py";
+    drop short kname kpath cdef _rc;
+  run;
+  data work._er_peq2;
+    if 0 then set work._er_pprod;
+    if _n_ = 1 then do; declare hash hp(dataset: 'work._er_pprod'); hp.definekey('kname'); hp.definedata('kpath'); hp.definedone(); end;
+    set work._er_peq;
+    kname = lowcase(term); kpath = '';
+    if hp.find() ne 0 then kpath = '';
+  run;
+
+  /* 5. the record */
+  %local ydich nresp resps profiles meds boot msg nmsg skipped fam meth struct imeth;
+  proc sql noprint;
+    select count(*) > 0 into :ydich trimmed from work._er_pts where name = 'likelihood_ratio' and resp = "&_er_py";
+    select count(*) > 0 into :boot trimmed from work._er_pef where m_effect in ('indirect', 'total_indirect', 'index_moderated_mediation');
+    select count(*) > 0 into :_er_pind trimmed from work._er_pef where m_effect = 'indirect';
+    select label into :skipped separated by '; ' from work._er_pskip;
+  quit;
+  %if %length(&_er_preps) = 0 or &_er_preps = . %then %let boot = 0;
+  data work._er_presp; set work._er_peq(keep=resp pno); by notsorted resp; if first.resp; run;
+  proc sort data=work._er_presp nodupkey; by resp; run;
+  proc sort data=work._er_presp; by pno; run;
+  %if %length(&_er_pm) and &_er_pind %then %let profiles = mediation/0.1;
+  %if %superq(_er_title) = %str(PROC IML) %then %let _er_title = PROCESS model &_er_pmodel;
+  %let _er_cmd = IML;
+  %let _er_pcall = PROCESS y=&_er_py /x=&_er_px;
+  %if %length(&_er_pm) %then %let _er_pcall = &_er_pcall /m=&_er_pm;
+  %if %length(&_er_pw) %then %let _er_pcall = &_er_pcall /w=&_er_pw;
+  %if %length(&_er_pz) %then %let _er_pcall = &_er_pcall /z=&_er_pz;
+  %if %length(&_er_pcov) %then %let _er_pcall = &_er_pcall /cov=&_er_pcov;
+  %let _er_pcall = &_er_pcall /model=&_er_pmodel..;
+  %if %length(&_er_pm) %then %let fam = mediation; %else %let fam = moderation;
+  %if &ydich and %length(&_er_pm) = 0 %then %let meth = logit; %else %let meth = ols;
+  %if %length(&_er_pw.&_er_pz) %then %let struct = moderated;
+  %else %if &_er_pmodel = 6 %then %let struct = serial;
+  %else %if %sysfunc(countw(&_er_pm, %str( ))) > 1 %then %let struct = parallel;
+  %else %let struct = simple;
+  %if &boot %then %let imeth = bootstrap; %else %let imeth = normal;
+  %_er_part(pmeta)
+    length id $ 36 now $ 20 v $ 2000;
+    id = lowcase(uuidgen());
+    substr(id, 15, 1) = '4'; substr(id, 20, 1) = substr('89ab', mod(rank(substr(id, 20, 1)), 4) + 1, 1);
+    now = cats(put(tzones2u(datetime()), e8601dt19.), 'Z');
+    call symputx('_er_pnow', now);
+    %_er_s('schema', 'estrec/0.1');
+    %_er_s('meta/id', id);
+    %_er_s('meta/created', now);
+    %_er_s('meta/status', 'ok');
+    %_er_s('meta/estimator/family', "&fam");
+    %_er_s('meta/estimator/method', "&meth");
+    %if %length(&profiles) %then %_er_s('meta/profiles/#0001', "&profiles"); %else %_er_ea('meta/profiles');;
+    %_er_s('meta/title', symget('_er_title'));
+    %_er_s('meta/producer/name', 'estrec for SAS');
+    %_er_s('meta/producer/version', "&_er_version");
+    %let nmsg = 0;
+    %if %length(&_er_pver) and %sysfunc(indexw(%str(5.0 5.1.1), &_er_pver)) = 0 %then %do;
+      %let nmsg = %eval(&nmsg + 1);
+      %_er_s("meta/messages/#%sysfunc(putn(&nmsg, z4.))/level", 'warning');
+      %_er_s("meta/messages/#%sysfunc(putn(&nmsg, z4.))/code", 'process_version_unchecked');
+      %_er_s("meta/messages/#%sysfunc(putn(&nmsg, z4.))/source", 'estrec');
+      %_er_s("meta/messages/#%sysfunc(putn(&nmsg, z4.))/message",
+             "PROCESS &_er_pver hasn't been checked with this writer (checked: 5.0, 5.1.1); PROCESS changes its output layout between minor versions, so compare the record with PROCESS's output");
+    %end;
+    %if %length(%superq(skipped)) %then %do;
+      %let nmsg = %eval(&nmsg + 1);
+      %_er_s("meta/messages/#%sysfunc(putn(&nmsg, z4.))/level", 'info');
+      %_er_s("meta/messages/#%sysfunc(putn(&nmsg, z4.))/code", 'process_sections_skipped');
+      %_er_s("meta/messages/#%sysfunc(putn(&nmsg, z4.))/source", 'estrec');
+      %_er_s("meta/messages/#%sysfunc(putn(&nmsg, z4.))/message", cat('PROCESS output not recorded: ', symget('skipped')));
+    %end;
+  %_er_endpart(pmeta)
+  %_er_part(presp)
+    set work._er_presp;
+    %_er_s(cats('meta/responses/#', put(_n_, z4.)), resp);
+  %_er_endpart(presp)
+  %_er_part(pspec)
+    %_er_s('specification/formula/text', symget('_er_pcall'));
+    %_er_s('specification/formula/syntax', 'PROCESS');
+    %if %length(&_er_pm) %then %do;
+      %_er_s('specification/mediation/treatment', "&_er_px");
+      %do i = 1 %to %sysfunc(countw(&_er_pm, %str( )));
+        %_er_s("specification/mediation/mediators/#%sysfunc(putn(&i, z4.))", "%scan(&_er_pm, &i, %str( ))");
+      %end;
+      %_er_s('specification/mediation/outcome', "&_er_py");
+      %if %length(&_er_pcov) %then %do;
+        %do i = 1 %to %sysfunc(countw(&_er_pcov, %str( )));
+          %_er_s("specification/mediation/covariates/#%sysfunc(putn(&i, z4.))", "%scan(&_er_pcov, &i, %str( ))");
+        %end;
+      %end;
+      %else %_er_ea('specification/mediation/covariates');;
+      %let k = 0;
+      %if %length(&_er_pw) %then %do; %let k = %eval(&k + 1); %_er_s("specification/mediation/moderators/#%sysfunc(putn(&k, z4.))", "&_er_pw"); %end;
+      %if %length(&_er_pz) %then %do; %let k = %eval(&k + 1); %_er_s("specification/mediation/moderators/#%sysfunc(putn(&k, z4.))", "&_er_pz"); %end;
+      %_er_s('specification/mediation/structure', "&struct");
+      %_er_i('specification/mediation/process_model', &_er_pmodel);
+      %_er_s('specification/mediation/inference/method', "&imeth");
+      %if &boot %then %do;
+        %_er_i('specification/mediation/inference/reps', round(&_er_preps));
+        %_er_s('specification/mediation/inference/ci_type', 'percentile');
+      %end;
+      %if %length(&_er_pseed) and &_er_pseed ne . %then %_er_i('specification/mediation/inference/seed', &_er_pseed);;
+    %end;
+  %_er_endpart(pspec)
+  %if %length(&_er_pm) %then %do;
+    %_er_part(pmodels)
+      set work._er_presp;
+      %_er_s(cats('specification/mediation/models/#', put(_n_, z4.), '/response'), resp);
+      %_er_s(cats('specification/mediation/models/#', put(_n_, z4.), '/estimator'), ifc(&ydich and resp = "&_er_py", 'logit', 'ols'));
+    %_er_endpart(pmodels)
+  %end;
+  %_er_part(pmetrics)
+    %if %length(&_er_pnobs) and &_er_pnobs ne . %then %_er_i('metrics/nobs', &_er_pnobs);;
+    %if %length(&_er_pconf) and &_er_pconf ne . %then %_er_n('metrics/conf_level', &_er_pconf / 100);;
+  %_er_endpart(pmetrics)
+  data work._er_ppar; set work._er_peq2(in=_q) work._er_pef2; isq = _q; run;
+  %_er_part(pparams)
+    set work._er_ppar;
+    length base $ 60;
+    base = cats('parameters/#', put(_n_, z4.));
+    %_er_s(cats(base, '/term'), term);
+    %_er_n(cats(base, '/estimate'), est);
+    %_er_n(cats(base, '/std_error'), se);
+    if not missing(stat) then do; %_er_n(cats(base, '/statistic'), stat); end;
+    if not missing(p) then do; %_er_n(cats(base, '/p_value'), p); end;
+    if not missing(lo) then do; %_er_n(cats(base, '/conf_low'), lo); end;
+    if not missing(hi) then do; %_er_n(cats(base, '/conf_high'), hi); end;
+    if resp ne '' then do; %_er_s(cats(base, '/response'), resp); end;
+    if comp ne '' then do; %_er_s(cats(base, '/component'), comp); end;
+    if isq then do;
+      if term = '(Intercept)' then do;
+        %_er_s(cats(base, '/canonical/name'), '(Intercept)');
+        %_er_ea(cats(base, '/canonical/factors'));
+      end;
+      else if kpath ne '' then do;
+        %_er_s(cats(base, '/canonical/name'), tranwrd(strip(kpath), ' ', ':'));
+        do _f = 1 to countw(kpath, ' ');
+          %_er_s(cats(base, '/canonical/factors/#', put(_f, z4.), '/variable'), scan(kpath, _f, ' '));
+        end;
+      end;
+      else do;
+        %_er_s(cats(base, '/canonical/name'), term);
+        %_er_s(cats(base, '/canonical/factors/#0001/variable'), term);
+      end;
+    end;
+    if m_effect ne '' then do;
+      %_er_s(cats(base, '/mediation/effect'), m_effect);
+      if m_med ne '' then do; %_er_s(cats(base, '/mediation/mediator'), m_med); end;
+      if m_treat ne '' then do; %_er_s(cats(base, '/mediation/treatment'), m_treat); end;
+      if not missing(m_mvn) then do; %_er_n(cats(base, '/mediation/moderator_value'), m_mvn); end;
+      else if m_mvs ne '' then do; %_er_s(cats(base, '/mediation/moderator_value'), m_mvs); end;
+      if m_path ne '' then do;
+        do _f = 1 to countw(m_path, ' ');
+          %_er_s(cats(base, '/mediation/path/#', put(_f, z4.)), scan(m_path, _f, ' '));
+        end;
+      end;
+    end;
+  %_er_endpart(pparams)
+  %if %_er_has(_er_pfit2) %then %do;
+    %_er_part(pfits)
+      set work._er_pfit2(where=(resp ne ''));
+      length base $ 80;
+      base = cats('structures/equations/per_response/#', put(_n_, z4.));
+      if _n_ = 1 then do; %_er_s('structures/equations/kind', 'object'); end;
+      %_er_s(cats(base, '/response'), resp);
+      if comp ne '' then do; %_er_s(cats(base, '/component'), comp); end;
+      %_er_nn(cats(base, '/r2'), r2); %_er_nn(cats(base, '/adj_r2'), adj_r2); %_er_nn(cats(base, '/mse'), mse);
+      if not missing(dfr) then do; %_er_i(cats(base, '/df_residual'), dfr); end;
+      %_er_nn(cats(base, '/deviance'), dev); %_er_nn(cats(base, '/pseudo_r2'), pr2);
+      %_er_nn(cats(base, '/cox_snell_r2'), csr2); %_er_nn(cats(base, '/nagelkerke_r2'), nkr2);
+      %if %length(&_er_pnobs) and &_er_pnobs ne . %then %_er_i(cats(base, '/nobs'), &_er_pnobs);;
+    %_er_endpart(pfits)
+  %end;
+  %if %_er_has(_er_pts2) %then %do;
+    %_er_part(ptests)
+      set work._er_pts2;
+      length base $ 60;
+      base = cats('tests/#', put(_n_, z4.));
+      %_er_s(cats(base, '/id'), cats('t', _n_));
+      %_er_s(cats(base, '/category'), cat);
+      %_er_s(cats(base, '/name'), name);
+      %_er_s(cats(base, '/label'), label);
+      if not missing(est) then do; %_er_n(cats(base, '/estimate'), est); end;
+      if not missing(se) then do; %_er_n(cats(base, '/std_error'), se); end;
+      if not missing(stat) then do; %_er_n(cats(base, '/statistic'), stat); end;
+      if not missing(p) then do; %_er_n(cats(base, '/p_value'), p); end;
+      %_er_s(cats(base, '/origin'), 'estimation');
+      if resp ne '' then do; %_er_s(cats(base, '/response'), resp); end;
+      if comp ne '' then do; %_er_s(cats(base, '/component'), comp); end;
+      if name = 'f' then do;
+        %_er_s(cats(base, '/distribution'), 'F');
+        if not missing(df) then do; %_er_n(cats(base, '/df1'), df); end;
+        if not missing(df2) then do; %_er_n(cats(base, '/df2'), df2); end;
+      end;
+      else do;
+        if dist ne '' then do; %_er_s(cats(base, '/distribution'), dist); end;
+        if not missing(df) then do; %_er_n(cats(base, '/df'), df); end;
+      end;
+    %_er_endpart(ptests)
+  %end;
+%mend;
+
 /* ------------------------------------------------------------------ end */
 %macro estrec_end(out=, title=, identifying=NO);
   %local nproc i dir proc file nrec k stem ext;
@@ -1394,7 +2038,8 @@ options append=(cmplib=work._estrec_f);
           _er_dfr _er_rss _er_tss _er_F _er_Fp _er_dfm _er_sigma _er_r2 _er_ar2 _er_full
           _er_m2ll _er_aic _er_bic _er_conv _er_ll _er_dev _er_pear _er_qic _er_disp _er_ncl
           _er_subj _er_isgee _er_hcm _er_digest _er_strat _er_clv _er_wv _er_nstr _er_sw _er_pos _er_npar _er_vcnose
-          _er_meth _er_ddfm _er_nsub _er_pm _er_ncs _er_nts _er_vu _er_ve _er_np2 _er_endo _er_inst;
+          _er_meth _er_ddfm _er_nsub _er_pm _er_ncs _er_nts _er_vu _er_ve _er_np2 _er_endo _er_inst
+          _er_pver _er_pisproc _er_pnow;
   %if %length(&out) = 0 %then %do; %put ERROR: estrec: %nrstr(%estrec_end) needs OUT=; %return; %end;
   ods document close;
   %if not %sysfunc(exist(work._estrec, itemstor)) %then %do;
@@ -1408,7 +2053,7 @@ options append=(cmplib=work._estrec_f);
   data work._er_procs; set work._er_list;
     where type = 'Dir' and countc(path, '\') = 1;
     length proc $ 32; proc = upcase(scan(path, 1, '\#'));
-    supported = proc in ('REG', 'GLM', 'SURVEYREG', 'LOGISTIC', 'SURVEYLOGISTIC', 'GENMOD', 'MIXED', 'GLIMMIX', 'PANEL', 'SYSLIN');
+    supported = proc in ('REG', 'GLM', 'SURVEYREG', 'LOGISTIC', 'SURVEYLOGISTIC', 'GENMOD', 'MIXED', 'GLIMMIX', 'PANEL', 'SYSLIN', 'IML');
   run;
   proc sql noprint;
     select count(*) into :nrec trimmed from work._er_procs where supported;
@@ -1429,7 +2074,7 @@ options append=(cmplib=work._estrec_f);
       options obs=max nosyntaxcheck;   /* one failed step must not stop the other records */
       %let _er_partno = 1; %let _er_resp =; %let _er_dataset =; %let _er_rows =; %let _er_nobs =;
       %let _er_status = ok; %let _er_skip =; %let _er_msgs =; %let _er_identifying = %upcase(&identifying);
-      %let _er_dist =; %let _er_link =;
+      %let _er_dist =; %let _er_link =; %let _er_pver =; %let _er_pisproc = 0;
       %if %length(&title) %then %let _er_title = &title; %else %let _er_title = PROC &_er_cmd;
       proc datasets lib=work nolist nowarn; delete _er_rec _er_par _er_cov; quit;
       %if &_er_cmd = REG %then %_er_reg(&_er_dir);
@@ -1442,6 +2087,7 @@ options append=(cmplib=work._estrec_f);
       %else %if &_er_cmd = GLIMMIX %then %_er_glimmix(&_er_dir);
       %else %if &_er_cmd = PANEL %then %_er_panel(&_er_dir);
       %else %if &_er_cmd = SYSLIN %then %_er_syslin(&_er_dir);
+      %else %if &_er_cmd = IML %then %_er_iml(&_er_dir);
       %if %length(&_er_skip) %then %do;
         %put WARNING: estrec: no record for PROC &_er_cmd: &_er_skip..;
       %end;

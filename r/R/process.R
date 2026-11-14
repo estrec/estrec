@@ -42,12 +42,12 @@ record_process <- function(expr, title = NULL, identifying = FALSE, digest = NUL
   list(title = title, kind = kind, columns = columns, rows = list(), lines = lines)
 
 # the value in `row` under the first heading in `...`
-.proc_col <- function(sec, row, ...) {
+.proc_col <- function(sec, row, ..., skip = 0L) {
   heads <- vapply(sec$columns, .proc_key, "")
   for (n in c(...)) {
     n <- .proc_key(n)
     for (i in seq_along(heads)) {
-      if ((heads[i] == n || sub("\\(.*\\)$", "", heads[i]) == n) && i <= length(row$values)) {
+      if (i > skip && (heads[i] == n || sub("\\(.*\\)$", "", heads[i]) == n) && i <= length(row$values)) {
         v <- row$values[i]
         return(if (is.na(v)) NULL else v)
       }
@@ -212,12 +212,13 @@ record_process <- function(expr, title = NULL, identifying = FALSE, digest = NUL
   if (tolower(lab) == "constant") "(Intercept)" else lab
 }
 
-.proc_row <- function(sec, row, term, ...) {
-  r <- list(term = term, estimate = .est_num(.proc_col(sec, row, "coeff", "effect", "index")),
-            std_error = .est_num(.proc_col(sec, row, "se", "bootse")))
-  r <- c(r, .est_compact(list(
-    statistic = .proc_col(sec, row, "t", "z"), p_value = .proc_col(sec, row, "p"),
-    conf_low = .proc_col(sec, row, "llci", "bootllci"), conf_high = .proc_col(sec, row, "ulci", "bootulci"))))
+# (past the first `skip` columns: a conditional table's moderator values; a moderator named z
+# isn't the z statistic)
+.proc_row <- function(sec, row, term, ..., skip = 0L) {
+  cl <- function(...) .proc_col(sec, row, ..., skip = skip)
+  r <- list(term = term, estimate = .est_num(cl("coeff", "effect", "index")), std_error = .est_num(cl("se", "bootse")))
+  r <- c(r, .est_compact(list(statistic = cl("t", "z"), p_value = cl("p"),
+                              conf_low = cl("llci", "bootllci"), conf_high = cl("ulci", "bootulci"))))
   extra <- .est_compact(list(...))
   for (k in names(extra)) r[[k]] <- extra[[k]]
   r
@@ -237,8 +238,14 @@ record_process <- function(expr, title = NULL, identifying = FALSE, digest = NUL
 .proc_fmt <- function(v) {
   if (is.character(v)) return(v)
   if (v == round(v)) return(format(v, scientific = FALSE, trim = TRUE))
-  v <- round(v, 4)        # as PROCESS printed it, then to 3 decimals (as the Python reader does)
-  if (abs(v) >= 0.01) sprintf("%.3f", v) else formatC(v, digits = 3, format = "g")
+  # to PROCESS's 4 printed decimals (half away from zero), then 3, in integers (as the Python
+  # and SAS readers do)
+  n4 <- floor(abs(v) * 10000 + 0.5)
+  if (n4 == 0) return("0")
+  sign <- if (v < 0) "-" else ""
+  if (n4 < 100) return(paste0(sign, "0.00", sub("0+$", "", sprintf("%02d", as.integer(n4)))))
+  n3 <- (n4 + 5) %/% 10
+  sprintf("%s%d.%03d", sign, as.integer(n3 %/% 1000), as.integer(n3 %% 1000))
 }
 
 .proc_mod_value <- function(s, row, mod) {
@@ -278,6 +285,7 @@ record_process <- function(expr, title = NULL, identifying = FALSE, digest = NUL
 
 .proc_indirect <- function(s, row, mod, path, relative = FALSE) {
   lab <- row$label
+  if (!is.null(lab)) lab <- sub("^\\{(C\\d+\\))$", "(\\1", lab)   # PROCESS for SAS prints {C1)
   mv <- .proc_mod_value(s, row, mod)
   med <- NULL; treat <- NULL; eff <- "indirect"; extra <- list()
   has <- !is.null(lab) && nzchar(lab)
@@ -296,7 +304,7 @@ record_process <- function(expr, title = NULL, identifying = FALSE, digest = NUL
     if (!is.null(treat)) term <- paste0(term, " [", treat, "]")
   }
   if (!is.null(mv)) term <- paste0(term, .proc_at(mod, mv))
-  .proc_row(s, row, term, mediation = .est_compact(c(list(
+  .proc_row(s, row, term, skip = length(mod), mediation = .est_compact(c(list(
     effect = eff, mediator = med, treatment = treat, moderator_value = mv), extra)))
 }
 
@@ -333,11 +341,11 @@ record_process <- function(expr, title = NULL, identifying = FALSE, digest = NUL
         ind_ctx <- .proc_key(v)
       if (grepl("->", v, fixed = TRUE)) {
         toks <- strsplit(trimws(v), "\\s+")[[1]]
-        toks <- toks[toks != "->"]
+        toks <- toks[!toks %in% c("->", ":")]   # SAS: "Ind1 : X1 -> M -> Y"
         if (length(toks) && grepl("^Ind\\d+$", toks[1])) keys[[toks[1]]] <- toks[-1]
         else path <- toks
       }
-      m <- .proc_match("^\\((C\\d+)\\)\\s+(.*)$", v)
+      m <- .proc_match("^[({](C\\d+)\\)\\s+(.*)$", v)
       if (!is.null(m)) contrasts[[m[2]]] <- gsub("\\s+", " ", trimws(m[3]))
       m <- .proc_match("(?i)^(Int_\\d+)\\s*:?\\s*(.*)$", v)
       if (!is.null(m)) {
@@ -392,7 +400,7 @@ record_process <- function(expr, title = NULL, identifying = FALSE, digest = NUL
       mod <- .proc_moderator_cols(s)
       for (row in s$rows) {
         mv <- .proc_mod_value(s, row, mod)
-        effects <- add(effects, .proc_row(s, row, .proc_eff_term("direct", row$label, mv, mod),
+        effects <- add(effects, .proc_row(s, row, .proc_eff_term("direct", row$label, mv, mod), skip = length(mod),
           mediation = .est_compact(list(effect = "direct", treatment = row$label, moderator_value = mv))))
       }
       next
@@ -446,7 +454,7 @@ record_process <- function(expr, title = NULL, identifying = FALSE, digest = NUL
       mod <- .proc_moderator_cols(s)
       for (row in s$rows) {
         mv <- .proc_mod_value(s, row, mod)
-        effects <- add(effects, .proc_row(s, row, paste0(h$x, if (!is.null(mv)) .proc_at(mod, mv) else ""),
+        effects <- add(effects, .proc_row(s, row, paste0(h$x, if (!is.null(mv)) .proc_at(mod, mv) else ""), skip = length(mod),
                                           response = outcome, component = "conditional"))
       }
       next

@@ -9,6 +9,8 @@ https://www.afhayes.com/download.html and point the tests at it.
   PROCESS for SAS when $ESTREC_SAS (or `sas`) is there too.
   With R, the estrec R package's record_process() is installed to a temporary library and run on
   the same models; its records must equal the Python reader's of the same printed output.
+  With SAS, sas/estrec.sas's %estrec_begin / %estrec_end go around each %process run; those
+  records must equal the Python reader's of PROCESS's listing.
 - ESTREC_PROCESS_SPSS_OUT: folders of OXML files written by spss/dev/probe_process.sps in SPSS,
   separated by os.pathsep (one per PROCESS version, e.g. 5.0 and 5.1.1). Each is tested, and with
   two or more test_spss_versions_agree compares their records.
@@ -226,6 +228,60 @@ def sas_runs(tmp_path_factory):
     return out, list(sas_opts)
 
 
+SAS_MODELS = {
+    "m4": "y=y, x=x1, m=x2, model=4, seed=20261114",
+    "m4cov": "y=y, x=x1, m=x2, cov=w, model=4, total=1, normal=1, boot=1000, seed=20261114",
+    "m4par": "y=y, x=x1, m=x2 z, model=4, contrast=1, hc=3, seed=20261114",
+    "m6": "y=y, x=x1, m=x2 z, model=6, seed=20261114",
+    "m7": "y=y, x=x1, m=x2, w=z, model=7, seed=20261114",
+    "m4bin": "y=ybin, x=x1, m=x2, model=4, seed=20261114",
+    "m1": "y=y, x=x1, w=z, model=1, jn=1, center=1",
+}
+
+
+@pytest.fixture(scope="module")
+def sas_records(tmp_path_factory):
+    """sas/estrec.sas's %estrec_begin / %estrec_end around each PROCESS run: the records and
+    PROCESS's listing."""
+    if not (PROCESS_SAS and SAS):
+        pytest.skip("needs PROCESS for SAS ($ESTREC_PROCESS_DIR) and SAS")
+    out = tmp_path_factory.mktemp("process_sas_rec")
+    (out / "work").mkdir()
+    prog = [f'options nonotes; %include "{PROCESS_SAS}"; options notes;',
+            f'%include "{ROOT / "sas" / "estrec.sas"}";',
+            f'data probe; infile "{DATA}" dsd firstobs=2 truncover;',
+            "  input id year grp stratum psu cat x1 x2 z w y ybin cnt; run;"]
+    for name, opts in SAS_MODELS.items():
+        prog += [f'ods listing file="{out}/{name}.lst";', "%estrec_begin;", f"%process(data=probe, {opts});",
+                 f"%estrec_end(out={out}/{name}.estrec.json);", "ods listing close;"]
+    (out / "run.sas").write_text("\n".join(prog))
+    env = dict(os.environ)
+    env.setdefault("LD_LIBRARY_PATH", "/usr/lib/x86_64-linux-gnu")
+    subprocess.run([SAS, "-nodms", "-work", str(out / "work"), "-log", str(out / "run.log"),
+                    "-print", str(out / "run.lst"), str(out / "run.sas")], env=env, timeout=1800)
+    return out
+
+
+@pytest.mark.parametrize("name", list(SAS_MODELS))
+def test_sas_writer(sas_records, name):
+    """%estrec_end: a valid record at full precision, the same as the Python reader's record of
+    PROCESS's listing (numbers to its printed decimals)."""
+    path = sas_records / f"{name}.estrec.json"
+    assert path.exists(), (sas_records / "run.log").read_text(errors="replace")[-3000:]
+    rec = ef.read(path)
+    exp = [(e, (m.upper() if isinstance(m, str) else [x.upper() for x in m]) if m else m)
+           for e, m in MODELS[name][1]]
+    _check(rec, exp)
+    assert [s["name"] for s in rec["provenance"]["software"]][:2] == ["SAS", "PROCESS"]
+    py, _ = _record_from_text((sas_records / f"{name}.lst").read_text(errors="replace"), name)
+    for k in ("parameters", "tests", "metrics", "structures"):
+        _close(py.get(k), rec.get(k), k)
+    for k in ("estimator", "responses", "profiles", "title"):
+        assert py["meta"].get(k) == rec["meta"].get(k), k
+    _close({k: v for k, v in py["specification"].items() if k != "call"},
+           {k: v for k, v in rec["specification"].items() if k != "call"}, "specification")
+
+
 def test_sas_text(sas_runs):
     out, names = sas_runs
     for name in names:
@@ -265,6 +321,9 @@ def test_spss(name, folder):
     for p in rec["parameters"]:
         if p["term"].lower().startswith("int_"):  # PROCESS's product terms are interactions
             assert len(p["canonical"]["factors"]) >= 2, p
+        mv = (p.get("mediation") or {}).get("moderator_value")
+        if mv is not None:                       # a moderator named z isn't the z statistic
+            assert p.get("statistic") != mv, p
     assert rec["provenance"]["software"][1]["name"] == "PROCESS"
     eqs = rec["structures"]["equations"]["per_response"]
     assert [e["response"] for e in eqs if "component" not in e] == rec["meta"]["responses"]

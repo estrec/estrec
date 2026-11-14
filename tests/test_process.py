@@ -194,6 +194,9 @@ def test_spss(name, folder):
            [("indirect", ["x1", "x2", "z", "y"])])
     codes = [m["code"] for m in rec["meta"].get("messages", [])]
     assert ("printed_precision" in codes) == name.startswith("p_")
+    for p in rec["parameters"]:
+        if p["term"].startswith("Int_"):      # PROCESS's product terms are interactions
+            assert len(p["canonical"]["factors"]) >= 2, p
     assert rec["provenance"]["software"][1]["name"] == "PROCESS"
     eqs = rec["structures"]["equations"]["per_response"]
     assert [e["response"] for e in eqs if "component" not in e] == rec["meta"]["responses"]

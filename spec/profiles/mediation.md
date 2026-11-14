@@ -153,3 +153,10 @@ Two-stage DiD mediation with `med2s` has its own tool profile, [`med2s/0.1`](med
 [`schema/examples/mediation.estrec.json`](../../schema/examples/mediation.estrec.json):
 a real pingouin run on the JOBS II data from R's mediation package (treatment → job-search
 self-efficacy → depression), no covariates, 5000 bias-corrected bootstrap replications.
+
+[`schema/examples/process-spss.estrec.json`](../../schema/examples/process-spss.estrec.json):
+a real PROCESS 5.1.1 run in SPSS 32 (model 7: x1 → x2 → y with the first stage moderated by z;
+`/display=tables`, 5000 percentile bootstrap draws), recorded by `ESTREC BEGIN` / `ESTREC END`:
+each equation's coefficients with `response`, the direct and conditional indirect effects and
+the index of moderated mediation as `mediation` rows, and each equation's R² and MSE in
+`structures.equations`.

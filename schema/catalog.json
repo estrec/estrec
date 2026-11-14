@@ -154,7 +154,7 @@
       "status": "draft",
       "maintainer": "jemather",
       "description": "Mediation analyses from regressions or SEM (R mediation, lavaan :=, PROCESS, Stata sem estat teffects, pingouin, statsmodels Mediation): treatment, mediators, outcome, the inference method (bootstrap, quasi-Bayesian, delta) with replications and CI type, and which effect each row is.",
-      "examples": ["examples/mediation.estrec.json"]
+      "examples": ["examples/mediation.estrec.json", "examples/process-spss.estrec.json"]
     },
     {
       "name": "mi/0.1",

@@ -1,0 +1,366 @@
+{
+  "schema": "estrec/0.1",
+  "meta": {
+    "id": "756788c0-0d30-4765-be2a-fc0f4d52de79",
+    "created": "2026-11-14T18:12:13Z",
+    "status": "ok",
+    "estimator": {
+      "family": "mediation",
+      "method": "ols"
+    },
+    "responses": [
+      "x2",
+      "y"
+    ],
+    "profiles": [
+      "mediation/0.1"
+    ],
+    "title": "PROCESS model 7 (moderated mediation)",
+    "producer": {
+      "name": "estrec for SPSS",
+      "version": "0.1.0"
+    },
+    "notes": "Real run: PROCESS 5.1.1 for SPSS (Andrew F. Hayes; https://www.afhayes.com/download.html) in SPSS 32, model 7 (x1 -> x2 -> y, the first stage moderated by z), /display=tables, 5000 percentile bootstrap draws, seed 20261114, recorded by ESTREC BEGIN / ESTREC END. The data are estrec's synthetic writers probe (tests/data/writers_probe.csv). Each equation's coefficients carry `response`; the direct, conditional indirect effects and the index of moderated mediation are rows tagged `mediation`; each equation's R² and MSE are in structures.equations.",
+    "core_digest": {
+      "algorithm": "sha256",
+      "canonicalization": "RFC8785",
+      "value": "4c06580f44f16f6ce266af3fee3c786347bf8c2bbb00a26df7570edacd70c0d6"
+    }
+  },
+  "specification": {
+    "formula": {
+      "text": "PROCESS y=y /x=x1 /m=x2 /w=z /model=7.",
+      "syntax": "PROCESS"
+    },
+    "mediation": {
+      "treatment": "x1",
+      "mediators": [
+        "x2"
+      ],
+      "outcome": "y",
+      "covariates": [],
+      "moderators": [
+        "z"
+      ],
+      "structure": "moderated",
+      "process_model": 7,
+      "models": [
+        {
+          "response": "x2",
+          "estimator": "ols"
+        },
+        {
+          "response": "y",
+          "estimator": "ols"
+        }
+      ],
+      "inference": {
+        "method": "bootstrap",
+        "reps": 5000,
+        "ci_type": "percentile",
+        "seed": 20261114
+      }
+    },
+    "state": {
+      "dataset": "probe"
+    }
+  },
+  "metrics": {
+    "nobs": 1997,
+    "conf_level": 0.95
+  },
+  "parameters": [
+    {
+      "term": "(Intercept)",
+      "estimate": 0.036500986731827,
+      "std_error": 0.024486707856163,
+      "statistic": 1.4906449223896,
+      "p_value": 0.13621298673367,
+      "conf_low": -0.011521242743394,
+      "conf_high": 0.084523216207047,
+      "response": "x2",
+      "canonical": {
+        "name": "(Intercept)",
+        "factors": []
+      }
+    },
+    {
+      "term": "x1",
+      "estimate": 0.025954163491019,
+      "std_error": 0.020923286488162,
+      "statistic": 1.2404439190614,
+      "p_value": 0.21495725353612,
+      "conf_low": -0.015079644361489,
+      "conf_high": 0.066987971343528,
+      "response": "x2",
+      "canonical": {
+        "name": "x1",
+        "factors": [
+          {
+            "variable": "x1"
+          }
+        ]
+      }
+    },
+    {
+      "term": "z",
+      "estimate": -0.0064403044441238,
+      "std_error": 0.025191947970583,
+      "statistic": -0.2556493230156,
+      "p_value": 0.79824801035904,
+      "conf_low": -0.055845619093912,
+      "conf_high": 0.042965010205664,
+      "response": "x2",
+      "canonical": {
+        "name": "z",
+        "factors": [
+          {
+            "variable": "z"
+          }
+        ]
+      }
+    },
+    {
+      "term": "Int_1",
+      "estimate": 0.003146769536168,
+      "std_error": 0.016793375956203,
+      "statistic": 0.18738159285987,
+      "p_value": 0.85138052744524,
+      "conf_low": -0.029787643638915,
+      "conf_high": 0.036081182711251,
+      "response": "x2",
+      "canonical": {
+        "name": "x1:z",
+        "factors": [
+          {
+            "variable": "x1"
+          },
+          {
+            "variable": "z"
+          }
+        ]
+      }
+    },
+    {
+      "term": "(Intercept)",
+      "estimate": 1.2473227573271,
+      "std_error": 0.03354994415043,
+      "statistic": 37.178087442841,
+      "p_value": 0.0,
+      "conf_low": 1.1815261367546,
+      "conf_high": 1.3131193778997,
+      "response": "y",
+      "canonical": {
+        "name": "(Intercept)",
+        "factors": []
+      }
+    },
+    {
+      "term": "x1",
+      "estimate": 0.74522448812007,
+      "std_error": 0.027562207699337,
+      "statistic": 27.037909889127,
+      "p_value": 0.0,
+      "conf_low": 0.69117074323144,
+      "conf_high": 0.79927823300871,
+      "response": "y",
+      "canonical": {
+        "name": "x1",
+        "factors": [
+          {
+            "variable": "x1"
+          }
+        ]
+      }
+    },
+    {
+      "term": "x2",
+      "estimate": -0.28224665411671,
+      "std_error": 0.033489878834416,
+      "statistic": -8.4278195066701,
+      "p_value": 0.0,
+      "conf_low": -0.34792547733051,
+      "conf_high": -0.21656783090291,
+      "response": "y",
+      "canonical": {
+        "name": "x2",
+        "factors": [
+          {
+            "variable": "x2"
+          }
+        ]
+      }
+    },
+    {
+      "term": "direct effect",
+      "estimate": 0.74522448812007,
+      "std_error": 0.027562207699337,
+      "statistic": 27.037909889127,
+      "p_value": 0.0,
+      "conf_low": 0.69117074323144,
+      "conf_high": 0.79927823300871,
+      "mediation": {
+        "effect": "direct"
+      },
+      "response": "y"
+    },
+    {
+      "term": "indirect: x1 -> x2 -> y | -1.01985876",
+      "estimate": -0.0064196727738702,
+      "std_error": 0.0077366580763738,
+      "statistic": -1.01985876,
+      "conf_low": -0.021607774981281,
+      "conf_high": 0.0088199511442357,
+      "mediation": {
+        "effect": "indirect",
+        "mediator": "x2",
+        "moderator_value": -1.01985876
+      },
+      "response": "y"
+    },
+    {
+      "term": "indirect: x1 -> x2 -> y | 0.027656",
+      "estimate": -0.0073500389017588,
+      "std_error": 0.0059511582951316,
+      "statistic": 0.027656,
+      "conf_low": -0.019321290418103,
+      "conf_high": 0.0042287832650084,
+      "mediation": {
+        "effect": "indirect",
+        "mediator": "x2",
+        "moderator_value": 0.027656
+      },
+      "response": "y"
+    },
+    {
+      "term": "indirect: x1 -> x2 -> y | 1.02760132",
+      "estimate": -0.008238155509747,
+      "std_error": 0.0076263391450235,
+      "statistic": 1.02760132,
+      "conf_low": -0.02339175494937,
+      "conf_high": 0.006578372841824,
+      "mediation": {
+        "effect": "indirect",
+        "mediator": "x2",
+        "moderator_value": 1.02760132
+      },
+      "response": "y"
+    },
+    {
+      "term": "index of moderated mediation (z): x1 -> x2 -> y",
+      "estimate": -0.00088816517285979,
+      "std_error": 0.0047438891177753,
+      "conf_low": -0.010153501889435,
+      "conf_high": 0.0084845387444158,
+      "mediation": {
+        "effect": "index_moderated_mediation",
+        "mediator": "x2"
+      },
+      "response": "y"
+    }
+  ],
+  "structures": {
+    "equations": {
+      "kind": "object",
+      "per_response": [
+        {
+          "response": "x2",
+          "r2": 0.00086288186684057,
+          "adj_r2": -0.00064108770385674,
+          "mse": 1.0027213212107,
+          "df_residual": 1993.0,
+          "nobs": 1997
+        },
+        {
+          "response": "y",
+          "r2": 0.28370111925751,
+          "adj_r2": 0.28298266501404,
+          "mse": 2.2414971508323,
+          "df_residual": 1994.0,
+          "nobs": 1997
+        }
+      ]
+    }
+  },
+  "tests": [
+    {
+      "id": "t1",
+      "category": "model",
+      "name": "f",
+      "label": "Model summary, x2",
+      "statistic": 0.57373625348142,
+      "p_value": 0.63229785127606,
+      "origin": "estimation",
+      "response": "x2",
+      "distribution": "F",
+      "df1": 3.0,
+      "df2": 1993.0
+    },
+    {
+      "id": "t2",
+      "category": "restriction",
+      "name": "f",
+      "label": "Test(s) of highest order unconditional interaction(s) X*W",
+      "statistic": 0.035111861342704,
+      "p_value": 0.85138052744524,
+      "origin": "estimation",
+      "response": "x2",
+      "distribution": "F",
+      "df1": 1.0,
+      "df2": 1993.0
+    },
+    {
+      "id": "t3",
+      "category": "model",
+      "name": "f",
+      "label": "Model summary, y",
+      "statistic": 394.87708762932,
+      "p_value": 0.0,
+      "origin": "estimation",
+      "response": "y",
+      "distribution": "F",
+      "df1": 2.0,
+      "df2": 1994.0
+    }
+  ],
+  "provenance": {
+    "software": [
+      {
+        "name": "IBM SPSS Statistics",
+        "version": "32.0",
+        "purl": "pkg:generic/spss@32.0",
+        "role": "estimator",
+        "command": "Matrix"
+      },
+      {
+        "name": "PROCESS",
+        "version": "5.1.1",
+        "role": "estimator",
+        "url": "https://www.afhayes.com/download.html",
+        "command": "PROCESS model 7"
+      },
+      {
+        "name": "estrec for SPSS",
+        "version": "0.1.0",
+        "role": "writer"
+      }
+    ],
+    "data": [
+      {
+        "role": "estimation",
+        "name": "probe",
+        "rows": 2000
+      }
+    ]
+  },
+  "history": [
+    {
+      "when": "2026-11-14T18:12:13Z",
+      "by": {
+        "name": "estrec for SPSS",
+        "version": "0.1.0"
+      },
+      "action": "created"
+    }
+  ]
+}

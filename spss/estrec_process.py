@@ -553,7 +553,8 @@ def build(info, cmd, nt, hints, precision=None, identifying=False):
     params = []
     for e in info["equations"]:
         e = dict(e)
-        e["canonical"] = P.canonical(e["term"])
+        prod = info.get("products", {}).get(e["term"])     # Int_1: x1 x z, from PROCESS's product key
+        e["canonical"] = P.canonical("*".join(prod) if prod else e["term"])
         params.append(e)
     params += [dict(e, response=e.get("response") or h.get("y")) for e in info["effects"]]
     messages = []

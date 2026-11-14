@@ -133,3 +133,29 @@ text, not pivot tables: the writer parses that text from the OMS capture (ESTREC
 already captures it). PROCESS for R and SAS print the same text, so the parser can serve those
 later. First step: `spss/dev/probe_process.sps` (models 1, 4 with covariates/contrasts/HC3/
 binary Y/multicategorical X/saved draws, 6, 7, 14), outputs to `raw/estrec_probe_process/`.
+
+### PROCESS 5.1 source and local runs (2026-11-14)
+
+Ted downloaded PROCESS 5.1 (`raw/process/processv51.zip`). Its license forbids storing it
+anywhere public or distributing modified copies, so the source (unzipped in
+`tmp/process_src/v51/`), its documentation and its output stay out of this repo; writers only
+read PROCESS's output, and users install PROCESS from afhayes.com.
+
+Read before running (Ted agreed to the runs): R and SAS versions print only (no files, system or
+network calls); loading either runs an activation call that prints "ready". SPSS changes
+settings inside PRESERVE/RESTORE, and its `save=` replaces the active dataset (`save ... /outfile
+= *`), so the SPSS writer must not use it.
+
+Runs on valiant (`tmp/process_runs/`, scripts there): R 5.1.1 (11 models) and SAS 5.1.1 (7).
+- Printed text has `decimals` places (R 9.4, SAS 10.4, SPSS F10.4): 4 decimals by default.
+- `save=2` returns every printed table's numbers at full precision, one matrix row per printed
+  table row in print order, padded (NA in R), last row the error counts (bad bootstraps,
+  singular, errors-in-variables). Checked row by row on models 4 and 7: the text gives the
+  labels and section structure, the matrix the numbers. The constant of y matches R `lm`
+  (1.24732275732714).
+- SAS prints the same sections in the same order (variable names upper-cased); its bootstrap
+  draws differ from R's (own RNG), so intervals differ in the third decimal.
+Writer plan: one reader of PROCESS's text (sections, labels, which row is which), plus the
+`save=2` matrix in R and SAS for precision; SPSS from OMS, `display=tables` pivot tables at full
+precision where PROCESS 5 provides them (probe `t_*` runs), else the printed decimals with a
+precision message.

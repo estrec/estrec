@@ -634,3 +634,79 @@ def test_latex_beside():
         else:  # one picture per term, its rule down through both rows, the marks between
             assert "\\tikz" not in se and se.endswith("&  \\\\")
             assert "(76.0,-20.8) -- (76.0,11.2)" in weight and "(27.4,-4.8) circle[radius=2.175pt]" in weight
+
+
+# ---------------------------------------------------------------- mediation (PROCESS) tables
+
+
+def process_like_record():
+    """A record shaped like a PROCESS model 4 run with a covariate and total=1: two equations,
+    the total-effect model as a component, effect rows, each equation's F test. Made-up
+    numbers (no PROCESS output in the repo)."""
+    def row(term, est, se, response, **kw):
+        return dict(term=term, estimate=est, std_error=se, statistic=est / se, p_value=0.01,
+                    conf_low=est - 2 * se, conf_high=est + 2 * se, response=response, **kw)
+    params = [
+        row("(Intercept)", 0.1, 0.05, "m"), row("x", 0.5, 0.1, "m"), row("w", 0.2, 0.1, "m"),
+        row("(Intercept)", 1.0, 0.2, "y"), row("x", 0.7, 0.1, "y"), row("m", -0.3, 0.05, "y"),
+        row("w", 0.1, 0.05, "y"),
+        row("(Intercept)", 1.1, 0.2, "y", component="total_effect_model"),
+        row("x", 0.55, 0.1, "y", component="total_effect_model"),
+        row("total effect", 0.55, 0.1, "y", mediation={"effect": "total"}),
+        row("direct effect", 0.7, 0.1, "y", mediation={"effect": "direct"}),
+        row("indirect: x -> m -> y", -0.15, 0.04, "y", mediation={"effect": "indirect", "mediator": "m"}),
+    ]
+    tests = [
+        {"id": "t1", "category": "model", "name": "f", "label": "Model summary, m", "statistic": 12.5,
+         "p_value": 0.001, "response": "m", "distribution": "F", "df1": 2.0, "df2": 97.0},
+        {"id": "t2", "category": "model", "name": "f", "label": "Model summary, y", "statistic": 40.25,
+         "p_value": 0.0, "response": "y", "distribution": "F", "df1": 3.0, "df2": 96.0},
+    ]
+    return {"schema": "estrec/0.1",
+            "meta": {"id": "5b0e3c2a-1f4d-4e8b-9a6c-2d7e8f9a0b1c", "created": "2026-11-14T00:00:00Z",
+                     "status": "ok", "estimator": {"family": "mediation", "method": "ols"},
+                     "responses": ["m", "y"], "profiles": ["mediation/0.1"], "title": "PROCESS model 4"},
+            "parameters": params, "metrics": {"nobs": 100, "conf_level": 0.95}, "tests": tests}
+
+
+def process_spec(rec):
+    return {"schema": et.TABLE_SCHEMA, "meta": {"id": "0d5a7c1e-2b3f-4a6d-8e9f-1a2b3c4d5e6f",
+                                                "created": "2026-11-14T00:00:00Z"},
+            "columns": et.mediation_columns(rec), "uncertainty": "std_error",
+            "stats": [{"metric": "nobs"}, {"test": "f", "label": "F"}, {"test": "f", "value": "p_value", "label": "p"}]}
+
+
+def test_mediation_columns():
+    rec = process_like_record()
+    assert et.mediation_columns(rec) == [
+        {"record": rec["meta"]["id"], "response": "m", "mediation": False},
+        {"record": rec["meta"]["id"], "response": "y", "mediation": False},
+        {"record": rec["meta"]["id"], "mediation": True},
+    ]
+    plain = ef.read(EXAMPLES / "lm-minimal.estrec.json")
+    assert et.mediation_columns(plain) == [{"record": plain["meta"]["id"]}]
+    pingouin = ef.read(EXAMPLES / "mediation.estrec.json")  # effect rows only, no equations
+    assert et.mediation_columns(pingouin) == [{"record": pingouin["meta"]["id"]}]
+
+
+def test_mediation_table():
+    rec = process_like_record()
+    t = et.build_table(process_spec(rec), records=[rec])
+    assert t["head"][1]["cells"] == ["m", "y", "Effects"]
+    est = {r["label"]: r["cells"] for r in t["rows"] if r["kind"] == "estimate"}
+    assert est["x"] == ["0.500", "0.700", ""]
+    assert est["m"] == ["", "-0.300", ""]
+    assert est["indirect: x -> m -> y"] == ["", "", "-0.150"]
+    assert "total effect" in est and "direct effect" in est
+    # the total-effect model is a component: not in the equation columns
+    assert est["(Intercept)"] == ["0.100", "1.000", ""]
+    stats = {r["label"]: r["cells"] for r in t["rows"] if r["kind"] == "stat"}
+    assert stats["F"] == ["12.500", "40.250", ""]
+    assert stats["N"] == ["100", "100", "100"]
+    assert not [i for i in et.validate_table(process_spec(rec)) if i.level == "error"]
+    bad = process_spec(rec)
+    bad["columns"][0]["mediation"] = "yes"
+    assert any(i.path == "columns[0].mediation" for i in et.validate_table(bad))
+    # without `mediation`, a column has every row (as before)
+    t = et.build_table(dict(process_spec(rec), columns=[{"record": rec["meta"]["id"], "response": "y"}]), records=[rec])
+    assert "indirect: x -> m -> y" in [r["label"] for r in t["rows"]]

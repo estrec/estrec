@@ -353,6 +353,8 @@ def _structural(spec: dict) -> list[Issue]:
             out.append(Issue("error", f"columns[{i}]", "a column needs `record` (a meta.id)"))
         elif c.get("source") is not None and c["source"] not in ids:
             out.append(Issue("error", f"columns[{i}].source", f"no source {c['source']!r}"))
+        if isinstance(c, dict) and "mediation" in c and not isinstance(c["mediation"], bool):
+            out.append(Issue("error", f"columns[{i}].mediation", "true or false"))
     for key in ("keep", "drop"):
         for j, pat in enumerate(spec.get(key) or []):
             try:
@@ -449,8 +451,16 @@ def validate_table(
 # ---------------------------------------------------------------- the table
 
 
-def _find_test(rec: dict, key: str) -> dict | None:
+def _find_test(rec: dict, key: str, col: dict | None = None) -> dict | None:
+    """The test labelled `key`, else the first named `key`. For a column of one equation
+    (`response`), tests of another equation are passed over; a column of effect rows
+    (`mediation: true`) has none."""
+    col = col or {}
+    if col.get("mediation") is True:
+        return None
     tests = rec.get("tests") or []
+    if col.get("response"):
+        tests = [t for t in tests if t.get("response") in (None, col["response"])]
     return next((t for t in tests if t.get("label") == key), None) or next(
         (t for t in tests if t.get("name") == key), None
     )
@@ -760,10 +770,50 @@ REFERENCE_TEXT = "—"  # a reference row's text with `"reference": true`
 DEFAULT_HEAD = ["number", "response"]
 
 
+def _column_rows(record: dict, c: dict) -> list[dict]:
+    """A column's rows: the record's tidy rows for its vcov and component, then those of its
+    `response`; `mediation: true` keeps only effect rows (`parameters[*].mediation`), false
+    leaves them out."""
+    rows = tidy(record, vcov=c.get("vcov"), component=c.get("component"))
+    if c.get("mediation") is True:
+        return [r for r in rows if r.get("mediation") is not None]
+    if c.get("mediation") is False:
+        rows = [r for r in rows if r.get("mediation") is None]
+    if c.get("response"):
+        rows = [r for r in rows if r.get("response") == c["response"]]
+    return rows
+
+
+EFFECTS_HEADING = "Effects"
+
+
+def mediation_columns(record: dict) -> list[dict]:
+    """The columns that show a mediation record the way PROCESS lays it out: one per equation
+    (each response with coefficient rows, in `meta.responses` order) and one of the effect
+    rows. A record without effect rows, or with one equation's coefficients at most, gets one
+    plain column."""
+    rid = record["meta"]["id"]
+    rows = tidy(record)
+    if not any(r.get("mediation") is not None for r in rows):
+        return [{"record": rid}]
+    eqs = []
+    for r in rows:
+        if r.get("mediation") is None and r.get("response") and r["response"] not in eqs:
+            eqs.append(r["response"])
+    order = [str(x) for x in (record.get("meta") or {}).get("responses") or []]
+    eqs.sort(key=lambda x: order.index(x) if x in order else len(order))
+    if len(eqs) < 2:
+        return [{"record": rid}]
+    return [{"record": rid, "response": y, "mediation": False} for y in eqs] + [{"record": rid, "mediation": True}]
+
+
 def _column_response(c: dict, record: dict, rows: list[dict], labels: dict) -> str:
     """A column's dependent variable: its `response`, else the one response its rows share (a
-    first stage's endogenous variable), else the record's `meta.responses`; then relabelled."""
+    first stage's endogenous variable), else the record's `meta.responses`; then relabelled.
+    A column of effect rows is headed "Effects" (relabel it as "Effects")."""
     name = c.get("response")
+    if not name and c.get("mediation") is True:
+        name = EFFECTS_HEADING
     if not name:
         named = sorted({r["response"] for r in rows if r.get("response")})
         if len(named) == 1:
@@ -810,9 +860,7 @@ def build_table(spec: dict, *, base_dir: str | os.PathLike | None = None, record
     cols = []
     for i, c in enumerate(spec["columns"]):
         f = found.get((c.get("source"), c["record"])) or found[(None, c["record"])]
-        rows = tidy(f.record, vcov=c.get("vcov"), component=c.get("component"))
-        if c.get("response"):
-            rows = [r for r in rows if r.get("response") == c["response"]]
+        rows = _column_rows(f.record, c)
         label = c.get("header")
         if label is None:
             label = (f.member or {}).get("label") or (f.record.get("meta") or {}).get("title") or ""
@@ -928,7 +976,7 @@ def build_table(spec: dict, *, base_dir: str | os.PathLike | None = None, record
             label = s.get("label") or s["test"]
             which = s.get("value", "statistic")
             for c in cols:
-                t = _find_test(c["found"].record, s["test"])
+                t = _find_test(c["found"].record, s["test"], c["spec"])
                 v = _num(t.get(which)) if t else math.nan
                 if math.isnan(v):
                     cells.append(missing)

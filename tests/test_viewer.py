@@ -355,3 +355,25 @@ def test_missing_record_errors_in_both():
         check=False,
     )
     assert "not found" in json.loads(run.stdout)["tables"][0]["error"]
+
+
+def test_mediation_table_matches_python():
+    """A PROCESS-shaped record: the viewer's columns (one per equation, then the effects) and
+    table match the Python reference's."""
+    if NODE is None:
+        pytest.skip("node not installed")
+    from test_table import process_like_record, process_spec
+
+    rec = process_like_record()
+    spec = process_spec(rec)
+    script = (
+        "const E=require(process.argv[1]+'/estrec-table.js');const x=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+        "const idx=E.indexRecords([{record:x.rec}]);"
+        "process.stdout.write(JSON.stringify({cols:E.mediationColumns(x.rec),t:E.buildTable(x.spec,idx)}))"
+    )
+    js = run_node(script, {"rec": rec, "spec": spec})
+    assert js["cols"] == et.mediation_columns(rec)
+    py = et.build_table(spec, records=[rec])
+    for k in ("head", "header", "notes"):
+        assert js["t"][k] == py[k]
+    assert [(r["label"], r["cells"]) for r in js["t"]["rows"]] == [(r["label"], r["cells"]) for r in py["rows"]]

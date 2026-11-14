@@ -75,6 +75,14 @@ some other way (loaded in a browser, passed to a function); sources are where to
 | `vcov` | optional | another vcov in the record: its `type`, its cluster variables (`"firm"`, `"firm & year"`), or its position (0-based). Standard errors, tests and intervals are computed from it (8) |
 | `component` | optional | a `parameters[*].component` to show (`"first_stage"`); default the rows with none |
 | `response` | optional | for a record with several responses, which one |
+| `mediation` | optional | `true`: only the record's effect rows (`parameters[*].mediation`: direct, indirect, total effects, ...); `false`: none of them. Default: all rows |
+
+A mediation record with several equations (PROCESS, a path model) is shown the way such
+tables usually are: a column per equation (`"response": "m", "mediation": false`, ...), then a
+column of its effects (`"mediation": true`), all naming the same record. A column of effects
+has `Effects` as its `response` heading (relabel it with `response_labels`) and no tests
+(below); a column with `response` shows only that equation's tests. Viewers MAY lay a
+mediation record out this way when it is added to a table.
 
 Columns name records by id, so a spec survives files being moved or renamed. A record that
 can't be found is an error, not a blank column. With `sha256`, a renderer warns when the
@@ -178,7 +186,7 @@ Each entry of `stats` is one row, of one of these kinds:
 | metric | `metric` (the record's name: `nobs`, `r2`, `r2_within`, `aic`, ...; `rmse` is `sqrt(rss / nobs)` when the record has no `rmse`) | the value; blank when the record hasn't got it |
 | vcov | `vcov`: `"type"` or `"n_clusters"` | the column's vcov as `by: firm` or its type; or its cluster counts |
 | fixed effect | `fixed_effect` (a name in `specification.fixed_effects`) | `format.fe_yes` (default `"Y"`) when the record has it, else `format.fe_no` (default `"N"`) |
-| test | `test` (a `tests[*].label`, else `name`), `value`: `"statistic"` (default) or `"p_value"` | the test's value |
+| test | `test` (a `tests[*].label`, else `name`), `value`: `"statistic"` (default) or `"p_value"` | the test's value; in a column with `response`, tests of other responses are passed over (so `"f"` gives each equation's own F); blank in a `mediation: true` column |
 | literal | `values` (one string per column) | the text, for what records don't hold |
 
 Every kind takes an optional `label` (default: the metric, fixed effect or test name) and

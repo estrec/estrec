@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Tables: a column's `mediation` (`true`: only the record's effect rows; `false`: none of them)
+  lays out a mediation record the way PROCESS tables are: a column per equation, then one of
+  direct, indirect and total effects (`estrec.table.mediation_columns`, `EstTable.mediationColumns`).
+  A `test` statistics row in a column with `response` shows that equation's own test
+  (`{"test": "f"}`: each equation's F). The viewer's **+ Table** does this for a record with
+  effect rows and several equations, and adds the F row.
+- SPSS: PROCESS (Hayes) runs between `ESTREC BEGIN` and `ESTREC END` are recorded
+  (`mediation/0.1` with mediators): each equation's coefficients, the direct, indirect, total,
+  conditional and relative effects, contrasts, indices of moderated mediation, the model tests
+  and the bootstrap settings. Full precision with PROCESS's `/display=tables`, its printed
+  decimals otherwise. PROCESS isn't included: get it from https://www.afhayes.com/download.html;
+  `tests/test_process.py` runs against a local copy. Indirect effects are named by their path
+  (`indirect: x1 -> x2 -> y`) whichever way PROCESS printed them.
 - SAS: `sas/estrec.sas`, `%estrec_begin` / `%estrec_end(out=)`: one record per REG, GLM,
   SURVEYREG, LOGISTIC, SURVEYLOGISTIC, GENMOD (incl. GEE), MIXED, GLIMMIX, PANEL or SYSLIN
   run in between, read from an

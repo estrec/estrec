@@ -200,7 +200,7 @@ def tidy(
     dropped: bool = False,
 ) -> list[dict]:
     """The parameters, one dict per row: `term`, `estimate`, `std_error`, `statistic`,
-    `p_value`, `conf_low`, `conf_high`, and `response`/`component` where the record has them.
+    `p_value`, `conf_low`, `conf_high`, and `response`/`component`/`mediation` where the record has them.
 
     By default the values are as written (from the default vcov). With `vcov`, they come from
     another vcov in the record: SEs from its diagonal, t tests on its `df_t` (normal without
@@ -219,7 +219,7 @@ def tidy(
         if p.get("dropped") is not None and not dropped:
             continue
         row = {"term": p.get("term")}
-        for k in ("response", "component", "dropped"):
+        for k in ("response", "component", "dropped", "mediation"):
             if p.get(k) is not None:
                 row[k] = p[k]
         for k in PARAMETER_COLUMNS:

@@ -383,6 +383,12 @@ def interpret(sections) -> dict:
             else:
                 med["path"] = p
             e["term"] = "indirect: " + " -> ".join(p)
+        elif med.get("effect") == "indirect" and med.get("mediator") and h.get("x") and h.get("y"):
+            # the text names the mediator only ("indirect: x2"); the tables print the path: the
+            # same term either way, so records of both line up in a table
+            short = f"indirect: {med['mediator']}"
+            if e["term"] == short or e["term"].startswith(short + " "):
+                e["term"] = f"indirect: {h['x']} -> {med['mediator']} -> {h['y']}" + e["term"][len(short):]
         if med.get("effect") == "contrast":
             lab = med.pop("_label", "")
             d = contrasts.get(lab.strip("()"))

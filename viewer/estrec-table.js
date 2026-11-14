@@ -277,7 +277,7 @@
       }
       if (p.dropped !== undefined && p.dropped !== null && !opts.dropped) continue;
       const row = { term: p.term };
-      for (const k of ["response", "component", "dropped"]) if (p[k] !== undefined && p[k] !== null) row[k] = p[k];
+      for (const k of ["response", "component", "dropped", "mediation"]) if (p[k] !== undefined && p[k] !== null) row[k] = p[k];
       for (const k of PARAM) row[k] = num(p[k]);
       rows.push(row);
     }
@@ -357,8 +357,13 @@
 
   // ------------------------------------------------------------ table specs
 
-  function findTest(rec, key) {
-    const tests = rec.tests || [];
+  // the test labelled key, else the first named key; for a column of one equation (response),
+  // tests of another equation are passed over; a column of effect rows (mediation) has none
+  function findTest(rec, key, col) {
+    col = col || {};
+    if (col.mediation === true) return null;
+    let tests = rec.tests || [];
+    if (col.response) tests = tests.filter((t) => t.response === undefined || t.response === null || t.response === col.response);
     return tests.find((t) => t.label === key) || tests.find((t) => t.name === key) || null;
   }
 
@@ -433,6 +438,7 @@
     cols.forEach((c, i) => {
       if (!c || !c.record) out.push(issue("error", `columns[${i}]`, "a column needs `record` (a meta.id)"));
       else if (c.source !== undefined && c.source !== null && !ids.includes(c.source)) out.push(issue("error", `columns[${i}].source`, `no source '${c.source}'`));
+      if (c && "mediation" in c && typeof c.mediation !== "boolean") out.push(issue("error", `columns[${i}].mediation`, "true or false"));
     });
     for (const key of ["keep", "drop"]) {
       (spec[key] || []).forEach((p, j) => {
@@ -500,8 +506,38 @@
 
   // A column's dependent variable: its `response`, else the one response its rows share (a
   // first stage's endogenous variable), else the record's `meta.responses`; then relabelled.
+  // A column's rows: the record's tidy rows for its vcov and component, then those of its
+  // response; mediation true keeps only effect rows (parameters[*].mediation), false leaves them out
+  function columnRows(record, c) {
+    let rows = tidy(record, { vcov: c.vcov, component: c.component });
+    if (c.mediation === true) return rows.filter((r) => r.mediation !== undefined);
+    if (c.mediation === false) rows = rows.filter((r) => r.mediation === undefined);
+    if (c.response) rows = rows.filter((r) => r.response === c.response);
+    return rows;
+  }
+
+  const EFFECTS_HEADING = "Effects";
+
+  // the columns that show a mediation record the way PROCESS lays it out: one per equation
+  // (each response with coefficient rows, in meta.responses order) and one of the effect rows;
+  // a record without effect rows, or with one equation's coefficients at most, gets one column
+  function mediationColumns(record) {
+    const rid = record.meta.id;
+    const rows = tidy(record);
+    if (!rows.some((r) => r.mediation !== undefined)) return [{ record: rid }];
+    const eqs = [];
+    for (const r of rows) if (r.mediation === undefined && r.response && !eqs.includes(r.response)) eqs.push(r.response);
+    const order = ((record.meta || {}).responses || []).map(String);
+    const pos = (x) => (order.includes(x) ? order.indexOf(x) : order.length);
+    eqs.sort((a, b) => pos(a) - pos(b));
+    if (eqs.length < 2) return [{ record: rid }];
+    return [...eqs.map((y) => ({ record: rid, response: y, mediation: false })), { record: rid, mediation: true }];
+  }
+
+  // (a column of effect rows is headed "Effects")
   function columnResponse(c, record, rows, labels) {
     let name = c.response;
+    if (!name && c.mediation === true) name = EFFECTS_HEADING;
     if (!name) {
       const named = [...new Set(rows.filter((r) => r.response).map((r) => r.response))].sort();
       if (named.length === 1) name = named[0];
@@ -715,8 +751,7 @@
 
     const cols = spec.columns.map((c, i) => {
       const f = lookup(idx, c);
-      let rows = tidy(f.record, { vcov: c.vcov, component: c.component });
-      if (c.response) rows = rows.filter((r) => r.response === c.response);
+      const rows = columnRows(f.record, c);
       const label = c.header !== undefined ? c.header : (f.member || {}).label || (f.record.meta || {}).title || "";
       return {
         spec: c, found: f, tidy: new Map(rows.map((r) => [r.term, r])), order: rows.map((r) => r.term),
@@ -820,7 +855,7 @@
         label = s.label || s.test;
         const which = s.value || "statistic";
         for (const c of cols) {
-          const t = findTest(c.found.record, s.test);
+          const t = findTest(c.found.record, s.test, c.spec);
           const v = t ? num(t[which]) : NaN;
           if (Number.isNaN(v)) cells.push(missing);
           else if (which === "p_value") cells.push(pValue(v, s.digits !== undefined ? s.digits : pDigits, pStyle));
@@ -1382,7 +1417,7 @@ ${table}</div>
     NAMED_LINES, PLACEHOLDERS, publishSpec, REFERENCE_TEXT, SPARK_COLOR, SPARK_SCALES, SPARK_PLACES, SPARK_ALIGNS, sparkSVG, sparkTikz, uncertaintyLines, pValue,
     num, vcovs, vcovLabel, pickVcov, tidy, glance, findTest,
     canonicalJSON, sha256Hex, recordSha256,
-    indexRecords, validateTable, checkPins, columnResponse, buildTable, render, renderers: RENDERERS,
+    indexRecords, validateTable, checkPins, columnResponse, columnRows, mediationColumns, buildTable, render, renderers: RENDERERS,
     redactRecord, renderWebPage,
     recordsIn, newSpec, fixed, statValue,
   };

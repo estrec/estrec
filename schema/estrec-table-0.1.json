@@ -50,7 +50,8 @@
           "header": {"type": "string"},
           "vcov": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "integer", "minimum": 0}]},
           "component": {"type": "string"},
-          "response": {"type": "string"}
+          "response": {"type": "string"},
+          "mediation": {"type": "boolean", "description": "true: only the record's effect rows (parameters with a mediation object); false: none of them."}
         },
         "additionalProperties": false
       }

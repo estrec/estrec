@@ -570,12 +570,30 @@ function newTable() {
   toast("New table");
 }
 
+// a mediation record with several equations (PROCESS) becomes a column per equation and one
+// of its effects
 function addColumn(it) {
   const s = ensureSpec();
-  s.columns.push({ record: it.record.meta.id });
+  const add = E.mediationColumns(it.record);
+  const first = s.columns.length + 1;
+  // a new table of a mediation record: bootstrap effects have intervals, not p-values, so
+  // each estimate shows its interval under its standard error
+  if (add.length > 1 && first === 1 && (s.uncertainty === undefined || s.uncertainty === "std_error")) s.uncertainty = ["std_error", "conf_int"];
+  s.columns.push(...add);
+  // and each equation's F test, when the record has one
+  const hasF = (it.record.tests || []).some((t) => t.name === "f" && t.response);
+  if (add.length > 1 && hasF && !(s.stats || []).some((x) => x.test === "f")) (s.stats = s.stats || []).push({ test: "f", label: "F" });
   renderAll();
   showTab("table");
-  toast(`Added ${recordName(it)} as column ${s.columns.length}`);
+  toast(add.length === 1 ? `Added ${recordName(it)} as column ${first}`
+    : `Added ${recordName(it)} as columns ${first}-${s.columns.length}: one per equation, then its effects`);
+}
+
+// what part of its record a column shows, for the column list
+function columnPart(c) {
+  if (c.mediation === true) return "effects";
+  const parts = [c.response ? `equation for ${c.response}` : "", c.component || ""].filter(Boolean);
+  return parts.join(", ");
 }
 
 function move(arr, i, d) {
@@ -628,8 +646,7 @@ function renderResponses(idx) {
     const f = c.record ? (c.source && idx.get(c.source + "\u0000" + c.record)) || idx.get(c.record) : null;
     if (!f) return;
     let rows;
-    try { rows = E.tidy(f.record, { vcov: c.vcov, component: c.component }); } catch { rows = []; }
-    if (c.response) rows = rows.filter((r) => r.response === c.response);
+    try { rows = E.columnRows(f.record, c); } catch { rows = []; }
     const n = E.columnResponse(c, f.record, rows, {});
     if (n && !names.includes(n)) names.push(n);
   });
@@ -677,7 +694,7 @@ function renderColumns(idx) {
     const values = () => (state.spec.stats || []).filter((st) => Array.isArray(st.values));
     const shift = (d) => { const j = i + d; if (j < 0 || j >= cols.length) return; move(cols, i, d); for (const st of values()) move(st.values, i, d); update(); };
     box.append(el("div", { class: "item" + (rec ? "" : " off") },
-      el("div", { class: "fields" }, head, el("span", { class: "hint", text: name }), vs.length > 1 ? sel : null),
+      el("div", { class: "fields" }, head, el("span", { class: "hint", text: columnPart(c) ? `${name} · ${columnPart(c)}` : name }), vs.length > 1 ? sel : null),
       el("div", { class: "tools" },
         el("button", { class: "btn icon", type: "button", "aria-label": "Move left", title: "Move left", text: "↑", disabled: i === 0, onclick: () => shift(-1) }),
         el("button", { class: "btn icon", type: "button", "aria-label": "Move right", title: "Move right", text: "↓", disabled: i === cols.length - 1, onclick: () => shift(1) }),
@@ -694,7 +711,7 @@ function termRows(idx) {
   recs.forEach((r, i) => {
     if (!r) return;
     let rows;
-    try { rows = E.tidy(r, { vcov: s.columns[i].vcov, component: s.columns[i].component }); } catch { rows = []; }
+    try { rows = E.columnRows(r, s.columns[i]); } catch { rows = []; }
     for (const t of rows) if (!all.includes(t.term)) all.push(t.term);
   });
   const out = [];
@@ -807,6 +824,10 @@ function statCandidates(idx) {
   const tests = [];
   for (const r of recs) for (const t of r.tests || []) { const k = t.label || t.name; if (k && !tests.includes(k)) tests.push(k); }
   for (const t of tests) { push({ test: t }, `Test ${t}: statistic`); push({ test: t, value: "p_value" }, `Test ${t}: p-value`); }
+  // a test each equation has (PROCESS's model F): by name, each equation column showing its own
+  const named = [];
+  for (const r of recs) for (const t of r.tests || []) if (t.response && t.name && !named.includes(t.name) && !tests.includes(t.name)) named.push(t.name);
+  for (const t of named) { push({ test: t }, `Test ${t}, each equation's: statistic`); push({ test: t, value: "p_value" }, `Test ${t}, each equation's: p-value`); }
   return out;
 }
 

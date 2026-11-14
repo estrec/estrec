@@ -39,7 +39,8 @@ restores your setting.
 record** (below OMS Identifiers) writes a record of the last supported procedure run. It runs
 `ESTREC WRITE OUTFILE='...'`, which finds that procedure's syntax in the journal (or, failing
 that, the Viewer's Notes tables), re-runs it quietly and records the result, so the record
-reflects the active dataset at that moment. The journal must be on (Edit > Options > File
+reflects the active dataset at that moment. Because it runs the model again, a slow model takes as long again; for
+those, put `ESTREC BEGIN` / `ESTREC END` around the model in syntax instead. The journal must be on (Edit > Options > File
 Locations > Record syntax in journal; it is by default).
 
 The dialog's source is `ESTREC_WRITE.spd` (SPSS's Custom Dialog Builder); the bundle carries

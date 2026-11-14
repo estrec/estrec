@@ -69,8 +69,13 @@ effects, contrasts and indices of moderated mediation as rows tagged `mediation`
 model and interaction tests. The seed, bootstrap draws and interval type are in
 `specification.mediation.inference`. Not recorded: standardized effects and the
 Johnson-Neyman region bounds (the conditional effects table is). Each equation's Model
-Summary (R², MSE, or -2LL and pseudo-R²s) is in `structures.equations`, its F in `tests`. `ESTREC WRITE` (the menu item)
+Summary (R², adjusted R², MSE, or -2LL and pseudo-R²s) is in `structures.equations`, its F in `tests`. `ESTREC WRITE` (the menu item)
 doesn't re-run PROCESS.
+
+Checked with PROCESS 5.0 and 5.1.1. Their output differs (5.1 moved MSE and the F's degrees of
+freedom into an SS/df/MS table under the Model Summary); both are read. With any other version
+the record carries a `process_version_unchecked` warning and `ESTREC END` prints it: compare the
+record with PROCESS's output before relying on it.
 
 Complex Samples procedures (CSGLM, CSLOGISTIC) aren't covered yet.
 

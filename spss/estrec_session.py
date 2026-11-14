@@ -149,6 +149,9 @@ def end(outfile: str, title: str | None = None, identifying: bool = False, rerun
         estrec_record.write(r, p)
     for p, r in zip(paths, recs):
         print(f"ESTREC END: wrote {p} ({r['meta']['title']})")
+        for m in r["meta"].get("messages", []):
+            if m.get("level") == "warning" and m.get("source") == "estrec":
+                print(f"ESTREC END: warning: {m['message']}")
     for s in skipped:
         if not s.startswith(("Notes", "Descriptives")):
             print(f"ESTREC END: no record for {s}")

@@ -348,8 +348,22 @@ def interpret(sections) -> dict:
             for row in s.rows:
                 effects.append(_indirect(s, row, mod, path, relative=k_ctx.startswith("relative")))
             continue
-        if k.startswith("coding of") or [c.lower() for c in s.columns] == ["ss", "df", "ms"] \
-                or k.startswith("anova summary"):
+        if [_key(c) for c in s.columns] == ["ss", "df", "ms"]:
+            # the ANOVA table under a Model Summary: PROCESS 5.1 prints MSE and the F's df only here
+            rows = {_key(r[0] or "")[:5]: r for r in s.rows}
+            res, reg = rows.get("resid"), rows.get("regre")
+            if fits and fits[-1].get("response") == outcome and res:
+                fits[-1].setdefault("mse", R.num(s.col(res, "ms")))
+                fits[-1].setdefault("df_residual", R.num(s.col(res, "df")))
+                fits[-1] = R.compact(fits[-1])
+            t = tests[-1] if tests else None
+            if t and t.get("name") == "f" and t.get("response") == outcome and res and reg:
+                if t.get("df") is None:
+                    t["df"] = R.num(s.col(reg, "df"))
+                if t.get("df2") is None:
+                    t["df2"] = R.num(s.col(res, "df"))
+            continue
+        if k.startswith("coding of") or k.startswith("anova summary"):
             continue
         if re.search(r"index of (partial |conditional )?moderated mediation", k):
             for row in s.rows:
@@ -437,7 +451,7 @@ def _indirect(s, row, mod, path, relative=False):
 
 # Model Summary columns -> metric names (spec/estrec.md 4.5 `equations`): OLS (R, R-sq, MSE, F,
 # df1, df2, p) and, for a dichotomous Y, logistic (-2LL, ModelLL, df, p, McFadden, CoxSnell, Nagelkrk)
-_FIT = {"r2": ("r-sq",), "mse": ("mse",), "df_residual": ("df2",), "deviance": ("-2ll",),
+_FIT = {"r2": ("r-sq",), "adj_r2": ("adj r-sq", "adj_r-sq"), "mse": ("mse",), "df_residual": ("df2",), "deviance": ("-2ll",),
         "pseudo_r2": ("mcfadden",), "cox_snell_r2": ("coxsnell",), "nagelkerke_r2": ("nagelkrk",)}
 
 
@@ -510,6 +524,12 @@ def _printed_decimals(texts):
     return best or None
 
 
+# PROCESS versions whose output this writer has been checked against (SPSS 5.0 and 5.1.1; R and SAS 5.1.1).
+# 5.1 moved MSE and the F's df out of the Model Summary into an SS/df/MS table; a version not listed
+# gets a warning in the record.
+CHECKED_VERSIONS = ("5.0", "5.1.1")
+
+
 def call_text(h, info):
     parts = [f"y={h.get('y')}", f"x={h.get('x')}"]
     if h.get("mediators"):
@@ -537,6 +557,11 @@ def build(info, cmd, nt, hints, precision=None, identifying=False):
         params.append(e)
     params += [dict(e, response=e.get("response") or h.get("y")) for e in info["effects"]]
     messages = []
+    if h.get("version") and h["version"] not in CHECKED_VERSIONS:
+        messages.append({"level": "warning", "code": "process_version_unchecked", "source": "estrec",
+                         "message": f"PROCESS {h['version']} hasn't been checked with this writer (checked: "
+                                    f"{', '.join(CHECKED_VERSIONS)}); PROCESS changes its output layout between "
+                                    f"minor versions, so compare the record with PROCESS's output"})
     if precision is not None:
         messages.append({"level": "info", "code": "printed_precision", "source": "estrec",
                          "message": f"PROCESS printed its results as text, so numbers carry its printed "

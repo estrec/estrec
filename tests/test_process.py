@@ -10,7 +10,8 @@ https://www.afhayes.com/download.html and point the tests at it.
 - ESTREC_PROCESS_SPSS_OUT: a folder of OXML files written by spss/dev/probe_process.sps in SPSS.
 
 Each test is skipped when what it needs isn't there. Checked 2026-11-14 with PROCESS 5.1.1 for R
-and SAS (valiant) and PROCESS 5.0 for SPSS 32 (Ted's Mac).
+and SAS (valiant) and PROCESS 5.0 and 5.1.1 for SPSS 32 (Ted's Mac). 5.1 changed the Model Summary
+(MSE and the F's df moved to an SS/df/MS table): TEXT_51 below has that layout, made-up numbers.
 """
 
 from __future__ import annotations
@@ -203,6 +204,53 @@ def test_spss_tables_full_precision():
     assert y_fit["mse"] == pytest.approx(2.24149715083227, rel=1e-12)    # sigma^2
     assert rec["specification"]["mediation"]["inference"] == {
         "method": "bootstrap", "reps": 5000, "ci_type": "percentile", "seed": 20261114}
+
+
+# PROCESS 5.1's layout (made-up numbers): the Model Summary has Adj R-sq, SEest and PRE but no MSE
+# or df; those are in the SS/df/MS table under it.
+TEXT_51 = """
+Model  : 4
+    Y  : y
+    X  : x1
+    M  : x2
+
+Sample
+Size:  500
+
+**************************************************************************
+OUTCOME VARIABLE:
+ x2
+
+Model Summary
+          R       R-sq   Adj R-sq          F          p      SEest        PRE
+      .1000      .0100      .0080     5.0400      .0252     1.0000      .0101
+
+                SS          df          MS
+Regress     5.0000      1.0000      5.0000
+Residual  498.0000    498.0000      1.0000
+Total     503.0000    499.0000      1.0080
+
+Model
+              coeff         se          t          p       LLCI       ULCI
+constant      .0500      .0450     1.1111      .2671     -.0384      .1384
+x1            .1000      .0445     2.2450      .0252      .0125      .1875
+"""
+
+
+def test_process51_anova_table():
+    info = PR.interpret(PR.sections_from_text(TEXT_51))
+    assert info["fits"] == [{"response": "x2", "r2": 0.01, "adj_r2": 0.008, "mse": 1.0, "df_residual": 498.0}]
+    t = info["tests"][0]
+    assert (t["name"], t["statistic"], t["df"], t["df2"]) == ("f", 5.04, 1.0, 498.0)
+
+
+@pytest.mark.parametrize("version, warned", [("5.0", False), ("5.1.1", False), ("5.2", True)])
+def test_version_warning(version, warned):
+    text = f"**************** PROCESS Procedure for SPSS Version {version} ****************\n" + TEXT_51
+    rec, info = _record_from_text(text, "m4")
+    assert info["header"]["version"] == version
+    codes = [m["code"] for m in rec["meta"].get("messages", [])]
+    assert ("process_version_unchecked" in codes) == warned
 
 
 def test_matrix_that_isnt_process():

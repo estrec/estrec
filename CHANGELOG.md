@@ -20,6 +20,9 @@
   decimals otherwise. PROCESS isn't included: get it from https://www.afhayes.com/download.html;
   `tests/test_process.py` runs against a local copy. Indirect effects are named by their path
   (`indirect: x1 -> x2 -> y`) whichever way PROCESS printed them.
+  Checked with PROCESS 5.0 and 5.1.1, whose Model Summary layouts differ (5.1 prints MSE and
+  the F's df in a separate SS/df/MS table); another version gets a `process_version_unchecked`
+  warning in the record, printed by `ESTREC END`.
 - SAS: `sas/estrec.sas`, `%estrec_begin` / `%estrec_end(out=)`: one record per REG, GLM,
   SURVEYREG, LOGISTIC, SURVEYLOGISTIC, GENMOD (incl. GEE), MIXED, GLIMMIX, PANEL or SYSLIN
   run in between, read from an

@@ -28,4 +28,5 @@ ESTREC WRITE OUTFILE='out/h_unianova.estrec.json'.
 SET OLANG=ENGLISH.
 
 * Now try the same from the menus (after installing the dialog, if built): run a
-* Regression from Analyze > Regression > Linear, then Extensions > Save estimation record.
+* Regression from Analyze > Regression > Linear, then the Save estimation record item.
+* If a WRITE finds nothing, its log lines in the Viewer say where it looked (journal, Viewer).

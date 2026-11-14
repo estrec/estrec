@@ -164,9 +164,115 @@ SUPPORTED_CMDS = {"Regression", "UNIANOVA", "Logistic Regression", "Generalized 
 
 
 def last_procedure_syntax():
-    """(procedure, syntax) of the last supported procedure in the designated Viewer, read from
-    its Notes table (the syntax as run, also for dialog-run procedures). The Notes table is
-    found by its OMS subtype and the syntax by its first word, so any output language works."""
+    """(procedure, syntax) of the last supported procedure run, or (None, None).
+
+    First from the journal, which records each command as it runs (also those pasted by the
+    dialogs, in any output language) and is current inside a Run All job. Then from the Notes
+    table of the designated Viewer, which can lag behind a running syntax job."""
+    notes = []
+    path = _journal_path()
+    if path:
+        try:
+            cmd, syntax = last_in_journal(_tail(path))
+            if syntax:
+                print(f"ESTREC WRITE: found the last {cmd} in the journal ({path})")
+                return cmd, syntax
+            notes.append(f"the journal ({path}) has no supported procedure")
+        except OSError as e:
+            notes.append(f"couldn't read the journal {path} ({e})")
+    else:
+        notes.append("no journal file (Edit > Options > File Locations > Record syntax in journal)")
+    try:
+        cmd, syntax = _last_in_viewer()
+        if syntax:
+            for n in notes:
+                print(f"ESTREC WRITE: {n}")
+            print(f"ESTREC WRITE: found the last {cmd} in the Viewer")
+            return cmd, syntax
+        notes.append("the Viewer's Notes tables have no supported procedure")
+    except Exception as e:  # noqa: BLE001
+        notes.append(f"couldn't read the Viewer ({e})")
+    for n in notes:
+        print(f"ESTREC WRITE: {n}")
+    return None, None
+
+
+def _journal_path():
+    text = _show("JOURNAL") or ""
+    m = re.search(r"([A-Za-z]:\\[^\n\"']*?\.jnl|/[^\n\"']*?\.jnl)", text, re.I)
+    if m and os.path.isfile(m[1]):
+        return m[1]
+    try:
+        import SpssClient
+        SpssClient.StartClient()
+        try:
+            for opt in ("JournalFile", "JournalFileLocation"):
+                o = getattr(SpssClient.PreferenceOptions, opt, None)
+                if o is not None:
+                    v = SpssClient.GetPreference(o)
+                    if v and os.path.isfile(v):
+                        return v
+        finally:
+            SpssClient.StopClient()
+    except Exception:  # noqa: BLE001
+        pass
+    # the usual defaults: the temp folder (Windows, Linux), Application Support (macOS)
+    import glob
+    home = os.path.expanduser("~")
+    found = [p for pat in (os.path.join(tempfile.gettempdir(), "statistics.jnl"),
+                           os.path.join(home, "Library", "Application Support", "IBM", "**", "statistics.jnl"),
+                           os.path.join(home, "AppData", "Local", "Temp", "statistics.jnl"))
+             for p in glob.glob(pat, recursive=True)]
+    return max(found, key=os.path.getmtime) if found else None
+
+
+def _tail(path, size=2_000_000):
+    with open(path, "rb") as f:
+        f.seek(0, 2)
+        n = f.tell()
+        f.seek(max(0, n - size))
+        data = f.read()
+    for enc in ("utf-8", "latin-1"):
+        try:
+            return data.decode(enc)
+        except UnicodeDecodeError:
+            pass
+    return data.decode("utf-8", "replace")
+
+
+def journal_commands(text):
+    """The journal's commands, each as its lines joined (a command ends at a line ending in '.')."""
+    cmds, cur = [], []
+    for line in text.splitlines():
+        if not line.strip() and not cur:
+            continue
+        cur.append(line.rstrip())
+        if line.rstrip().endswith("."):
+            cmds.append("\n".join(cur))
+            cur = []
+    if cur:
+        cmds.append("\n".join(cur))
+    return cmds
+
+
+def last_in_journal(text):
+    """The last supported command in a journal's text. A comment without its closing period
+    runs on into the next command, so a command may also start on a later line of a block."""
+    for c in reversed(journal_commands(text)):
+        lines = c.split("\n")
+        for i, line in enumerate(lines):
+            if i and line[:1].isspace():
+                continue
+            rest = "\n".join(lines[i:])
+            cmd = _cmd_of(rest)
+            if cmd:
+                return cmd, rest
+    return None, None
+
+
+def _last_in_viewer():
+    """Notes table found by its OMS subtype and the syntax by its first word, so any output
+    language works."""
     import SpssClient  # the scripting API: only inside the SPSS client
     SpssClient.StartClient()
     try:
@@ -186,7 +292,6 @@ def last_procedure_syntax():
                     cmd = _cmd_of(text)
                     if cmd:
                         return cmd, text
-            # the last procedure isn't one we record: keep looking further back
         return None, None
     finally:
         SpssClient.StopClient()
@@ -209,8 +314,8 @@ def _cmd_of(syntax: str):
 def write_last(outfile: str, title: str | None = None, identifying: bool = False) -> list:
     proc, syntax = last_procedure_syntax()
     if not syntax:
-        print("ESTREC WRITE: no REGRESSION, UNIANOVA, LOGISTIC REGRESSION, GENLIN, MIXED or "
-              "GENLINMIXED output in the Viewer")
+        print("ESTREC WRITE: found no REGRESSION, UNIANOVA, LOGISTIC REGRESSION, GENLIN, MIXED or "
+              "GENLINMIXED run to record")
         return []
     print(f"ESTREC WRITE: re-running the last {proc} quietly to record it")
     begin(quiet=True)

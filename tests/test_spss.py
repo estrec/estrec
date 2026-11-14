@@ -158,3 +158,22 @@ def test_committed_bundle_is_current():
         for n in names - {"META-INF/MANIFEST.MF"}:
             assert z.read(n) == (ROOT / "spss" / n).read_bytes(), f"{n} is out of date in estrec.spe"
         assert b"Plugins:" not in z.read("META-INF/MANIFEST.MF")
+
+
+def test_last_in_journal():
+    """ESTREC WRITE finds the last supported command in the SPSS journal: multi-line commands,
+    other commands after it, and a comment missing its closing period."""
+    import estrec_session
+    j = ("GET DATA /TYPE=TXT /FILE=csv.\n"
+         "* a comment without its period\n"
+         "REGRESSION /STATISTICS COEFF OUTS CI(95) R ANOVA BCOV\n"
+         "  /DEPENDENT y /METHOD=ENTER x1 x2.\n"
+         "ESTREC WRITE OUTFILE='out/f.json'.\n"
+         "LOGISTIC REGRESSION VARIABLES ybin /METHOD=ENTER x1 x2.\n"
+         "DESCRIPTIVES VARIABLES=y.\n"
+         "ESTREC WRITE OUTFILE='out/g.json'.\n")
+    assert estrec_session.last_in_journal(j) == (
+        "Logistic Regression", "LOGISTIC REGRESSION VARIABLES ybin /METHOD=ENTER x1 x2.")
+    assert estrec_session.last_in_journal(j.split("LOGISTIC")[0]) == (
+        "Regression", "REGRESSION /STATISTICS COEFF OUTS CI(95) R ANOVA BCOV\n  /DEPENDENT y /METHOD=ENTER x1 x2.")
+    assert estrec_session.last_in_journal("LOGISTIC VARIABLES=y.\nDESCRIPTIVES y.\n") == (None, None)

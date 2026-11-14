@@ -23,6 +23,11 @@
   Checked with PROCESS 5.0 and 5.1.1, whose Model Summary layouts differ (5.1 prints MSE and
   the F's df in a separate SS/df/MS table); another version gets a `process_version_unchecked`
   warning in the record, printed by `ESTREC END`.
+  Conditional effects are named by moderator and value, rounded (`indirect: x1 -> x2 -> y,
+  at z = 0.028`; the exact value is in `mediation.moderator_value`), so printed and
+  full-precision runs name rows alike; product terms (`Int_1`, R's `int_1`) are interactions.
+  Tables: `mediation_columns()` heads each column with its role (Mediator, Outcome, `x1 → y`);
+  the viewer shows that row above the outcomes in a new PROCESS table.
 - SAS: `sas/estrec.sas`, `%estrec_begin` / `%estrec_end(out=)`: one record per REG, GLM,
   SURVEYREG, LOGISTIC, SURVEYLOGISTIC, GENMOD (incl. GEE), MIXED, GLIMMIX, PANEL or SYSLIN
   run in between, read from an

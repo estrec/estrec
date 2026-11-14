@@ -809,7 +809,7 @@ EFFECTS_HEADING = "Effects"
 def mediation_columns(record: dict) -> list[dict]:
     """The columns that show a mediation record the way PROCESS lays it out: one per equation
     (each response with coefficient rows, in `meta.responses` order) and one of the effect
-    rows. A record without effect rows, or with one equation's coefficients at most, gets one
+    rows, with headers from `specification.mediation` (Mediator, Outcome, "x -> y"). A record without effect rows, or with one equation's coefficients at most, gets one
     plain column."""
     rid = record["meta"]["id"]
     rows = tidy(record)
@@ -823,7 +823,21 @@ def mediation_columns(record: dict) -> list[dict]:
     eqs.sort(key=lambda x: order.index(x) if x in order else len(order))
     if len(eqs) < 2:
         return [{"record": rid}]
-    return [{"record": rid, "response": y, "mediation": False} for y in eqs] + [{"record": rid, "mediation": True}]
+    med = ((record.get("specification") or {}).get("mediation")) or {}
+    mediators = [str(m) for m in med.get("mediators") or []]
+    outcome, treat = med.get("outcome"), med.get("treatment")
+
+    def eq(y):
+        c = {"record": rid, "response": y, "mediation": False}
+        role = "Mediator" if y in mediators else "Outcome" if outcome is not None and y == str(outcome) else None
+        if role:
+            c["header"] = role
+        return c
+
+    eff = {"record": rid, "mediation": True}
+    if treat and outcome:
+        eff["header"] = f"{treat} \u2192 {outcome}"
+    return [eq(y) for y in eqs] + [eff]
 
 
 def _column_response(c: dict, record: dict, rows: list[dict], labels: dict) -> str:

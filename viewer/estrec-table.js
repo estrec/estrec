@@ -554,7 +554,18 @@
     const pos = (x) => (order.includes(x) ? order.indexOf(x) : order.length);
     eqs.sort((a, b) => pos(a) - pos(b));
     if (eqs.length < 2) return [{ record: rid }];
-    return [...eqs.map((y) => ({ record: rid, response: y, mediation: false })), { record: rid, mediation: true }];
+    const med = ((record.specification || {}).mediation) || {};
+    const mediators = (med.mediators || []).map(String);
+    const outcome = med.outcome, treat = med.treatment;
+    const eq = (y) => {
+      const c = { record: rid, response: y, mediation: false };
+      const role = mediators.includes(y) ? "Mediator" : outcome != null && y === String(outcome) ? "Outcome" : null;
+      if (role) c.header = role;
+      return c;
+    };
+    const eff = { record: rid, mediation: true };
+    if (treat && outcome) eff.header = `${treat} \u2192 ${outcome}`;
+    return [...eqs.map(eq), eff];
   }
 
   // (a column of effect rows is headed "Effects")

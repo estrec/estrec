@@ -117,6 +117,9 @@ def test_r_text(r_runs, name):
     assert info["header"]["platform"] == "R"
     assert rec["metrics"]["nobs"] == (2000 if name == "m1" else 1997)
     assert not info["skipped"] or name == "m4cov"         # m4cov: the standardized effects
+    for p in rec["parameters"]:
+        if p["term"].lower().startswith("int_"):  # PROCESS's product terms (R prints int_1)
+            assert len(p["canonical"]["factors"]) >= 2, p
 
 
 def test_r_text_matches_save2(r_runs):
@@ -195,13 +198,26 @@ def test_spss(name, folder):
     codes = [m["code"] for m in rec["meta"].get("messages", [])]
     assert ("printed_precision" in codes) == name.startswith("p_")
     for p in rec["parameters"]:
-        if p["term"].startswith("Int_"):      # PROCESS's product terms are interactions
+        if p["term"].lower().startswith("int_"):  # PROCESS's product terms are interactions
             assert len(p["canonical"]["factors"]) >= 2, p
     assert rec["provenance"]["software"][1]["name"] == "PROCESS"
     eqs = rec["structures"]["equations"]["per_response"]
     assert [e["response"] for e in eqs if "component" not in e] == rec["meta"]["responses"]
     for e in eqs:
         assert ("pseudo_r2" in e) == (e["response"] == "ybin") and ("r2" in e) != ("pseudo_r2" in e)
+
+
+def test_spss_conditional_effects_named_alike():
+    """Conditional effects name the moderator and its value rounded, so the printed and the
+    full-precision runs name each row the same (the exact value is in moderator_value)."""
+    for folder in SPSS_OUT or [None]:
+        text, tables = _spss("p_m7", folder), _spss("t_m7", folder)
+        names = [[p["term"] for p in r["parameters"] if "mediation" in p] for r in (text, tables)]
+        assert names[0] == names[1]
+        assert "indirect: x1 -> x2 -> y, at z = 0.028" in names[1]
+        mv = [p["mediation"]["moderator_value"] for p in tables["parameters"]
+              if (p.get("mediation") or {}).get("moderator_value") is not None]
+        assert mv[1] == pytest.approx(0.027656, rel=1e-9)
 
 
 @pytest.mark.parametrize("folder", range(max(1, len(SPSS_OUT))))

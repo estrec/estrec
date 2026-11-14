@@ -292,7 +292,7 @@ def interpret(sections) -> dict:
             m = re.match(r"^\((C\d+)\)\s+(.*)$", v)
             if m:
                 contrasts[m[1]] = " ".join(m[2].split())
-            m = re.match(r"^(Int_\d+)\s*:?\s*(.*)$", v)
+            m = re.match(r"(?i)^(Int_\d+)\s*:?\s*(.*)$", v)
             if m:
                 products[m[1]] = [t for t in m[2].split() if t not in ("x", ":")]
             continue
@@ -340,7 +340,7 @@ def interpret(sections) -> dict:
             mod = _moderator_cols(s)
             for row in s.rows:
                 mv = _mod_value(s, row, mod)
-                effects.append(_row(s, row, _eff_term("direct", row[0], mv), mediation=R.compact(
+                effects.append(_row(s, row, _eff_term("direct", row[0], mv, mod), mediation=R.compact(
                     {"effect": "direct", "treatment": row[0], "moderator_value": mv})))
             continue
         if re.match(rf"(relative )?(conditional )?indirect {_EFF} of x on y", k) or (not k and path):
@@ -444,7 +444,7 @@ def _indirect(s, row, mod, path, relative=False):
         if treat:
             term += f" [{treat}]"
     if mv is not None:
-        term += f" | {mv}"
+        term += _at(mod, mv)
     return _row(s, row, term, mediation=R.compact({
         "effect": eff, "mediator": med, "treatment": treat, "moderator_value": mv, **extra}))
 
@@ -473,13 +473,35 @@ def _mod_value(s, row, mod):
     return ", ".join(f"{c.strip()}={R.num(v)}" for c, v in zip(mod, vals))
 
 
-def _eff_term(eff, label, mv=None):
+def _eff_term(eff, label, mv=None, mod=None):
     base = {"total": "total effect", "direct": "direct effect"}[eff]
     if label:
         base += f": {label}"
     if mv is not None:
-        base += f" | {mv}"
+        base += _at(mod, mv)
     return base
+
+
+def _fmt_mv(v):
+    """A moderator value for a row's name: 3 decimals (3 significant digits below 0.01), so
+    the printed (4-decimal) and full-precision values name the row alike."""
+    if not isinstance(v, (int, float)):
+        return str(v)
+    if v == int(v):
+        return str(int(v))
+    return f"{v:.3f}" if abs(v) >= 0.01 else f"{v:.3g}"
+
+
+def _at(mod, mv):
+    """', at z = -1.020' (the exact value stays in mediation.moderator_value)."""
+    names = [str(c).strip() for c in (mod or [])]
+    if isinstance(mv, str) or len(names) != 1:          # several moderators: "w=1, z=2"
+        parts = [p.split("=", 1) for p in str(mv).split(", ")]
+        if all(len(p) == 2 for p in parts):
+            return ", at " + ", ".join(f"{k.strip()} = {_fmt_mv(R.num(v) if _isnum(v.strip()) else v)}"
+                                         for k, v in parts)
+        return f", at {mv}"
+    return f", at {names[0]} = {_fmt_mv(mv)}"
 
 
 # ---------------------------------------------------------------- the record
@@ -553,7 +575,7 @@ def build(info, cmd, nt, hints, precision=None, identifying=False):
     params = []
     for e in info["equations"]:
         e = dict(e)
-        prod = info.get("products", {}).get(e["term"])     # Int_1: x1 x z, from PROCESS's product key
+        prod = {k.lower(): v for k, v in info.get("products", {}).items()}.get(e["term"].lower())  # Int_1: x1 x z (R: int_1)
         e["canonical"] = P.canonical("*".join(prod) if prod else e["term"])
         params.append(e)
     params += [dict(e, response=e.get("response") or h.get("y")) for e in info["effects"]]

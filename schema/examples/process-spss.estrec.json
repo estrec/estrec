@@ -24,7 +24,7 @@
     "core_digest": {
       "algorithm": "sha256",
       "canonicalization": "RFC8785",
-      "value": "4c06580f44f16f6ce266af3fee3c786347bf8c2bbb00a26df7570edacd70c0d6"
+      "value": "f3186fad8dedba220a9a768a425be773670d584e284d2b3231228abb12bb31c1"
     }
   },
   "specification": {
@@ -205,7 +205,7 @@
       "response": "y"
     },
     {
-      "term": "indirect: x1 -> x2 -> y | -1.01985876",
+      "term": "indirect: x1 -> x2 -> y, at z = -1.020",
       "estimate": -0.0064196727738702,
       "std_error": 0.0077366580763738,
       "statistic": -1.01985876,
@@ -219,7 +219,7 @@
       "response": "y"
     },
     {
-      "term": "indirect: x1 -> x2 -> y | 0.027656",
+      "term": "indirect: x1 -> x2 -> y, at z = 0.028",
       "estimate": -0.0073500389017588,
       "std_error": 0.0059511582951316,
       "statistic": 0.027656,
@@ -233,7 +233,7 @@
       "response": "y"
     },
     {
-      "term": "indirect: x1 -> x2 -> y | 1.02760132",
+      "term": "indirect: x1 -> x2 -> y, at z = 1.028",
       "estimate": -0.008238155509747,
       "std_error": 0.0076263391450235,
       "statistic": 1.02760132,

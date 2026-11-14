@@ -378,3 +378,27 @@ def test_mediation_table_matches_python():
     for k in ("head", "header", "notes"):
         assert js["t"][k] == py[k]
     assert [(r["label"], r["cells"]) for r in js["t"]["rows"]] == [(r["label"], r["cells"]) for r in py["rows"]]
+
+
+def test_process_example_columns_match_python():
+    """The PROCESS example: the viewer's columns carry the same headers (Mediator, Outcome,
+    x1 -> y) and give the same table, with those headers as a heading row."""
+    if NODE is None:
+        pytest.skip("node not installed")
+    rec = ef.read(EXAMPLES / "process-spss.estrec.json")
+    cols = et.mediation_columns(rec)
+    spec = {"schema": et.TABLE_SCHEMA, "meta": {"id": "0d5a7c1e-2b3f-4a6d-8e9f-1a2b3c4d5e70",
+            "created": "2026-11-14T00:00:00Z"}, "columns": cols, "head": ["number", "label", "response"],
+            "uncertainty": "std_error", "stats": [{"metric": "nobs"}, {"metric": "r2"}]}
+    script = (
+        "const E=require(process.argv[1]+'/estrec-table.js');const x=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+        "const idx=E.indexRecords([{record:x.rec}]);"
+        "process.stdout.write(JSON.stringify({cols:E.mediationColumns(x.rec),t:E.buildTable(x.spec,idx)}))"
+    )
+    js = run_node(script, {"rec": rec, "spec": spec})
+    assert js["cols"] == cols
+    py = et.build_table(spec, records=[rec])
+    assert js["t"]["head"] == py["head"]
+    assert py["head"][1] == {"kind": "label", "cells": ["Mediator", "Outcome", "x1 \u2192 y"]}
+    assert py["head"][2] == {"kind": "response", "cells": ["x2", "y", "Effects"]}
+    assert [(r["label"], r["cells"]) for r in js["t"]["rows"]] == [(r["label"], r["cells"]) for r in py["rows"]]

@@ -53,5 +53,13 @@ button:disabled { opacity: .5; cursor: default; }
 }
 .tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
 .tabs button:hover, .tabs button:focus-visible { border-color: var(--accent); }
+/* the panes share one grid cell, so the band is as tall as the tallest and switching tabs
+   doesn't move the page; a hidden pane keeps its space but isn't shown or read out */
+.panes {
+  display: grid; border: 1px solid var(--line); border-radius: 8px; padding: 16px;
+}
+.panes > .pane { grid-area: 1 / 1; align-self: center; min-width: 0; }
+.panes > .pane[hidden] { display: block; visibility: hidden; }
 .pane > p:first-child { margin-top: 0; }
+.pane > :last-child { margin-bottom: 0; }
 .pane pre + p { margin-top: 14px; }

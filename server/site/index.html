@@ -37,6 +37,7 @@
     <button type="button" role="tab" id="tab-julia" aria-controls="pane-julia" aria-selected="false" tabindex="-1">Julia</button>
     <button type="button" role="tab" id="tab-other" aria-controls="pane-other" aria-selected="false" tabindex="-1">Other tools</button>
   </div>
+  <div class="panes">
   <section class="pane" role="tabpanel" id="pane-python" aria-labelledby="tab-python">
     <p>The reference validator, writer and redactor:</p>
     <pre>pip install "estrec[jsonschema] @ git+https://github.com/estrec/estrec"
@@ -44,12 +45,12 @@ estrec validate model.estrec.json</pre>
     <p>Without git (the command above needs it on your PATH):</p>
     <pre>pip install "estrec[jsonschema] @ https://github.com/estrec/estrec/archive/refs/heads/main.zip"</pre>
   </section>
-  <section class="pane" role="tabpanel" id="pane-r" aria-labelledby="tab-r">
+  <section class="pane" role="tabpanel" id="pane-r" aria-labelledby="tab-r" hidden>
     <p>From fixest fits (<code>feols</code>, <code>feglm</code>, <code>fepois</code>):</p>
     <pre>remotes::install_github("estrec/estrec", subdir = "r")
 estrec::write_estimation(fit, "fit.estrec.json")</pre>
   </section>
-  <section class="pane" role="tabpanel" id="pane-stata" aria-labelledby="tab-stata">
+  <section class="pane" role="tabpanel" id="pane-stata" aria-labelledby="tab-stata" hidden>
     <p>Stata 16 or later. Run <code>estrec write</code> right after an estimation command
     (<code>regress</code>, <code>reghdfe</code>, <code>ivreghdfe</code>, <code>logit</code> and
     <a href="https://github.com/estrec/estrec/tree/main/stata">others</a>):</p>
@@ -57,7 +58,7 @@ estrec::write_estimation(fit, "fit.estrec.json")</pre>
 regress price mpg weight, vce(cluster rep78)
 estrec write using "price.estrec.json", replace</pre>
   </section>
-  <section class="pane" role="tabpanel" id="pane-spss" aria-labelledby="tab-spss">
+  <section class="pane" role="tabpanel" id="pane-spss" aria-labelledby="tab-spss" hidden>
     <p>SPSS Statistics 27 or later. Download
     <a href="https://github.com/estrec/estrec/raw/main/spss/estrec.spe">estrec.spe</a> and install it
     with <b>Extensions &gt; Install Local Extension Bundle</b>. Then bracket the procedures
@@ -66,8 +67,9 @@ estrec write using "price.estrec.json", replace</pre>
     <pre>ESTREC BEGIN.
 REGRESSION /STATISTICS COEFF OUTS R ANOVA BCOV /DEPENDENT y /METHOD=ENTER x1 x2.
 ESTREC END OUTFILE='fit.estrec.json'.</pre>
+    <p>Or, after running a model from the menus: <b>Utilities &gt; Save estimation record</b>.</p>
   </section>
-  <section class="pane" role="tabpanel" id="pane-sas" aria-labelledby="tab-sas">
+  <section class="pane" role="tabpanel" id="pane-sas" aria-labelledby="tab-sas" hidden>
     <p>SAS 9.4. Bracket the procedures (<code>REG</code>, <code>GLM</code>, <code>LOGISTIC</code>,
     <code>GENMOD</code>, <code>SURVEYREG</code>, <code>SURVEYLOGISTIC</code>, <code>MIXED</code>,
     <code>GLIMMIX</code>, <code>PANEL</code>, <code>SYSLIN</code>) with:</p>
@@ -77,13 +79,13 @@ ESTREC END OUTFILE='fit.estrec.json'.</pre>
 proc reg data=mydata; model y = x1 x2 / covb; run; quit;
 %estrec_end(out=fit.estrec.json);</pre>
   </section>
-  <section class="pane" role="tabpanel" id="pane-julia" aria-labelledby="tab-julia">
+  <section class="pane" role="tabpanel" id="pane-julia" aria-labelledby="tab-julia" hidden>
     <p>From FixedEffectModels.jl (<code>reg</code>) and GLM.jl (<code>lm</code>, <code>glm</code>) fits:</p>
     <pre>using Pkg; Pkg.add(url = "https://github.com/estrec/estrec", subdir = "julia")
 using EstRec
 write_estimation(m, "fit.estrec.json"; data = df)</pre>
   </section>
-  <section class="pane" role="tabpanel" id="pane-other" aria-labelledby="tab-other">
+  <section class="pane" role="tabpanel" id="pane-other" aria-labelledby="tab-other" hidden>
     <p>Other tools don't have a writer yet. A record is plain JSON, so any
     tool can write one by following the
     <a href="https://github.com/estrec/estrec/blob/main/spec/estrec.md">specification</a>; the
@@ -91,6 +93,7 @@ write_estimation(m, "fit.estrec.json"; data = df)</pre>
     worked examples, and the Python validator checks the result. If you'd like a writer for
     your tool, say so on <a href="https://github.com/estrec/estrec/issues">GitHub</a>.</p>
   </section>
+  </div>
   <script>
   (function () {
     var tabs = Array.prototype.slice.call(document.querySelectorAll('.tabs [role=tab]'));

@@ -7,10 +7,12 @@ https://www.afhayes.com/download.html and point the tests at it.
   "PROCESS v5.1  for SAS/process.sas", or the files themselves). The R tests run PROCESS for R
   (Rscript) on tests/data/writers_probe.csv and read its printed output; the SAS tests run
   PROCESS for SAS when $ESTREC_SAS (or `sas`) is there too.
-- ESTREC_PROCESS_SPSS_OUT: a folder of OXML files written by spss/dev/probe_process.sps in SPSS.
+- ESTREC_PROCESS_SPSS_OUT: folders of OXML files written by spss/dev/probe_process.sps in SPSS,
+  separated by os.pathsep (one per PROCESS version, e.g. 5.0 and 5.1.1). Each is tested, and with
+  two or more test_spss_versions_agree compares their records.
 
 Each test is skipped when what it needs isn't there. Checked 2026-11-14 with PROCESS 5.1.1 for R
-and SAS (valiant) and PROCESS 5.0 and 5.1.1 for SPSS 32 (Ted's Mac). 5.1 changed the Model Summary
+and SAS (valiant) and PROCESS 5.0 and 5.1.1 for SPSS 32 (Ted's Mac; the same probes under each). 5.1 changed the Model Summary
 (MSE and the F's df moved to an SS/df/MS table): TEXT_51 below has that layout, made-up numbers.
 """
 
@@ -18,6 +20,7 @@ from __future__ import annotations
 
 import csv
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -36,7 +39,7 @@ import estrec_process as PR  # noqa: E402
 
 DATA = ROOT / "tests" / "data" / "writers_probe.csv"
 PDIR = os.environ.get("ESTREC_PROCESS_DIR")
-SPSS_OUT = os.environ.get("ESTREC_PROCESS_SPSS_OUT")
+SPSS_OUT = [d for d in os.environ.get("ESTREC_PROCESS_SPSS_OUT", "").split(os.pathsep) if d]
 SAS = os.environ.get("ESTREC_SAS") or shutil.which("sas")
 
 
@@ -168,19 +171,24 @@ def test_sas_text(sas_runs):
 # ---------------------------------------------------------------- SPSS
 
 
-def _spss(name):
-    if not SPSS_OUT or not (Path(SPSS_OUT) / f"{name}.xml").exists():
+def _spss(name, folder=None):
+    folder = folder or (SPSS_OUT[0] if SPSS_OUT else None)
+    if not folder or not (Path(folder) / f"{name}.xml").exists():
         pytest.skip("needs $ESTREC_PROCESS_SPSS_OUT (outputs of spss/dev/probe_process.sps)")
-    cmds = estrec_oxml.parse(str(Path(SPSS_OUT) / f"{name}.xml"))
+    cmds = estrec_oxml.parse(str(Path(folder) / f"{name}.xml"))
     recs, skipped = estrec_procedures.records(cmds, {"spss_version": "32.0"})
     assert len(recs) == 1, skipped
     return recs[0]
 
 
-@pytest.mark.parametrize("name", ["p_m4", "p_m4cov", "p_m4par", "p_m6", "p_m7", "p_m14", "p_m4bin",
-                                  "p_m4mcx", "p_m1", "t_m4cov", "t_m7", "t_m1"])
-def test_spss(name):
-    rec = _spss(name)
+SPSS_PROBES = ["p_m4", "p_m4cov", "p_m4par", "p_m6", "p_m7", "p_m14", "p_m4bin", "p_m4mcx", "p_m1",
+               "t_m4cov", "t_m7", "t_m1"]
+
+
+@pytest.mark.parametrize("folder", range(max(1, len(SPSS_OUT))))
+@pytest.mark.parametrize("name", SPSS_PROBES)
+def test_spss(name, folder):
+    rec = _spss(name, SPSS_OUT[folder] if SPSS_OUT else None)
     key = name.split("_", 1)[1]
     _check(rec, MODELS.get(key, (None, []))[1] if key != "m6" else
            [("indirect", ["x1", "x2", "z", "y"])])
@@ -193,9 +201,10 @@ def test_spss(name):
         assert ("pseudo_r2" in e) == (e["response"] == "ybin") and ("r2" in e) != ("pseudo_r2" in e)
 
 
-def test_spss_tables_full_precision():
+@pytest.mark.parametrize("folder", range(max(1, len(SPSS_OUT))))
+def test_spss_tables_full_precision(folder):
     """display=tables: the y equation matches R lm to 1e-12 (the text gives 4 decimals)."""
-    rec = _spss("t_m7")
+    rec = _spss("t_m7", SPSS_OUT[folder] if SPSS_OUT else None)
     y = {p["term"]: p["estimate"] for p in rec["parameters"] if p.get("response") == "y" and "mediation" not in p}
     for term, b in LM_Y.items():
         assert y[term] == pytest.approx(b, rel=1e-12)
@@ -251,6 +260,42 @@ def test_version_warning(version, warned):
     assert info["header"]["version"] == version
     codes = [m["code"] for m in rec["meta"].get("messages", [])]
     assert ("process_version_unchecked" in codes) == warned
+
+
+def _flat(x, p=""):
+    if isinstance(x, dict):
+        for k, v in x.items():
+            yield from _flat(v, f"{p}.{k}" if p else k)
+    elif isinstance(x, list):
+        for i, v in enumerate(x):
+            yield from _flat(v, f"{p}[{i}]")
+    else:
+        yield p, x
+
+
+@pytest.mark.parametrize("name", SPSS_PROBES)
+def test_spss_versions_agree(name):
+    """The same model under two PROCESS versions gives the same record, apart from what the
+    versions themselves print differently: 5.1 adds Adj R-sq, and its bootstrap draws differ
+    from 5.0's under the same seed (bootstrap SEs and intervals of the effects)."""
+    if len(SPSS_OUT) < 2:
+        pytest.skip("needs two folders in $ESTREC_PROCESS_SPSS_OUT (two PROCESS versions)")
+    recs = [_spss(name, d) for d in SPSS_OUT]
+    boot = {i for i, p in enumerate(recs[0]["parameters"]) if "p_value" not in p}  # bootstrap rows
+    flats = [dict(_flat(r)) for r in recs]
+    for f in flats[1:]:
+        for k in sorted(set(flats[0]) | set(f)):
+            if k.startswith(("meta.id", "meta.created", "meta.core_digest", "history",
+                             "provenance.software[1].version")) or k.endswith(".adj_r2"):
+                continue
+            m = re.match(r"parameters\[(\d+)\]\.(std_error|conf_low|conf_high)$", k)
+            if m and int(m[1]) in boot:
+                continue
+            a, b = flats[0].get(k, "<absent>"), f.get(k, "<absent>")
+            if isinstance(a, float) and isinstance(b, float):
+                assert a == pytest.approx(b, rel=1e-9, abs=1e-12), k
+            else:
+                assert a == b, k
 
 
 def test_matrix_that_isnt_process():

@@ -52,6 +52,28 @@ as_estimation_test.my_test <- function(x, ...)
   list(list(name = "wald", statistic = x$W, distribution = "chi2", df = x$k, p_value = x$p))
 ```
 
+## PROCESS
+
+`record_process()` records a run of PROCESS (Andrew F. Hayes's macro for mediation,
+moderation and conditional process models). estrec doesn't include PROCESS: get it from
+https://www.afhayes.com/download.html and `source()` it.
+
+```r
+source("process.R")
+rec <- record_process(process(data = d, y = "y", x = "x1", m = "x2", w = "z", model = 7,
+                              seed = 20261114))
+write_estimation(rec, "model7.estrec.json")
+```
+
+PROCESS prints as usual. The call runs with `save = 2`, so the record's numbers come from
+PROCESS's matrix at full precision and its labels from the printed output; `save = 2` also
+probes every interaction (as `intprobe = 1`). The record is the one estrec for SPSS writes for
+the same model: each equation's coefficients (`response`), the direct, indirect, total and
+conditional effects (`indirect: x1 -> x2 -> y, at z = 0.028`; the exact value in
+`mediation.moderator_value`) and indices of moderated mediation as `mediation` rows, the model
+tests, each equation's R² and MSE in `structures.equations`, and the bootstrap settings.
+Checked with PROCESS 5.1.1; another version gets a `process_version_unchecked` warning.
+
 ## Collections
 
 `write_collection()` writes several records as one `estrec-collection` file (spec section

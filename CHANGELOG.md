@@ -28,6 +28,10 @@
   full-precision runs name rows alike; product terms (`Int_1`, R's `int_1`) are interactions.
   Tables: `mediation_columns()` heads each column with its role (Mediator, Outcome, `x1 → y`);
   the viewer shows that row above the outcomes in a new PROCESS table.
+- R: `record_process(process(...))` records a PROCESS for R run: the same record as estrec
+  for SPSS, with full-precision numbers from PROCESS's `save = 2` matrix matched row by row to
+  its printed output. `tests/test_process.py` checks it against the Python reader on 7 models.
+- R: `print()` of a record whose software list names no language (SPSS, SAS) no longer fails.
 - SAS: `sas/estrec.sas`, `%estrec_begin` / `%estrec_end(out=)`: one record per REG, GLM,
   SURVEYREG, LOGISTIC, SURVEYLOGISTIC, GENMOD (incl. GEE), MIXED, GLIMMIX, PANEL or SYSLIN
   run in between, read from an

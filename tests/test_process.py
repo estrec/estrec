@@ -7,6 +7,8 @@ https://www.afhayes.com/download.html and point the tests at it.
   "PROCESS v5.1  for SAS/process.sas", or the files themselves). The R tests run PROCESS for R
   (Rscript) on tests/data/writers_probe.csv and read its printed output; the SAS tests run
   PROCESS for SAS when $ESTREC_SAS (or `sas`) is there too.
+  With R, the estrec R package's record_process() is installed to a temporary library and run on
+  the same models; its records must equal the Python reader's of the same printed output.
 - ESTREC_PROCESS_SPSS_OUT: folders of OXML files written by spss/dev/probe_process.sps in SPSS,
   separated by os.pathsep (one per PROCESS version, e.g. 5.0 and 5.1.1). Each is tested, and with
   two or more test_spss_versions_agree compares their records.
@@ -132,6 +134,69 @@ def test_r_text_matches_save2(r_runs):
     for term, b in LM_Y.items():
         assert y[term] == pytest.approx(b, abs=5e-5)
         assert any(abs(r[0] - b) < 1e-12 for r in coefs)
+
+
+@pytest.fixture(scope="module")
+def r_records(tmp_path_factory):
+    """record_process() (the estrec R package, installed to a temporary library) on each model:
+    the record and the printed text it read."""
+    if not (PROCESS_R and shutil.which("Rscript") and shutil.which("R")):
+        pytest.skip("needs PROCESS for R ($ESTREC_PROCESS_DIR) and R")
+    out = tmp_path_factory.mktemp("process_r_rec")
+    lib = out / "lib"
+    lib.mkdir()
+    subprocess.run(["R", "CMD", "INSTALL", "-l", str(lib), str(ROOT / "r")], check=True,
+                   capture_output=True, text=True, timeout=600)
+    lines = [f'.libPaths(c("{lib}", .libPaths())); library(estrec)',
+             f'invisible(capture.output(source("{PROCESS_R}")))', f'd <- read.csv("{DATA}")']
+    for name, (opts, _) in MODELS.items():
+        lines += [f'txt <- capture.output(rec <- record_process(process(data=d, {opts})))',
+                  f'writeLines(txt, "{out}/{name}.txt")',
+                  f'write_estimation(rec, "{out}/{name}.estrec.json")']
+    (out / "run.R").write_text("\n".join(lines))
+    subprocess.run(["Rscript", "--vanilla", str(out / "run.R")], check=True, capture_output=True,
+                   text=True, timeout=1800)
+    return out
+
+
+def _close(a, b, path):
+    """Python's record (printed decimals) against R's (full precision): numbers agree to the
+    printed rounding, everything else exactly."""
+    if isinstance(a, dict):
+        assert isinstance(b, dict) and set(a) == set(b), (path, sorted(a), sorted(b))
+        for k in a:
+            _close(a[k], b[k], f"{path}.{k}")
+    elif isinstance(a, list):
+        assert isinstance(b, list) and len(a) == len(b), (path, a, b)
+        for i, (x, y) in enumerate(zip(a, b)):
+            _close(x, y, f"{path}[{i}]")
+    elif isinstance(a, (int, float)) and not isinstance(a, bool) and isinstance(b, (int, float)):
+        assert abs(a - b) <= 5.01e-5 + 1e-9 * abs(b), (path, a, b)
+    else:
+        assert a == b, (path, a, b)
+
+
+@pytest.mark.parametrize("name", list(MODELS))
+def test_r_writer(r_records, name):
+    """record_process(): a valid record, at full precision, the same as the Python reader's
+    record of the same printed output."""
+    rec = ef.read(r_records / f"{name}.estrec.json")
+    _check(rec, MODELS[name][1])
+    assert rec["provenance"]["software"][0]["name"] == "PROCESS"
+    assert not any(m["code"] == "printed_precision" for m in rec["meta"].get("messages", [])), \
+        rec["meta"]["messages"]
+    py, _ = _record_from_text((r_records / f"{name}.txt").read_text(), name)
+    for k in ("parameters", "tests", "metrics"):
+        _close(py.get(k), rec.get(k), k)
+    _close(py.get("structures"), rec.get("structures"), "structures")
+    for k in ("estimator", "responses", "profiles", "title"):
+        assert py["meta"].get(k) == rec["meta"].get(k), k
+    _close({k: v for k, v in py["specification"].items() if k != "call"},
+           {k: v for k, v in rec["specification"].items() if k != "call"}, "specification")
+    if name == "m4":
+        y = {p["term"]: p["estimate"] for p in rec["parameters"] if p.get("response") == "y" and "mediation" not in p}
+        for term, b in LM_Y.items():
+            assert y[term] == pytest.approx(b, rel=1e-12)
 
 
 # ---------------------------------------------------------------- SAS

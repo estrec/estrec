@@ -10,7 +10,8 @@ Description: Writes fitted models as records in the 'estrec' format, a JSON
     and 'feglm'/'fepois' (GLMs), including multiple estimations, 'split' and
     'subset'; adds hypothesis tests
     and linear combinations to records, and writes sets of records as collections
-    (a paper's results, a session or a replication).
+    (a paper's results, a session or a replication). Also records runs of
+    PROCESS (Hayes's mediation and moderation macro, which users install themselves).
 License: MIT + file LICENSE
 URL: https://github.com/estrec/estrec
 BugReports: https://github.com/estrec/estrec/issues

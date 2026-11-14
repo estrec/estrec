@@ -387,7 +387,8 @@ def interpret(sections) -> dict:
             mod = _moderator_cols(s)
             for row in s.rows:
                 mv = _mod_value(s, row, mod)
-                effects.append(_row(s, row, f"{h.get('x')} | {mv}", response=outcome, component="conditional"))
+                effects.append(_row(s, row, f"{h.get('x')}" + (_at(mod, mv) if mv is not None else ""),
+                                    response=outcome, component="conditional"))
             continue
         if s.rows:
             skipped.append(s.title.strip().rstrip(":") or "(untitled table)")
@@ -483,12 +484,14 @@ def _eff_term(eff, label, mv=None, mod=None):
 
 
 def _fmt_mv(v):
-    """A moderator value for a row's name: 3 decimals (3 significant digits below 0.01), so
-    the printed (4-decimal) and full-precision values name the row alike."""
+    """A moderator value for a row's name: 3 decimals (3 significant digits below 0.01), from
+    the value at PROCESS's 4 printed decimals, so printed and full-precision values name the
+    row alike (-2.69446 and the printed -2.6945 both give -2.695)."""
     if not isinstance(v, (int, float)):
         return str(v)
     if v == int(v):
         return str(int(v))
+    v = round(v, 4)          # PROCESS prints 4 decimals: round as it did first, then to 3
     return f"{v:.3f}" if abs(v) >= 0.01 else f"{v:.3g}"
 
 

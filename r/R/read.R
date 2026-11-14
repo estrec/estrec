@@ -243,7 +243,7 @@ print.estimation_record <- function(x, digits = 4, ...) {
     if (!is.null(sw$name)) sw <- list(sw)
     pick <- Filter(function(s) identical(s$role, "estimator"), sw)
     lang <- Filter(function(s) identical(s$role, "language"), sw)
-    show <- c(if (length(pick)) pick[1] else sw[1], lang[1])
+    show <- c(if (length(pick)) pick[1] else sw[1], if (length(lang)) lang[1])   # SPSS/SAS records name no language
     cat("  software: ", paste(vapply(show, function(s)
       paste0(s$name, if (!is.null(s$version)) paste0(" ", s$version)), ""), collapse = ", "),
       "\n", sep = "")

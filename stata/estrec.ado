@@ -1621,12 +1621,35 @@ string scalar _er_uuid()
 {
 	transmorphic state
 	real rowvector h
-	string scalar s
-	real scalar i
+	string scalar s, src
+	real scalar i, v
+	real matrix b
+	pointer(real scalar) scalar n
+	// Unique per call. The clock has only seconds, and a do-file often writes several
+	// records in one second, so the source also has a counter kept for the session (a
+	// Mata external), the process id (in a temp file name), the command line and
+	// coefficients (for the case where `clear all` resets the counter), host and user, and
+	// a draw from the user's RNG (its state restored, so their random numbers don't change).
+	if ((n = findexternal("_estrec_uuid_n")) == NULL) {
+		n = crexternal("_estrec_uuid_n")
+		*n = 0
+	}
+	*n = *n + 1
+	b = st_matrix("e(b)")
 	state = rngstate()
-	rseed(floor(runiform(1, 1) * 1e9) + clock(c("current_date") + " " + c("current_time"), "DMYhms") / 1000)
-	h = floor(runiform(1, 16) * 256)
+	src = strofreal(*n) + "|" + st_tempfilename() + "|" + c("current_date") + " " +
+		c("current_time") + "|" + strofreal(runiform(1, 1), "%21.19f") + "|" +
+		c("hostname") + "|" + c("username") + "|" + st_global("e(cmdline)") + "|" +
+		(length(b) ? strofreal(sum(b), "%21.0g") + "|" + strofreal(sum(b :* b), "%21.0g") : "")
 	rngstate(state)
+	h = J(1, 16, 0)
+	for (i = 0; i < 4; i++) {
+		v = hash1(src + "|" + strofreal(i), .)
+		h[4 * i + 1] = mod(v, 256)
+		h[4 * i + 2] = mod(floor(v / 256), 256)
+		h[4 * i + 3] = mod(floor(v / 65536), 256)
+		h[4 * i + 4] = floor(v / 16777216)
+	}
 	h[7] = mod(h[7], 16) + 64      // version 4
 	h[9] = mod(h[9], 64) + 128     // variant 10xx
 	s = ""

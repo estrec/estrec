@@ -404,6 +404,13 @@ def test_unmapped_command_is_core_only(written, installed):
     assert aux and "p_value" not in aux[0]
 
 
+def test_record_ids_are_unique(written):
+    """Every record gets its own id, though one do-file writes many in the same second."""
+    ids = [json.loads(p.read_text())["meta"]["id"] for p in written.glob("*.estrec.json")]
+    assert len(ids) > 10
+    assert len(set(ids)) == len(ids), f"{len(ids) - len(set(ids))} duplicate ids"
+
+
 def _flat(d, p=""):
     if isinstance(d, dict):
         return {k2: v2 for k, v in d.items() for k2, v2 in _flat(v, f"{p}.{k}").items()}

@@ -203,12 +203,34 @@ string scalar _est_uuid()
 {
 	transmorphic state
 	real rowvector h
-	string scalar s
-	real scalar i
+	string scalar s, src
+	real scalar i, v
+	real matrix b
+	pointer(real scalar) scalar n
+	// Unique per call (as estrec.ado's _er_uuid): a session counter, the process id (in a
+	// temp file name), clock, host, user, command line and coefficients, and a draw from
+	// the user's RNG with its state restored. Seeding from the clock alone gave records
+	// written in the same second the same id.
+	if ((n = findexternal("_estimation_uuid_n")) == NULL) {
+		n = crexternal("_estimation_uuid_n")
+		*n = 0
+	}
+	*n = *n + 1
+	b = st_matrix("e(b)")
 	state = rngstate()
-	rseed(floor(runiform(1, 1) * 1e9) + clock(c("current_date") + " " + c("current_time"), "DMYhms") / 1000)
-	h = floor(runiform(1, 16) * 256)
+	src = strofreal(*n) + "|" + st_tempfilename() + "|" + c("current_date") + " " +
+		c("current_time") + "|" + strofreal(runiform(1, 1), "%21.19f") + "|" +
+		c("hostname") + "|" + c("username") + "|" + st_global("e(cmdline)") + "|" +
+		(length(b) ? strofreal(sum(b), "%21.0g") + "|" + strofreal(sum(b :* b), "%21.0g") : "")
 	rngstate(state)
+	h = J(1, 16, 0)
+	for (i = 0; i < 4; i++) {
+		v = hash1(src + "|" + strofreal(i), .)
+		h[4 * i + 1] = mod(v, 256)
+		h[4 * i + 2] = mod(floor(v / 256), 256)
+		h[4 * i + 3] = mod(floor(v / 65536), 256)
+		h[4 * i + 4] = floor(v / 16777216)
+	}
 	h[7] = mod(h[7], 16) + 64      // version 4
 	h[9] = mod(h[9], 64) + 128     // variant 10xx
 	s = ""

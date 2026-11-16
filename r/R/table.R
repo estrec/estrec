@@ -420,3 +420,69 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
   }
   idx
 }
+
+# Make a table spec (estrec-table/0.1) with one column per record, as Python's
+# estrec.table.new_table() does. `records`: a record, a list of records, or
+# read_collection()'s result; a list's names become the column headers unless `headers`
+# is given. Entries of `rows` and `stats` may be plain strings (a term, a metric name).
+# `...` comes second so that spec fields passed through it (`head`, ...) are never partially
+# matched to these arguments (`head` would otherwise go to `headers`).
+new_table <- function(records, ..., headers = NULL, rows = NULL,
+                      stats = list("nobs", "r2", list(vcov = "type")),
+                      uncertainty = "std_error", stars = c(0.1, 0.05, 0.01), title = NULL,
+                      sources = NULL, pin = FALSE, fixed_effects = TRUE) {
+  recs <- if (is_estimation_record(records)) list(records) else records
+  if (!is.list(recs) || !length(recs) || !all(vapply(recs, is_estimation_record, logical(1))))
+    stop("`records` must be a record or a list of records", call. = FALSE)
+  if (is.null(headers) && !is.null(names(recs)) && all(nzchar(names(recs)))) headers <- names(recs)
+  if (!is.null(headers) && length(headers) != length(recs))
+    stop("`headers` has ", length(headers), " entries for ", length(recs), " records", call. = FALSE)
+  if (isTRUE(pin) && !requireNamespace("openssl", quietly = TRUE))
+    stop("pin = TRUE needs the 'openssl' package", call. = FALSE)
+  cols <- lapply(seq_along(recs), function(i) {
+    r <- .est_plain(recs[[i]])
+    .est_compact(list(record = as.character(r$meta$id),
+                      header = if (!is.null(headers)) as.character(headers[[i]]),
+                      sha256 = if (isTRUE(pin)) .est_sha256(.est_canonical_json(r))))
+  })
+  st <- lapply(stats %||% list(), function(s) if (is.character(s)) list(metric = s) else s)
+  if (fixed_effects) {
+    fes <- unique(unlist(lapply(recs, function(r) r$specification$fixed_effects)))
+    st <- c(st, lapply(fes, function(fe) list(fixed_effect = fe, label = paste0("FE: ", fe))))
+  }
+  spec <- list(schema = "estrec-table/0.1",
+               meta = list(id = .est_uuid(), created = .est_now(), producer = estrec_info()))
+  spec$title <- title
+  spec$sources <- sources
+  spec$columns <- cols
+  if (length(rows)) spec$rows <- lapply(rows, function(r) if (is.character(r)) list(term = r) else r)
+  spec$uncertainty <- uncertainty
+  if (length(stars)) spec$stars <- as.list(stars)
+  if (length(st)) spec$stats <- st
+  utils::modifyList(spec, list(...))
+}
+
+# Write a table spec as JSON. `spec` is a list as render_table() takes; a missing `schema` or
+# `meta` is filled in (a new id, now, this package as producer). Returns `path` invisibly.
+write_table <- function(spec, path) {
+  if (!is.list(spec) || is.null(names(spec)))
+    stop("`spec` must be a named list (a table spec)", call. = FALSE)
+  if (is.null(spec$schema)) spec <- c(list(schema = "estrec-table/0.1"), spec)
+  if (!identical(spec$schema, "estrec-table/0.1"))
+    stop("not an estrec-table/0.1 spec", call. = FALSE)
+  if (!length(spec$columns)) stop("the spec has no columns", call. = FALSE)
+  # fields the schema has as arrays stay arrays with one entry (auto_unbox would unbox them)
+  for (f in c("head", "keep", "drop", "stars", "notes"))
+    if (!is.null(spec[[f]])) spec[[f]] <- as.list(spec[[f]])
+  if (!is.null(spec$rows)) spec$rows <- lapply(spec$rows, function(r) {
+    if (is.list(r) && !is.null(r$terms)) r$terms <- as.list(r$terms)
+    r
+  })
+  if (is.null(spec$meta)) {
+    spec <- append(spec, list(meta = list(id = .est_uuid(), created = .est_now(),
+                                          producer = estrec_info())), after = 1L)
+  }
+  jsonlite::write_json(spec, path, auto_unbox = TRUE, digits = I(17), null = "null",
+                       na = "null", pretty = TRUE)
+  invisible(path)
+}

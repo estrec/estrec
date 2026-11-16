@@ -132,6 +132,17 @@ render_table("table2.estrec-table.json", output = "latex")
 render_table(spec, records = read_collection("table2.estrec-collection.json"))
 ```
 
+`new_table()` makes a spec with one column per record (as Python's `estrec.table.new_table()`),
+and `write_table()` writes a spec, filling in `schema` and `meta` when they're missing and
+keeping one-entry fields such as `head` or a row's `terms` as JSON arrays:
+
+```r
+recs <- list(Base = to_estimation(fit1), Full = to_estimation(fit2))
+spec <- new_table(recs, sources = list(list(id = "r", path = "records")),
+                  head = c("label", "number"))   # show the headers (the list's names)
+write_table(spec, "table2.estrec-table.json")
+```
+
 ## What a record holds
 
 | Section | From fixest |

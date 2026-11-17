@@ -8,7 +8,7 @@ improving the table tool. Decisions are Ted's unless marked as a proposal.
 | Piece | Where | Notes |
 |---|---|---|
 | Table spec | `spec/table.md`, `schema/estrec-table-0.1.json`, `schema/examples/paper.estrec-table.json` | Own document type, versioned apart from the record format (adopted; `docs/proposals/table-spec.md`). Holds layout only, never numbers |
-| Python | `src/estrec/views.py` (`tidy`, `glance`, `parameters_table`), `table.py` (`new_table`, `validate_table`, `build_table`, `render`, `render_table`, `to_great_table`), `show.py` | Renderers: text, markdown, latex, html, csv, word; great_tables optional |
+| Python | `src/estrec/views.py` (`tidy`, `glance`, `parameters_table`), `table.py` (`new_table`, `validate_table`, `build_table`, `render`, `render_table`, `to_great_table`), `show.py` | Renderers: text, markdown, latex, html, csv, word, docx (bytes); great_tables optional |
 | CLI | `estrec show`, `estrec table`, `estrec validate` (detects table specs) | In `records.py` `main()` |
 | R (estrec) | `r/R/read.R` (`read_estimation`, `read_collection`, `tidy`/`glance` methods), `r/R/table.R` (`render_table` through modelsummary) | `S3method(generics::tidy, ...)` registered lazily |
 | Viewer | `viewer/index.html`, `viewer/estrec-table.js` (UMD: `window.EstTable` / node), generated `examples.js`, `identifying.js` (`python viewer/make_examples.py`) | Static page; Pages deploys it at `/estimation/viewer/` |

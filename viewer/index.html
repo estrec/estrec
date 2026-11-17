@@ -346,6 +346,7 @@ details.raw pre { font: 12px/1.45 var(--font-mono); background: var(--bg); paddi
               <label class="inline" id="redact-wrap" hidden><input type="checkbox" id="opt-redact" checked> Leave out identifying details</label>
               <button class="btn small" id="copy" type="button">Copy</button>
               <button class="btn small" id="save" type="button">Save file</button>
+              <button class="btn small" id="save-docx" type="button" hidden title="A Word file of the table, at the Table width and Font set here; sparklines are Word drawings">Save .docx</button>
               <button class="btn small" id="print" type="button" title="Print the table alone, fitted to the Table width (6.5 in unless set in the Word export); choose Save as PDF in the print dialog for a PDF">Print / PDF</button>
               <button class="btn small" id="publish" type="button" hidden>Publish…</button>
               <button class="btn small" id="load-spec" type="button">Open table spec</button>
@@ -1097,18 +1098,17 @@ async function renderExport() {
   $("redact-wrap").hidden = state.format !== "web";
   $("wordw-wrap").hidden = state.format !== "word";
   $("wordf-wrap").hidden = state.format !== "word";
+  $("save-docx").hidden = embedded || state.format !== "word";
   $("web-note").hidden = true;
   const box = $("export-text");
   if (state.format === "spec") box.value = state.spec ? JSON.stringify(await specForExport(), null, 2) + "\n" : "";
   else if (state.format === "web") box.value = lastTable ? webPage() : "";
   else if (state.format === "word") {
-    const ww = parseFloat($("opt-wordw").value);
-    const wf = parseFloat($("opt-wordf").value);
-    box.value = lastTable ? E.render(lastTable, "word", { width: ww >= 2 && ww <= 20 ? ww : null, font: wf >= 6 && wf <= 16 ? wf : 10 }) : "";
+    box.value = lastTable ? E.render(lastTable, "word", wordOpts()) : "";
     const note = $("web-note");
     note.hidden = false;
     note.textContent = "Copy puts the formatted table on the clipboard: paste it into Word (or Google Docs, LibreOffice, Excel) and it arrives as a table with the rules and alignment shown here. "
-      + "In Word, \u201cKeep Source Formatting\u201d keeps the 10 pt size; \u201cMerge Formatting\u201d takes the document\u2019s. Save file gives an .html file that Word opens. Table width fixes every column, and draws the sparklines to fit, for a page of that width (6.5 in: Letter or A4 with 1 in margins); empty it for the natural width. Font sets the size on every cell and sizes the rows. With sparklines the rows run on without space between terms, so the drawings join. Below is the HTML it pastes.";
+      + "In Word, \u201cKeep Source Formatting\u201d keeps the 10 pt size; \u201cMerge Formatting\u201d takes the document\u2019s. Save file gives an .html file that Word opens; Save .docx gives a Word file, its sparklines drawn as Word shapes. Table width fixes every column, and draws the sparklines to fit, for a page of that width (6.5 in: Letter or A4 with 1 in margins); empty it for the natural width. Font sets the size on every cell and sizes the rows. With sparklines the rows run on without space between terms, so the drawings join. Below is the HTML it pastes.";
   }
   else box.value = lastTable ? E.render(lastTable, state.format) : "";
 }
@@ -1351,6 +1351,12 @@ $("copy").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText(box.value); toast("Copied"); }
   catch { box.focus(); box.select(); toast("Selected: press Ctrl+C or ⌘C to copy"); }
 });
+// the Word export's options: Table width (inches; empty or out of range for the natural width) and Font
+function wordOpts() {
+  const ww = parseFloat($("opt-wordw").value);
+  const wf = parseFloat($("opt-wordf").value);
+  return { width: ww >= 2 && ww <= 20 ? ww : null, font: wf >= 6 && wf <= 16 ? wf : 10 };
+}
 const EXT = { word: "html", latex: "tex", markdown: "md", html: "html", csv: "csv", text: "txt", web: "html", spec: "estrec-table.json" };
 $("save").hidden = embedded;
 // Print / PDF: the browser's print dialog (Save as PDF there); the table shrinks to fit the
@@ -1391,12 +1397,19 @@ $("print").addEventListener("click", () => {
   }, 500);
 });
 
+const fileBase = () => (state.spec && state.spec.title ? state.spec.title.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase() : "") || "table";
+function download(blob, name) {
+  const a = el("a", { href: URL.createObjectURL(blob), download: name });
+  document.body.append(a); a.click(); a.remove();
+}
 $("save").addEventListener("click", () => {
   const text = $("export-text").value;
   if (!text) return;
-  const base = (state.spec && state.spec.title ? state.spec.title.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase() : "") || "table";
-  const a = el("a", { href: URL.createObjectURL(new Blob([text], { type: "text/plain" })), download: `${base}.${EXT[state.format]}` });
-  document.body.append(a); a.click(); a.remove();
+  download(new Blob([text], { type: "text/plain" }), `${fileBase()}.${EXT[state.format]}`);
+});
+$("save-docx").addEventListener("click", () => {
+  if (!lastTable) return;
+  download(new Blob([E.render(lastTable, "docx", wordOpts())], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }), `${fileBase()}.docx`);
 });
 // Paste: JSON text pasted anywhere outside a text box (a table spec, a record, a collection)
 // opens as if it were a dropped file

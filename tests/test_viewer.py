@@ -1,6 +1,7 @@
 """The browser viewer (viewer/): its examples are current, and when node is installed, its
 table logic (viewer/estrec-table.js) builds the same tables as the Python reference."""
 
+import base64
 import copy
 import importlib.util
 import json
@@ -298,7 +299,9 @@ def test_renderers_match_python(node_result):
             "const E=require(process.argv[1]);const t=JSON.parse(require('fs').readFileSync(0,'utf8'));"
             "process.stdout.write(JSON.stringify(Object.assign(Object.fromEntries(['text','markdown','latex','html','csv','word'].map(f=>[f,E.render(t,f)])),"
             "{'word 6.5':E.render(t,'word',{width:6.5}),'word 4':E.render(t,'word',{width:4}),"
-            "'word f':E.render(t,'word',{width:6.5,font:12,termSpace:true}),'word s':E.render(t,'word',{font:9.5,termSpace:false})})))"
+            "'word f':E.render(t,'word',{width:6.5,font:12,termSpace:true}),'word s':E.render(t,'word',{font:9.5,termSpace:false})},"
+            "Object.fromEntries([['docx',{}],['docx 6.5',{width:6.5}],['docx 4',{width:4}],['docx f',{width:6.5,font:12,termSpace:true}],"
+            "['docx s',{font:9.5,termSpace:false}]].map(([k,o])=>[k,Buffer.from(E.render(t,'docx',o)).toString('base64')])))))"
         )
         run = subprocess.run(
             [NODE, "-e", script, str(ROOT / "viewer" / "estrec-table.js")],
@@ -316,6 +319,8 @@ def test_renderers_match_python(node_result):
                 want = et.render(py, f, font=9.5, term_space=False)
             else:
                 want = et.render(py, f, width=float(w)) if w else et.render(py, f)
+            if f == "docx":
+                want = base64.b64encode(want).decode("ascii")
             assert text == want, (spec.get("head"), fmt)
 
 

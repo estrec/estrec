@@ -1535,6 +1535,403 @@ def _render_word(t: dict, width: float | None = None, font: float = 10, term_spa
     return "\n".join(out) + "\n"
 
 
+# ---------------------------------------------------------------- .docx
+#
+# A Word file laid out as `_render_word`'s paste: the same rows, rules, widths, font sizes and
+# exact row heights, as WordprocessingML. Sparklines are DrawingML shapes (Ted, 2026-11-17),
+# one inline group per drawing whose child coordinates are tenths of a pixel, the SVG's
+# integers, so no number needs rounding; line widths are EMU (1 px = 9525). The zip is
+# stored, not deflated, with fixed dates, so the viewer (estrec-table.js) writes the same bytes.
+
+_DX_NS = (
+    'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+    'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '
+    'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+    'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" '
+    'xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" '
+    'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"'
+)
+_DX_XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+_DX_BAD = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f]")
+# line widths in EMU: 1, 1.3, 0.9, 1.1 and 1.2 px, rounded half up
+_DX_RULE, _DX_LINE, _DX_END, _DX_EST, _DX_RING = 9525, 12383, 8573, 10478, 11430
+
+
+def _dx(s: str) -> str:
+    """Text for XML: escaped, without the control characters XML 1.0 forbids."""
+    s = _DX_BAD.sub("", s)
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+
+def _dx_ln(w: int, color: str | None, cap: bool = False) -> str:
+    if color is None:
+        return "<a:ln><a:noFill/></a:ln>"
+    return f'<a:ln w="{w}"' + (' cap="rnd"' if cap else "") + f'><a:solidFill><a:srgbClr val="{color}"/></a:solidFill></a:ln>'
+
+
+def _dx_fill(color: str | None, alpha: int = 0) -> str:
+    if color is None:
+        return "<a:noFill/>"
+    a = f'<a:alpha val="{alpha}"/>' if alpha else ""
+    return f'<a:solidFill><a:srgbClr val="{color}">{a}</a:srgbClr></a:solidFill>'
+
+
+def _dx_shape(n: int, x: int, y: int, cx: int, cy: int, geom: str, fill: str, ln: str) -> str:
+    if geom.startswith("<"):
+        g = geom
+    else:
+        g = f'<a:prstGeom prst="{geom}"><a:avLst/></a:prstGeom>'
+    return (
+        f'<wps:wsp><wps:cNvPr id="{n}" name="Shape {n}"/><wps:cNvSpPr/><wps:spPr>'
+        f'<a:xfrm><a:off x="{x}" y="{y}"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm>'
+        f"{g}{fill}{ln}</wps:spPr><wps:bodyPr/></wps:wsp>"
+    )
+
+
+def _dx_dot(n: int, x: int, y: int, r: int, fill: str, w: int, line: str) -> str:
+    return _dx_shape(n, x - r, y - r, 2 * r, 2 * r, "ellipse", _dx_fill(fill), _dx_ln(w, line))
+
+
+def _dx_spark(
+    ids: list,
+    m: dict | None,
+    color: str,
+    label: str,
+    height: int = SPARK_H,
+    mid: int | None = None,
+    rule_only: bool = False,
+    width: int = SPARK_W,
+) -> str:
+    """A sparkline as an inline group of DrawingML shapes (a run), drawn as `_spark_svg` /
+    `_spark_rule` draw it: `width` x `height` pixels, the marks `mid` tenths of a pixel down
+    (default halfway), the background white. `ids` holds the document's last drawing id."""
+    if m is None:
+        return ""
+    if "estimate" not in m and not m.get("reference"):
+        rule_only = True
+
+    def nid() -> int:
+        ids[0] += 1
+        return ids[0]
+
+    frame = nid()
+    hh = height * 10
+    y = height * 5 if mid is None else mid
+    c, d = color[1:].upper(), _spark_dark(color)[1:].upper()
+    x0 = _spark_x0(m, width)
+    shapes = [_dx_shape(nid(), x0, 0, 0, hh, "line", _dx_fill(None), _dx_ln(_DX_RULE, "555555"))]
+    if not rule_only and "estimate" in m:
+        _, xl, xe, xh = _spark_xs(m, width)
+        cx, ce = xh - xl, xe - xl
+        if cx > 0:
+            band = (
+                '<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="r" b="b"/>'
+                f'<a:pathLst><a:path w="{cx}" h="120"><a:moveTo><a:pt x="0" y="60"/></a:moveTo>'
+                f'<a:quadBezTo><a:pt x="{ce}" y="0"/><a:pt x="{cx}" y="60"/></a:quadBezTo>'
+                f'<a:quadBezTo><a:pt x="{ce}" y="120"/><a:pt x="0" y="60"/></a:quadBezTo>'
+                "<a:close/></a:path></a:pathLst></a:custGeom>"
+            )
+            shapes.append(_dx_shape(nid(), xl, y - 60, cx, 120, band, _dx_fill(c, 22000), _dx_ln(0, None)))
+        shapes.append(_dx_shape(nid(), xl, y, cx, 0, "line", _dx_fill(None), _dx_ln(_DX_LINE, c, cap=True)))
+        shapes.append(_dx_dot(nid(), xl, y, 19, c, _DX_END, "FFFFFF"))
+        shapes.append(_dx_dot(nid(), xh, y, 19, c, _DX_END, "FFFFFF"))
+        shapes.append(_dx_dot(nid(), xe, y, 29, d, _DX_EST, "FFFFFF"))
+    elif not rule_only:
+        shapes.append(_dx_dot(nid(), x0, y, 26, "FFFFFF", _DX_RING, d))
+    ex, ey = width * 9525, height * 9525
+    descr = "" if rule_only else _dx(_spark_label(m, label))
+    return (
+        '<w:r><mc:AlternateContent><mc:Choice Requires="wpg"><w:drawing>'
+        f'<wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="{ex}" cy="{ey}"/>'
+        '<wp:effectExtent l="0" t="0" r="0" b="0"/>'
+        f'<wp:docPr id="{frame}" name="Sparkline {frame}" descr="{descr}"/><wp:cNvGraphicFramePr/>'
+        '<a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup">'
+        "<wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr>"
+        f'<a:xfrm><a:off x="0" y="0"/><a:ext cx="{ex}" cy="{ey}"/>'
+        f'<a:chOff x="0" y="0"/><a:chExt cx="{width * 10}" cy="{hh}"/></a:xfrm></wpg:grpSpPr>'
+        + "".join(shapes)
+        + "</wpg:wgp></a:graphicData></a:graphic></wp:inline></w:drawing></mc:Choice>"
+        "<mc:Fallback/></mc:AlternateContent></w:r>"
+    )
+
+
+def _dx_p(runs: str, sz: int, align: str = "left", before: int = 0, after: int = 0, bold: bool = False) -> str:
+    """A paragraph: `runs` (XML) or, as text, one run of it, at `sz` half-points."""
+    b = "<w:b/>" if bold else ""
+    rpr = f'<w:rPr>{b}<w:sz w:val="{sz}"/><w:szCs w:val="{sz}"/></w:rPr>'
+    return (
+        f'<w:p><w:pPr><w:spacing w:before="{before}" w:after="{after}"/><w:jc w:val="{align}"/>{rpr}</w:pPr>'
+        + runs
+        + "</w:p>"
+    )
+
+
+def _dx_run(text: str, sz: int, bold: bool = False) -> str:
+    if not text:
+        return ""
+    b = "<w:b/>" if bold else ""
+    return f'<w:r><w:rPr>{b}<w:sz w:val="{sz}"/><w:szCs w:val="{sz}"/></w:rPr><w:t xml:space="preserve">{_dx(text)}</w:t></w:r>'
+
+
+def _dx_tc(
+    body: str,
+    *,
+    width: int | None,
+    span: int = 1,
+    vmerge: str = "",
+    top: int = 0,
+    bottom: int = 0,
+    mar: tuple[int, int, int] | None = None,
+    valign: str = "center",
+) -> str:
+    """A cell: `width` twips (None: auto), borders `top` / `bottom` in eighths of a point,
+    `mar` (top, left, right) margins in twips instead of the table's."""
+    pr = f'<w:tcW w:w="{width}" w:type="dxa"/>' if width is not None else '<w:tcW w:w="0" w:type="auto"/>'
+    if span > 1:
+        pr += f'<w:gridSpan w:val="{span}"/>'
+    if vmerge:
+        pr += '<w:vMerge w:val="restart"/>' if vmerge == "restart" else "<w:vMerge/>"
+    if top or bottom:
+        pr += "<w:tcBorders>"
+        if top:
+            pr += f'<w:top w:val="single" w:sz="{top}" w:space="0" w:color="auto"/>'
+        if bottom:
+            pr += f'<w:bottom w:val="single" w:sz="{bottom}" w:space="0" w:color="auto"/>'
+        pr += "</w:tcBorders>"
+    pr += "<w:noWrap/>"
+    if mar:
+        pr += (
+            f'<w:tcMar><w:top w:w="{mar[0]}" w:type="dxa"/><w:left w:w="{mar[1]}" w:type="dxa"/>'
+            f'<w:right w:w="{mar[2]}" w:type="dxa"/></w:tcMar>'
+        )
+    pr += f'<w:vAlign w:val="{valign}"/>'
+    return f"<w:tc><w:tcPr>{pr}</w:tcPr>{body}</w:tc>"
+
+
+def _dx_rule(pt: str) -> int:
+    """A rule's width ("1.5pt", ".75pt", "") in eighths of a point."""
+    return {"1.5pt": 12, ".75pt": 6, "": 0}[pt]
+
+
+def _docx_document(t: dict, width: float | None = None, font: float = 10, term_space: bool | None = None) -> str:
+    plan = _beside_plan(t)
+    sz = math.floor(font * 2 + 0.5)
+    line_px = math.floor(font * 1.6 + 0.5)
+    if term_space is None:
+        term_space = not any("sparkline" in r for r in t["rows"])
+    pad_px = math.floor(font * 0.4 + 0.5) if term_space else 0
+    W = _word_widths(t, plan, width, font) if width else None
+    spw = W["below_px"] if W else SPARK_W
+    sidew = W["side_px"] if W and plan else SPARK_W
+    rows = t["rows"]
+    n = len(t["header"])
+    if W:
+        grid = [W["label"]] + ([W["num"], W["side"]] if plan else [W["col"]]) * n
+    else:  # a guide for the autofit table: about 5 pt a character, the drawings' width
+        lab = max([len(r["label"]) for r in rows] + [0])
+        numc = max([len(c) for r in rows + t["head"] for c in r["cells"]] + [0])
+        num = max(math.floor(font * 5.5 + 0.5) * numc + 108, 200)
+        if any(r.get("sparkline") and r["sparkline"].get("place") != "beside" for r in rows):
+            num = max(num, SPARK_W * 15 // 2 + 108)
+        grid = [max(math.floor(font * 5 + 0.5) * lab + 108, 360)] + ([num, SPARK_W * 15 // 2] if plan else [num]) * n
+    grid = [g * 2 for g in grid]  # tenths of a point -> twips
+
+    def tw(k: int, span: int = 1) -> int | None:
+        return sum(grid[k : k + span]) if W else None
+
+    ids = [0]
+    body = []
+    if t["title"]:
+        body.append(_dx_p(_dx_run(t["title"], sz, bold=True), sz, after=120, bold=True))
+    total = sum(grid)
+    tblw = f'<w:tblW w:w="{total}" w:type="dxa"/>' if W else '<w:tblW w:w="0" w:type="auto"/>'
+    layout = '<w:tblLayout w:type="fixed"/>' if W else ""
+    out = [
+        f"<w:tbl><w:tblPr>{tblw}{layout}"
+        '<w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="108" w:type="dxa"/>'
+        '<w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar>'
+        '<w:tblLook w:val="0000" w:firstRow="0" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="1" w:noVBand="1"/>'
+        "</w:tblPr><w:tblGrid>" + "".join(f'<w:gridCol w:w="{g}"/>' for g in grid) + "</w:tblGrid>"
+    ]
+    per = 2 if plan else 1
+    nh = len(t["head"])
+    for k, hr in enumerate(t["head"]):
+        top = 12 if k == 0 else 0
+        bottom = 6 if k == nh - 1 else 0
+        cells = [_dx_tc(_dx_p("", sz), width=tw(0), top=top, bottom=bottom)]
+        for j, x in enumerate(hr["cells"]):
+            cells.append(
+                _dx_tc(_dx_p(_dx_run(x, sz), sz, "center"), width=tw(1 + per * j, per), span=per, top=top, bottom=bottom)
+            )
+        out.append("<w:tr><w:trPr><w:cantSplit/><w:tblHeader/></w:trPr>" + "".join(cells) + "</w:tr>")
+    prev = None
+    last = len(rows) - 1
+    shown = [i for i in range(len(rows)) if not (plan and i in plan["skip"])]
+    first = shown[0] if shown else 0
+
+    def pads(i):
+        return pad_px > 0 and _row_kind(t, plan, i) == "estimate" and i > first and "sparkline" not in rows[i]
+
+    def row_px(i):
+        return line_px + (pad_px if pads(i) else 0)
+
+    for i in shown:
+        r = rows[i]
+        kind = _row_kind(t, plan, i)
+        top = ".75pt" if kind == "stat" and prev != "stat" else ""
+        if i == first and not nh:
+            top = "1.5pt"
+        bottom = "1.5pt" if i == last else ""
+        bt, bb = _dx_rule(top), _dx_rule(bottom)
+        sp = r.get("sparkline")
+        mar = (pad_px * 15, 108, 108) if pads(i) else None
+        label = plan["label"].get(i, r["label"]) if plan else r["label"]
+        exact = plan and (i in plan["start"] or i in plan["inside"])
+        trpr = "<w:cantSplit/>" + (f'<w:trHeight w:val="{row_px(i) * 15}" w:hRule="exact"/>' if exact else "")
+        cells = [_dx_tc(_dx_p(_dx_run(label, sz), sz), width=tw(0), top=bt, bottom=bb, mar=mar)]
+        for c, x in enumerate(r["cells"]):
+            col = 1 + per * c
+            many = plan and i not in plan["start"] and i not in plan["inside"]
+            if sp:
+                para = _dx_p(_dx_spark(ids, sp["marks"][c], sp["color"], x, width=spw), 2, "center")
+            else:
+                para = _dx_p(_dx_run(x, sz), sz, "center")
+            span = 2 if many else 1
+            cells.append(_dx_tc(para, width=tw(col, span), span=span, top=bt, bottom=bb, mar=mar))
+            if plan and plan["align"] == "estimate" and (i in plan["start"] or i in plan["inside"]):
+                k = plan["start"][i][0] if i in plan["start"] else plan["inside"][i]
+                ssp = rows[k]["sparkline"]
+                px = row_px(i)
+                drawing = _dx_spark(
+                    ids,
+                    ssp["marks"][c],
+                    ssp["color"],
+                    rows[k]["cells"][c],
+                    px,
+                    mid=(px - line_px) * 10 + line_px * 5,
+                    rule_only=i not in plan["start"],
+                    width=sidew,
+                )
+                cells.append(
+                    _dx_tc(_dx_p(drawing, 2, "center"), width=tw(col + 1), top=bt, bottom=bb, mar=(0, 0, 0), valign="top")
+                )
+            elif plan and i in plan["start"]:
+                k, _n, end = plan["start"][i]
+                ssp = rows[k]["sparkline"]
+                height = sum(row_px(q) for q in range(i, end) if q not in plan["skip"])
+                drawing = _dx_spark(ids, ssp["marks"][c], ssp["color"], rows[k]["cells"][c], height, width=sidew)
+                cells.append(
+                    _dx_tc(
+                        _dx_p(drawing, 2, "center"),
+                        width=tw(col + 1),
+                        vmerge="restart",
+                        top=bt,
+                        bottom=bb,
+                        mar=(0, 0, 0),
+                        valign="top",
+                    )
+                )
+            elif plan and plan["align"] == "middle" and i in plan["inside"]:
+                cells.append(_dx_tc(_dx_p("", 2), width=tw(col + 1), vmerge="continue", top=bt, bottom=bb, mar=(0, 0, 0)))
+        out.append(f"<w:tr><w:trPr>{trpr}</w:trPr>" + "".join(cells) + "</w:tr>")
+        prev = kind
+    out.append("</w:tbl>")
+    body.append("".join(out))
+    nsz = math.floor((font - 1) * 2 + 0.5)
+    for note in t["notes"]:
+        body.append(_dx_p(_dx_run(note, nsz), nsz, before=60))
+    if not t["notes"]:
+        body.append(_dx_p("", sz))  # Word wants a paragraph between a table and the section's end
+    page = max(12240, total + 2880)
+    return (
+        _DX_XML
+        + f"<w:document {_DX_NS}><w:body>"
+        + "".join(body)
+        + f'<w:sectPr><w:pgSz w:w="{page}" w:h="15840"/>'
+        '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/>'
+        "</w:sectPr></w:body></w:document>"
+    )
+
+
+def _docx_styles(sz: int) -> str:
+    return (
+        _DX_XML
+        + '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        f'<w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="{sz}"/><w:szCs w:val="{sz}"/></w:rPr></w:rPrDefault>'
+        '<w:pPrDefault><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>'
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>'
+        '<w:style w:type="table" w:default="1" w:styleId="TableNormal"><w:name w:val="Normal Table"/>'
+        "<w:uiPriority w:val=\"99\"/><w:semiHidden/><w:unhideWhenUsed/><w:tblPr>"
+        '<w:tblInd w:w="0" w:type="dxa"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="108" w:type="dxa"/>'
+        '<w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style>'
+        "</w:styles>"
+    )
+
+
+_DOCX_STATIC = [
+    (
+        "[Content_Types].xml",
+        _DX_XML
+        + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/word/document.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+        '<Override PartName="/word/styles.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'
+        "</Types>",
+    ),
+    (
+        "_rels/.rels",
+        _DX_XML
+        + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
+        'Target="word/document.xml"/></Relationships>',
+    ),
+    (
+        "word/_rels/document.xml.rels",
+        _DX_XML
+        + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" '
+        'Target="styles.xml"/></Relationships>',
+    ),
+]
+
+
+def _zip_stored(files: list[tuple[str, bytes]]) -> bytes:
+    """A zip of `files` stored uncompressed, dated 1980-01-01, as estrec-table.js writes it."""
+    import struct
+    import zlib
+
+    out, central = bytearray(), bytearray()
+    for name, data in files:
+        nb = name.encode("utf-8")
+        crc = zlib.crc32(data) & 0xFFFFFFFF
+        off = len(out)
+        out += struct.pack("<IHHHHHIIIHH", 0x04034B50, 20, 0, 0, 0, 0x21, crc, len(data), len(data), len(nb), 0)
+        out += nb + data
+        central += struct.pack(
+            "<IHHHHHHIIIHHHHHII", 0x02014B50, 20, 20, 0, 0, 0, 0x21, crc, len(data), len(data), len(nb), 0, 0, 0, 0, 0, off
+        )
+        central += nb
+    start = len(out)
+    out += central
+    out += struct.pack("<IHHHHIIH", 0x06054B50, 0, 0, len(files), len(files), len(central), start, 0)
+    return bytes(out)
+
+
+def _render_docx(t: dict, width: float | None = None, font: float = 10, term_space: bool | None = None) -> bytes:
+    """A Word file (.docx bytes) of the table as `_render_word` lays it out, with the same
+    options; sparklines are Word drawing shapes."""
+    sz = math.floor(font * 2 + 0.5)
+    parts = _DOCX_STATIC + [
+        ("word/document.xml", _docx_document(t, width, font, term_space)),
+        ("word/styles.xml", _docx_styles(sz)),
+    ]
+    return _zip_stored([(name, text.encode("utf-8")) for name, text in parts])
+
+
 RENDERERS = {
     "markdown": _render_markdown,
     "latex": _render_latex,
@@ -1542,13 +1939,15 @@ RENDERERS = {
     "csv": _render_csv,
     "text": _render_text,
     "word": _render_word,
+    "docx": _render_docx,
 }
 
 
-def render(table: dict, format: str = "text", **options: Any) -> str:
+def render(table: dict, format: str = "text", **options: Any) -> str | bytes:
     """A built table (`build_table`) as text: "text", "markdown", "latex", "html", "csv"
-    or "word" (an HTML document styled inline, for pasting into or opening in Word).
-    LaTeX takes `escape=False` to keep labels as written (for math in labels)."""
+    or "word" (an HTML document styled inline, for pasting into or opening in Word); or
+    "docx", a Word file as bytes (the same layout and options as "word": `width`, `font`,
+    `term_space`). LaTeX takes `escape=False` to keep labels as written (for math in labels)."""
     if format not in RENDERERS:
         raise ValueError(f"format is one of {', '.join(RENDERERS)}")
     return RENDERERS[format](table, **options)
@@ -1561,8 +1960,9 @@ def render_table(
     base_dir: str | os.PathLike | None = None,
     records: Any = None,
     **options: Any,
-) -> str:
-    """Build and render a spec (a dict or a path; a path's folder is `base_dir`)."""
+) -> str | bytes:
+    """Build and render a spec (a dict or a path; a path's folder is `base_dir`). "docx"
+    gives bytes."""
     if not isinstance(spec, dict):
         path = Path(spec)
         spec = read_table(path)
@@ -1669,6 +2069,12 @@ def run(a) -> int:
     for w in t["warnings"]:
         print(w, file=sys.stderr)
     text = render(t, a.format)
+    if isinstance(text, bytes):
+        if not a.output:
+            print("estrec table: docx needs -o FILE", file=sys.stderr)
+            return 1
+        Path(a.output).write_bytes(text)
+        return 0
     if a.output:
         Path(a.output).write_text(text, encoding="utf-8")
     else:

@@ -1196,7 +1196,305 @@
     return out.join("\n") + "\n";
   }
 
-  const RENDERERS = { text: renderText, markdown: renderMarkdown, latex: renderLatex, html: renderHTML, csv: renderCSV, word: renderWord };
+  // ------------------------------------------------------------ .docx
+  //
+  // A Word file laid out as renderWord's paste, as WordprocessingML; the same bytes as Python's
+  // render(t, "docx") (estrec/table.py, _render_docx). Sparklines are DrawingML shapes, one
+  // inline group per drawing whose child coordinates are tenths of a pixel (the SVG's
+  // integers); line widths in EMU (1 px = 9525). The zip is stored, dated 1980-01-01.
+
+  const DX_NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+    + 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+    + 'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '
+    + 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+    + 'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" '
+    + 'xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" '
+    + 'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"';
+  const DX_XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+  // line widths in EMU: 1, 1.3, 0.9, 1.1 and 1.2 px, rounded half up
+  const DX_RULE = 9525, DX_LINE = 12383, DX_END = 8573, DX_EST = 10478, DX_RING = 11430;
+
+  const dx = (s) => String(s).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const dxLn = (w, color, cap) => color === null ? "<a:ln><a:noFill/></a:ln>"
+    : `<a:ln w="${w}"` + (cap ? ' cap="rnd"' : "") + `><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></a:ln>`;
+  const dxFill = (color, alpha) => color === null ? "<a:noFill/>"
+    : `<a:solidFill><a:srgbClr val="${color}">${alpha ? `<a:alpha val="${alpha}"/>` : ""}</a:srgbClr></a:solidFill>`;
+  function dxShape(n, x, y, cx, cy, geom, fill, ln) {
+    const g = geom.startsWith("<") ? geom : `<a:prstGeom prst="${geom}"><a:avLst/></a:prstGeom>`;
+    return `<wps:wsp><wps:cNvPr id="${n}" name="Shape ${n}"/><wps:cNvSpPr/><wps:spPr>`
+      + `<a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>`
+      + `${g}${fill}${ln}</wps:spPr><wps:bodyPr/></wps:wsp>`;
+  }
+  const dxDot = (n, x, y, r, fill, w, line) => dxShape(n, x - r, y - r, 2 * r, 2 * r, "ellipse", dxFill(fill), dxLn(w, line));
+
+  // a sparkline as an inline group of shapes (a run), drawn as sparkSVG / sparkRule draw it;
+  // ids = [the document's last drawing id]
+  function dxSpark(ids, m, color, label, height, mid, ruleOnly, width) {
+    if (!m) return "";
+    const H = height === undefined ? SPARK_H : height;
+    const Wd = width === undefined ? SPARK_W : width;
+    let rule = !!ruleOnly;
+    if (!("estimate" in m) && !m.reference) rule = true;
+    const nid = () => ++ids[0];
+    const frame = nid();
+    const hh = H * 10;
+    const y = mid === undefined || mid === null ? H * 5 : mid;
+    const c = color.slice(1).toUpperCase(), d = sparkDark(color).slice(1).toUpperCase();
+    const x0 = sparkX0(m, Wd);
+    const shapes = [dxShape(nid(), x0, 0, 0, hh, "line", dxFill(null), dxLn(DX_RULE, "555555"))];
+    if (!rule && "estimate" in m) {
+      const [, xl, xe, xh] = sparkXs(m, Wd);
+      const cx = xh - xl, ce = xe - xl;
+      if (cx > 0) {
+        const band = '<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="r" b="b"/>'
+          + `<a:pathLst><a:path w="${cx}" h="120"><a:moveTo><a:pt x="0" y="60"/></a:moveTo>`
+          + `<a:quadBezTo><a:pt x="${ce}" y="0"/><a:pt x="${cx}" y="60"/></a:quadBezTo>`
+          + `<a:quadBezTo><a:pt x="${ce}" y="120"/><a:pt x="0" y="60"/></a:quadBezTo>`
+          + "<a:close/></a:path></a:pathLst></a:custGeom>";
+        shapes.push(dxShape(nid(), xl, y - 60, cx, 120, band, dxFill(c, 22000), dxLn(0, null)));
+      }
+      shapes.push(dxShape(nid(), xl, y, cx, 0, "line", dxFill(null), dxLn(DX_LINE, c, true)));
+      shapes.push(dxDot(nid(), xl, y, 19, c, DX_END, "FFFFFF"));
+      shapes.push(dxDot(nid(), xh, y, 19, c, DX_END, "FFFFFF"));
+      shapes.push(dxDot(nid(), xe, y, 29, d, DX_EST, "FFFFFF"));
+    } else if (!rule) {
+      shapes.push(dxDot(nid(), x0, y, 26, "FFFFFF", DX_RING, d));
+    }
+    const ex = Wd * 9525, ey = H * 9525;
+    const descr = rule ? "" : dx(sparkLabel(m, label));
+    return '<w:r><mc:AlternateContent><mc:Choice Requires="wpg"><w:drawing>'
+      + `<wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${ex}" cy="${ey}"/>`
+      + '<wp:effectExtent l="0" t="0" r="0" b="0"/>'
+      + `<wp:docPr id="${frame}" name="Sparkline ${frame}" descr="${descr}"/><wp:cNvGraphicFramePr/>`
+      + '<a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup">'
+      + "<wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr>"
+      + `<a:xfrm><a:off x="0" y="0"/><a:ext cx="${ex}" cy="${ey}"/>`
+      + `<a:chOff x="0" y="0"/><a:chExt cx="${Wd * 10}" cy="${hh}"/></a:xfrm></wpg:grpSpPr>`
+      + shapes.join("")
+      + "</wpg:wgp></a:graphicData></a:graphic></wp:inline></w:drawing></mc:Choice>"
+      + "<mc:Fallback/></mc:AlternateContent></w:r>";
+  }
+
+  function dxP(runs, sz, align, before, after, bold) {
+    const b = bold ? "<w:b/>" : "";
+    const rpr = `<w:rPr>${b}<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/></w:rPr>`;
+    return `<w:p><w:pPr><w:spacing w:before="${before || 0}" w:after="${after || 0}"/><w:jc w:val="${align || "left"}"/>${rpr}</w:pPr>` + runs + "</w:p>";
+  }
+  function dxRun(text, sz, bold) {
+    if (!text) return "";
+    const b = bold ? "<w:b/>" : "";
+    return `<w:r><w:rPr>${b}<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/></w:rPr><w:t xml:space="preserve">${dx(text)}</w:t></w:r>`;
+  }
+  // a cell: width in twips (null: auto), borders top / bottom in eighths of a point, mar
+  // [top, left, right] margins in twips instead of the table's
+  function dxTc(body, { width, span = 1, vmerge = "", top = 0, bottom = 0, mar = null, valign = "center" }) {
+    let pr = width !== null ? `<w:tcW w:w="${width}" w:type="dxa"/>` : '<w:tcW w:w="0" w:type="auto"/>';
+    if (span > 1) pr += `<w:gridSpan w:val="${span}"/>`;
+    if (vmerge) pr += vmerge === "restart" ? '<w:vMerge w:val="restart"/>' : "<w:vMerge/>";
+    if (top || bottom) {
+      pr += "<w:tcBorders>";
+      if (top) pr += `<w:top w:val="single" w:sz="${top}" w:space="0" w:color="auto"/>`;
+      if (bottom) pr += `<w:bottom w:val="single" w:sz="${bottom}" w:space="0" w:color="auto"/>`;
+      pr += "</w:tcBorders>";
+    }
+    pr += "<w:noWrap/>";
+    if (mar) pr += `<w:tcMar><w:top w:w="${mar[0]}" w:type="dxa"/><w:left w:w="${mar[1]}" w:type="dxa"/><w:right w:w="${mar[2]}" w:type="dxa"/></w:tcMar>`;
+    pr += `<w:vAlign w:val="${valign}"/>`;
+    return `<w:tc><w:tcPr>${pr}</w:tcPr>${body}</w:tc>`;
+  }
+  const dxRuleW = (pt) => ({ "1.5pt": 12, ".75pt": 6, "": 0 })[pt];
+
+  function docxDocument(t, opts) {
+    const plan = besidePlan(t);
+    const width = opts && opts.width;
+    const font = opts && opts.font ? Number(opts.font) : 10;
+    const sz = Math.floor(font * 2 + 0.5);
+    const linePx = Math.floor(font * 1.6 + 0.5);
+    const termSpace = opts && opts.termSpace !== undefined && opts.termSpace !== null ? !!opts.termSpace : !t.rows.some((r) => r.sparkline);
+    const padPx = termSpace ? Math.floor(font * 0.4 + 0.5) : 0;
+    const W = width ? wordWidths(t, plan, width, font) : null;
+    const spw = W ? W.below_px : SPARK_W;
+    const sidew = W && plan ? W.side_px : SPARK_W;
+    const rows = t.rows;
+    const n = t.header.length;
+    let grid = [];
+    if (W) {
+      grid = [W.label];
+      for (let j = 0; j < n; j++) grid.push(...(plan ? [W.num, W.side] : [W.col]));
+    } else { // a guide for the autofit table: about 5 pt a character, the drawings' width
+      const lab = Math.max(0, ...rows.map((r) => r.label.length));
+      const numc = Math.max(0, ...[...rows, ...t.head].flatMap((r) => r.cells.map((c) => c.length)));
+      let num = Math.max(Math.floor(font * 5.5 + 0.5) * numc + 108, 200);
+      if (rows.some((r) => r.sparkline && r.sparkline.place !== "beside")) num = Math.max(num, Math.floor(SPARK_W * 15 / 2) + 108);
+      grid = [Math.max(Math.floor(font * 5 + 0.5) * lab + 108, 360)];
+      for (let j = 0; j < n; j++) grid.push(...(plan ? [num, Math.floor(SPARK_W * 15 / 2)] : [num]));
+    }
+    grid = grid.map((g) => g * 2); // tenths of a point -> twips
+    const tw = (k, span) => { if (!W) return null; let s = 0; for (let q = k; q < k + (span || 1); q++) s += grid[q]; return s; };
+    const ids = [0];
+    const body = [];
+    if (t.title) body.push(dxP(dxRun(t.title, sz, true), sz, "left", 0, 120, true));
+    const total = grid.reduce((a, b) => a + b, 0);
+    const tblw = W ? `<w:tblW w:w="${total}" w:type="dxa"/>` : '<w:tblW w:w="0" w:type="auto"/>';
+    const layout = W ? '<w:tblLayout w:type="fixed"/>' : "";
+    const out = [`<w:tbl><w:tblPr>${tblw}${layout}`
+      + '<w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="108" w:type="dxa"/>'
+      + '<w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar>'
+      + '<w:tblLook w:val="0000" w:firstRow="0" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="1" w:noVBand="1"/>'
+      + "</w:tblPr><w:tblGrid>" + grid.map((g) => `<w:gridCol w:w="${g}"/>`).join("") + "</w:tblGrid>"];
+    const per = plan ? 2 : 1;
+    const nh = t.head.length;
+    t.head.forEach((hr, k) => {
+      const top = k === 0 ? 12 : 0;
+      const bottom = k === nh - 1 ? 6 : 0;
+      const cells = [dxTc(dxP("", sz), { width: tw(0), top, bottom })];
+      hr.cells.forEach((x, j) => cells.push(dxTc(dxP(dxRun(x, sz), sz, "center"), { width: tw(1 + per * j, per), span: per, top, bottom })));
+      out.push("<w:tr><w:trPr><w:cantSplit/><w:tblHeader/></w:trPr>" + cells.join("") + "</w:tr>");
+    });
+    let prev = null;
+    const last = rows.length - 1;
+    const shown = rows.map((_, i) => i).filter((i) => !(plan && plan.skip.has(i)));
+    const first = shown.length ? shown[0] : 0;
+    const pads = (i) => padPx > 0 && rowKind(t, plan, i) === "estimate" && i > first && !rows[i].sparkline;
+    const rowPx = (i) => linePx + (pads(i) ? padPx : 0);
+    for (const i of shown) {
+      const r = rows[i];
+      const kind = rowKind(t, plan, i);
+      let top = kind === "stat" && prev !== "stat" ? ".75pt" : "";
+      if (i === first && !nh) top = "1.5pt";
+      const bottom = i === last ? "1.5pt" : "";
+      const bt = dxRuleW(top), bb = dxRuleW(bottom);
+      const sp = r.sparkline;
+      const mar = pads(i) ? [padPx * 15, 108, 108] : null;
+      const label = plan && plan.label.has(i) ? plan.label.get(i) : r.label;
+      const exact = plan && (plan.start.has(i) || plan.inside.has(i));
+      const trpr = "<w:cantSplit/>" + (exact ? `<w:trHeight w:val="${rowPx(i) * 15}" w:hRule="exact"/>` : "");
+      const cells = [dxTc(dxP(dxRun(label, sz), sz), { width: tw(0), top: bt, bottom: bb, mar })];
+      r.cells.forEach((x, c) => {
+        const col = 1 + per * c;
+        const many = plan && !plan.start.has(i) && !plan.inside.has(i);
+        const para = sp ? dxP(dxSpark(ids, sp.marks[c], sp.color, x, undefined, undefined, false, spw), 2, "center") : dxP(dxRun(x, sz), sz, "center");
+        const span = many ? 2 : 1;
+        cells.push(dxTc(para, { width: tw(col, span), span, top: bt, bottom: bb, mar }));
+        if (plan && plan.align === "estimate" && (plan.start.has(i) || plan.inside.has(i))) {
+          const k = plan.start.has(i) ? plan.start.get(i)[0] : plan.inside.get(i);
+          const ssp = rows[k].sparkline;
+          const px = rowPx(i);
+          const drawing = dxSpark(ids, ssp.marks[c], ssp.color, rows[k].cells[c], px, (px - linePx) * 10 + linePx * 5, !plan.start.has(i), sidew);
+          cells.push(dxTc(dxP(drawing, 2, "center"), { width: tw(col + 1), top: bt, bottom: bb, mar: [0, 0, 0], valign: "top" }));
+        } else if (plan && plan.start.has(i)) {
+          const [k, , end] = plan.start.get(i);
+          const ssp = rows[k].sparkline;
+          let height = 0;
+          for (let q = i; q < end; q++) if (!plan.skip.has(q)) height += rowPx(q);
+          const drawing = dxSpark(ids, ssp.marks[c], ssp.color, rows[k].cells[c], height, undefined, false, sidew);
+          cells.push(dxTc(dxP(drawing, 2, "center"), { width: tw(col + 1), vmerge: "restart", top: bt, bottom: bb, mar: [0, 0, 0], valign: "top" }));
+        } else if (plan && plan.align === "middle" && plan.inside.has(i)) {
+          cells.push(dxTc(dxP("", 2), { width: tw(col + 1), vmerge: "continue", top: bt, bottom: bb, mar: [0, 0, 0] }));
+        }
+      });
+      out.push(`<w:tr><w:trPr>${trpr}</w:trPr>` + cells.join("") + "</w:tr>");
+      prev = kind;
+    }
+    out.push("</w:tbl>");
+    body.push(out.join(""));
+    const nsz = Math.floor((font - 1) * 2 + 0.5);
+    for (const note of t.notes) body.push(dxP(dxRun(note, nsz), nsz, "left", 60));
+    if (!t.notes.length) body.push(dxP("", sz)); // Word wants a paragraph between a table and the section's end
+    const page = Math.max(12240, total + 2880);
+    return DX_XML + `<w:document ${DX_NS}><w:body>` + body.join("")
+      + `<w:sectPr><w:pgSz w:w="${page}" w:h="15840"/>`
+      + '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/>'
+      + "</w:sectPr></w:body></w:document>";
+  }
+
+  const docxStyles = (sz) => DX_XML
+    + '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+    + `<w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/></w:rPr></w:rPrDefault>`
+    + '<w:pPrDefault><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>'
+    + '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>'
+    + '<w:style w:type="table" w:default="1" w:styleId="TableNormal"><w:name w:val="Normal Table"/>'
+    + '<w:uiPriority w:val="99"/><w:semiHidden/><w:unhideWhenUsed/><w:tblPr>'
+    + '<w:tblInd w:w="0" w:type="dxa"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="108" w:type="dxa"/>'
+    + '<w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style>'
+    + "</w:styles>";
+
+  const DOCX_STATIC = [
+    ["[Content_Types].xml", DX_XML
+      + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+      + '<Default Extension="xml" ContentType="application/xml"/>'
+      + '<Override PartName="/word/document.xml" '
+      + 'ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+      + '<Override PartName="/word/styles.xml" '
+      + 'ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'
+      + "</Types>"],
+    ["_rels/.rels", DX_XML
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
+      + 'Target="word/document.xml"/></Relationships>'],
+    ["word/_rels/document.xml.rels", DX_XML
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" '
+      + 'Target="styles.xml"/></Relationships>'],
+  ];
+
+  let CRC_TABLE = null;
+  function crc32(bytes) {
+    if (!CRC_TABLE) {
+      CRC_TABLE = new Uint32Array(256);
+      for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        CRC_TABLE[n] = c >>> 0;
+      }
+    }
+    let c = 0xffffffff;
+    for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  }
+
+  // a zip of [name, bytes] stored uncompressed, dated 1980-01-01, as Python's _zip_stored
+  function zipStored(files) {
+    const enc = new TextEncoder();
+    const parts = [], central = [];
+    let off = 0, clen = 0;
+    for (const [name, data] of files) {
+      const nb = enc.encode(name);
+      const crc = crc32(data);
+      const loc = new DataView(new ArrayBuffer(30));
+      [[0, 0x04034b50, 4], [4, 20, 2], [6, 0, 2], [8, 0, 2], [10, 0, 2], [12, 0x21, 2], [14, crc, 4], [18, data.length, 4], [22, data.length, 4], [26, nb.length, 2], [28, 0, 2]]
+        .forEach(([p, v, s]) => (s === 4 ? loc.setUint32(p, v, true) : loc.setUint16(p, v, true)));
+      const cen = new DataView(new ArrayBuffer(46));
+      [[0, 0x02014b50, 4], [4, 20, 2], [6, 20, 2], [8, 0, 2], [10, 0, 2], [12, 0, 2], [14, 0x21, 2], [16, crc, 4], [20, data.length, 4], [24, data.length, 4], [28, nb.length, 2], [30, 0, 2], [32, 0, 2], [34, 0, 2], [36, 0, 2], [38, 0, 4], [42, off, 4]]
+        .forEach(([p, v, s]) => (s === 4 ? cen.setUint32(p, v, true) : cen.setUint16(p, v, true)));
+      parts.push(new Uint8Array(loc.buffer), nb, data);
+      central.push(new Uint8Array(cen.buffer), nb);
+      off += 30 + nb.length + data.length;
+      clen += 46 + nb.length;
+    }
+    const end = new DataView(new ArrayBuffer(22));
+    [[0, 0x06054b50, 4], [4, 0, 2], [6, 0, 2], [8, files.length, 2], [10, files.length, 2], [12, clen, 4], [16, off, 4], [20, 0, 2]]
+      .forEach(([p, v, s]) => (s === 4 ? end.setUint32(p, v, true) : end.setUint16(p, v, true)));
+    const all = [...parts, ...central, new Uint8Array(end.buffer)];
+    const out = new Uint8Array(all.reduce((a, b) => a + b.length, 0));
+    let p = 0;
+    for (const b of all) { out.set(b, p); p += b.length; }
+    return out;
+  }
+
+  // A Word file (Uint8Array) of the table as renderWord lays it out, with the same options;
+  // sparklines are Word drawing shapes
+  function renderDocx(t, opts) {
+    const font = opts && opts.font ? Number(opts.font) : 10;
+    const sz = Math.floor(font * 2 + 0.5);
+    const enc = new TextEncoder();
+    const parts = [...DOCX_STATIC, ["word/document.xml", docxDocument(t, opts)], ["word/styles.xml", docxStyles(sz)]];
+    return zipStored(parts.map(([name, text]) => [name, enc.encode(text)]));
+  }
+
+  const RENDERERS = { text: renderText, markdown: renderMarkdown, latex: renderLatex, html: renderHTML, csv: renderCSV, word: renderWord, docx: renderDocx };
 
   function render(t, format, opts) {
     const f = RENDERERS[format || "text"];

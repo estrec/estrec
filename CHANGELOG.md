@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Tables: a Word file. `render(t, "docx")` (bytes; `estrec table -f docx -o t.docx`) and the
+  viewer's **Save .docx** (Word export) write the table as the Word export lays it out: three
+  rules, the same widths (`width`), font size (`font`), term spacing and exact row heights
+  beside the estimates. Sparklines are Word drawing shapes (DrawingML groups), not images.
+  The zip is stored with fixed dates, so Python and the viewer write the same bytes.
+
 ## 0.1.0 (2026-11-17)
 
 First release on PyPI (`pip install estrec`).

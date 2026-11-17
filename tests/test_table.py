@@ -41,7 +41,68 @@ def test_example_builds():
 @pytest.mark.parametrize("fmt", sorted(et.RENDERERS))
 def test_example_renders(fmt):
     out = et.render_table(SPEC, fmt)
+    if fmt == "docx":
+        out = docx_xml(out)
     assert "3.206" in out
+
+
+def docx_xml(data: bytes, part: str = "word/document.xml") -> str:
+    import io
+    import zipfile
+
+    return zipfile.ZipFile(io.BytesIO(data)).read(part).decode("utf-8")
+
+
+DOCX_SPARKS = [
+    ["std_error", {"sparkline": {}}],
+    ["std_error", {"sparkline": {"place": "beside"}}],
+    ["std_error", "[{p_value}]", {"sparkline": {"place": "beside", "align": "middle"}}],
+]
+
+
+@pytest.mark.parametrize("unc", [None] + DOCX_SPARKS)
+@pytest.mark.parametrize("width", [None, 6.5])
+def test_docx_package(unc, width):
+    """A .docx: a stored zip of well-formed parts; every row covers the table grid; drawing
+    ids are unique; sparklines are inline shape groups; a fixed width fixes the grid."""
+    import io
+    import re
+    import xml.dom.minidom
+    import zipfile
+
+    s = spec()
+    if unc is not None:
+        s["uncertainty"] = unc
+    t = et.build_table(s, base_dir=EXAMPLES)
+    data = et.render(t, "docx", width=width)
+    assert data == et.render(t, "docx", width=width)  # deterministic
+    z = zipfile.ZipFile(io.BytesIO(data))
+    assert z.testzip() is None
+    assert z.namelist()[0] == "[Content_Types].xml"
+    assert {i.compress_type for i in z.infolist()} == {zipfile.ZIP_STORED}
+    for name in z.namelist():
+        xml.dom.minidom.parseString(z.read(name))
+    doc = docx_xml(data)
+    grid = re.findall(r'<w:gridCol w:w="(\d+)"/>', doc)
+    for tr in re.findall(r"<w:tr>.*?</w:tr>", doc):
+        spans = [int(m.group(1)) if m else 1 for m in (re.search(r'<w:gridSpan w:val="(\d+)"', tc) for tc in re.findall(r"<w:tc>.*?</w:tc>", tr))]
+        assert sum(spans) == len(grid)
+    ids = re.findall(r' id="(\d+)"', doc)
+    assert len(ids) == len(set(ids))
+    n_marks = sum(1 for r in t["rows"] for m in (r.get("sparkline") or {}).get("marks", []) if m)
+    assert doc.count("<wp:inline ") >= n_marks and (n_marks > 0) == ("<wpg:wgp>" in doc)
+    if width:
+        assert sum(map(int, grid)) == 6.5 * 1440 and '<w:tblLayout w:type="fixed"/>' in doc
+    if unc and unc[-1]["sparkline"].get("align") == "middle":
+        assert doc.count('<w:vMerge w:val="restart"/>') == doc.count("<wp:inline ")
+    assert "3.206" in doc and "Weight (1000 lbs)" in doc
+
+
+def test_docx_cli(tmp_path):
+    out = tmp_path / "t.docx"
+    assert et.run(type("A", (), {"spec": str(SPEC), "check": False, "format": "docx", "output": str(out)})()) == 0
+    assert "3.206" in docx_xml(out.read_bytes())
+    assert et.run(type("A", (), {"spec": str(SPEC), "check": False, "format": "docx", "output": None})()) == 1
 
 
 def test_validates_against_schema():

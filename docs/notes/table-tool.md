@@ -154,8 +154,10 @@ tested, not Windows; the earlier "real Word" checks of 2026-11-07/08 were Mac Wo
 
 1. **Word.**
    - Check the paste in Windows Word (Mac Word and Google Docs work). Ted's to do.
-   - A real .docx from the viewer: a small zip writer in the browser (no library), and the
-     same from Python (`render(t, "docx")`?, stdlib `zipfile`). Sparklines would be PNG parts.
+   - ~~A real .docx~~: done (c4e54fd, 147b330; Ted 2026-11-17: samples in Mac Word look good,
+     sparklines aligned). `render(t, "docx")` / the viewer's Save .docx; sparklines are
+     DrawingML paths, each mark in a shape spanning the whole drawing (a shape per mark sat
+     up to 1 px off in Mac Word). Other apps opening the file: not reported yet.
    - estrec R: `render_table(output = "x.docx")` already goes to modelsummary/tinytable,
      but on valiant it stops with "Please install the `pandoc` package" (the R package; the
      pandoc binary is there). Untested otherwise; no test covers it.

@@ -1,4 +1,4 @@
-# estrec
+# <img src="https://estrec.org/favicon.svg" alt="" width="36" height="36"> estrec
 
 **estrec** ("estimation record") is **a file format for one statistical estimation run**:
 what was estimated, what came out, and how and where it ran, as a small JSON record that any

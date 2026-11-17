@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.0 (2026-11-17)
+
+First release on PyPI (`pip install estrec`).
+
 - Tables: a column's `mediation` (`true`: only the record's effect rows; `false`: none of them)
   lays out a mediation record the way PROCESS tables are: a column per equation, then one of
   direct, indirect and total effects (`estrec.table.mediation_columns`, `EstTable.mediationColumns`).

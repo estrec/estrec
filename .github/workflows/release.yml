@@ -1,0 +1,95 @@
+name: Release
+
+# Push a tag vX.Y.Z to build, publish to TestPyPI, then PyPI.
+# Uses PyPI trusted publishing: no API tokens are stored in the repository.
+# One-time setup: on pypi.org and test.pypi.org add a trusted publisher for
+# this repository, workflow "release.yml", environments "pypi" / "testpypi",
+# and create those two environments under Settings -> Environments
+# (optionally requiring approval for "pypi").
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Tag matches package version
+        run: |
+          v=$(python -c "import re;print(re.search(r'__version__ = \"(.+?)\"', open('src/estrec/__init__.py').read())[1])")
+          test "v$v" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} != version $v"; exit 1; }
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check --strict dist/*
+      - name: Wheel carries the schemas and both licenses
+        run: |
+          python - <<'EOF'
+          import glob, json, zipfile
+          whl = zipfile.ZipFile(glob.glob("dist/*.whl")[0])
+          names = set(whl.namelist())
+          catalog = json.loads(whl.read("estrec/schema/catalog.json"))
+          files = [catalog["core"]["file"], *(p["file"] for p in catalog["profiles"])]
+          files += [x for e in [catalog["core"], *catalog["profiles"]] for x in e["examples"]]
+          missing = [f for f in files if f"estrec/schema/{f}" not in names]
+          assert not missing, missing
+          assert "estrec/schema/LICENSE" in names
+          assert any(n.endswith("licenses/LICENSE") for n in names)
+          EOF
+      - name: The installed wheel finds its schemas and validates the examples
+        run: |
+          pip install dist/*.whl 'jsonschema>=4.18'
+          cd /tmp && estrec validate "$(python -c 'import estrec as ef; print(ef.PACKAGED_SCHEMAS)')"/examples/*.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  testpypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  pypi:
+    needs: testpypi
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    needs: pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}

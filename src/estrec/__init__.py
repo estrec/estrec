@@ -11,7 +11,7 @@ and collections of records.
 The specification is spec/estrec.md in https://github.com/estrec/estrec.
 """
 
-__version__ = "0.1.0.dev0"
+__version__ = "0.1.0"
 
 from . import show, table
 from .collection import (

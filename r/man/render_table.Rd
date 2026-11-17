@@ -28,6 +28,12 @@ are computed by the spec's rules and added with \code{add_rows}; modelsummary's 
 goodness-of-fit rows are left out. Rounding is R's, so the last digit may differ from the
 browser viewer's on exact ties.
 
+A spec with \code{panels} (Panel A, Panel B) renders each panel through modelsummary as a
+table of its own and stacks them: \code{output = "data.frame"} gives the cells with each
+panel's label on a row of its own; other outputs give a tinytable whose row groups are the
+panels (a file output is written with \code{tinytable::save_tt()}). Sparklines in panels show
+as the interval in text.
+
 Sparkline lines (\code{{"sparkline": {color, scale}}}) are drawn for modelsummary's
 tinytable outputs (\code{"default"}, \code{"tinytable"}, \code{"html"}, \code{"latex"},
 \code{"markdown"}, \code{"typst"} and \code{.html}, \code{.tex}, \code{.md}, \code{.typ}

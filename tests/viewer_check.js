@@ -27,7 +27,7 @@ process.stdin.on("end", async () => {
     // only where its record id is in several files
     const bare = JSON.parse(JSON.stringify(s));
     delete bare.sources;
-    for (const c of bare.columns) if (idCount.get(c.record) === 1) delete c.source;
+    for (const c of [...bare.columns, ...(bare.panels || []).flatMap((p) => p.columns || [])]) if (idCount.get(c.record) === 1) delete c.source;
     const pair = [];
     for (const [pin, from] of [[false, s], [true, s], [false, bare], [true, bare]]) {
       const spec = await E.exportSpec(from, items, { pin });

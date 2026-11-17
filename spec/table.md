@@ -54,7 +54,8 @@ key words MUST, SHOULD and MAY are as in `spec/estrec.md` section 1.1. Schema:
 | `uncertainty` | optional | the lines under each estimate (5); default `"std_error"` |
 | `estimate` | optional | `false` leaves out the estimate row (5); default `true` |
 | `stars` | optional | significance thresholds (5); default none |
-| `stats` | optional | rows under the estimates (6) |
+| `stats` | optional | rows under the estimates (6); with panels, under all of them |
+| `panels` | optional | blocks of estimates under labels, Panel A, Panel B (4.1) |
 | `format` | optional | number display (7) |
 | `notes` | optional | lines of text under the table |
 
@@ -125,6 +126,23 @@ Terms not in `rows` follow in the order they first appear across the columns, un
 syntax, searched anywhere in `term`) that filter these unlisted terms: with `keep`, only terms
 matching one are shown; then terms matching a `drop` pattern are left out. Listed rows are
 always shown. Dropped terms (`parameters[*].dropped`) are never shown.
+
+### 4.1 Panels
+
+`panels` stacks blocks of estimates, each under a label row: `[{"label": "Panel A: Log
+wages"}, {"label": "Panel B: Employment", "columns": [...]}]`. A panel takes the top level's
+`columns`, `rows`, `keep`, `drop`, `keep_unlisted`, `estimate` and `uncertainty` unless it
+sets its own; `label` is required. Its `stats` (6) are its own and follow its estimates;
+the top level's `stats` follow all the panels, with a rule above them.
+
+A panel's own `columns` name other records, one per column of the table (as many as the top
+level has): the same specifications on another outcome or sample, say. Heading rows (3.1)
+come from the top level's columns, so when the panels differ in outcome, `"head":
+["number"]` with the outcome in each panel's label is the usual layout. Sparkline axes (5)
+are shared within a panel, not across panels.
+
+Renderers show a panel's label in italics on a row of its own spanning the table, with a
+rule above every panel but the first.
 
 ## 5. Estimates, the lines under them, and stars
 
@@ -216,6 +234,8 @@ A validator reports, as **errors**: a spec that fails the schema, a column whose
 be found, a `source` naming no source, duplicate source ids, a `keep`/`drop` pattern that
 doesn't compile, a literal row whose `values` don't match the columns, and an `uncertainty`
 line that is neither a name nor a template, or uses an unknown placeholder, and a `head`
-entry that isn't `number`, `response` or `label` or appears twice. As **warnings**: a
+entry that isn't `number`, `response` or `label` or appears twice, and a panel without a
+`label` or whose `columns` aren't as many as the table's (a panel's own columns, patterns,
+lines and literal rows are checked as the top level's are). As **warnings**: a
 column whose record's hash isn't its `sha256`, a vcov a record doesn't have, a row term that
 no column has, and a metric, fixed effect or test that no column's record has.

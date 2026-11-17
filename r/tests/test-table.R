@@ -144,4 +144,39 @@ if (requireNamespace("fixest", quietly = TRUE)) {
   bad <- spec; bad$columns[[1]]$source <- "nowhere"
   stopifnot(grepl("no source", tryCatch(render_table(bad, records = list(r1, r2)), error = conditionMessage)))
 }
+# panels (spec/table.md 4.1): Panel B with its own records (the session examples), per panel
+# and top-level statistics; the same cells as the Python reference's built table
+if (dir.exists(ex)) {
+  spec <- jsonlite::fromJSON(file.path(ex, "paper.estrec-table.json"), simplifyVector = FALSE)
+  coll <- read_collection(file.path(ex, "session.estrec-collection.json"))
+  ids <- vapply(coll, function(r) r$meta$id, "")
+  spec$sources <- c(spec$sources, list(list(id = "session", path = "session.estrec-collection.json")))
+  spec$head <- list("number")
+  spec$panels <- list(
+    list(label = "Panel A: Fuel economy", stats = list(list(metric = "nobs", label = "N"))),
+    list(label = "Panel B: Session models",
+         columns = lapply(0:2, function(k) list(record = ids[[k %% length(ids) + 1]], source = "session")),
+         rows = list(list(term = "x1", label = "X one")), keep = list("^x"),
+         stats = list(list(metric = "nobs", label = "N"), list(label = "Sample", values = list("a", "b", "c")))))
+  spec$stats <- list(list(vcov = "type", label = "Std. errors"), list(fixed_effect = "cyl", label = "Cylinders FE"))
+  x <- render_table(spec, output = "data.frame", base_dir = ex)
+  stopifnot(identical(names(x), c("term", "(1)", "(2)", "(3)")),
+            identical(x$term[c(1, 7, 12, 14)], c("Panel A: Fuel economy", "Panel B: Session models", "N", "Std. errors")),
+            identical(unname(unlist(x[7, 2:4])), rep("", 3)),
+            identical(unname(unlist(x[8, ])), c("X one", "0.499***", "0.499***", "0.499***")),
+            identical(unname(unlist(x[12, 2:4])), rep("99,947", 3)),
+            identical(unname(unlist(x[13, 2:4])), c("a", "b", "c")),
+            identical(unname(unlist(x[14, 2:4])), c("iid", "HC1", "HC1")),
+            nrow(x) == 15)
+  tt <- render_table(spec, base_dir = ex)
+  md <- paste(utils::capture.output(print(tt, "markdown")), collapse = "\n")
+  stopifnot(inherits(tt, "tinytable"), grepl("_Panel B: Session models_", md, fixed = TRUE))
+  # a panel showing a term some column lacks (modelsummary needs a term per model)
+  spec2 <- spec
+  spec2$panels[[2]] <- list(label = "Horsepower", rows = list(list(term = "hp")), keep_unlisted = FALSE)
+  x <- render_table(spec2, output = "data.frame", base_dir = ex)
+  stopifnot(identical(unname(unlist(x[x$term == "hp", ])), c("hp", "", "-0.023**", "-0.021*")))
+  bad <- spec; bad$panels[[2]]$columns <- bad$panels[[2]]$columns[1:2]
+  stopifnot(grepl("2 columns; the table has 3", tryCatch(render_table(bad, base_dir = ex), error = conditionMessage)))
+}
 cat("test-table: ok\n")

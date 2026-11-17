@@ -242,6 +242,46 @@ def specs():
     s["uncertainty"] = {"sparkline": {"place": "beside", "align": "middle"}}
     s["estimate"] = True
     out.append(s)
+    out += panel_specs()
+    return out
+
+
+def panel_specs():
+    """Panels (spec/table.md 4.1): Panel B with its own columns (the session records), per
+    panel and top-level stats; panels of the same columns with sparklines beside; a panel
+    overriding the lines (a sparkline below, no estimate row)."""
+    base = et.read_table(EXAMPLES / "paper.estrec-table.json")
+    coll = ef.read_collection(EXAMPLES / "session.estrec-collection.json")
+    ids = [r["meta"]["id"] for _, _, r in ef.iter_members(coll)]
+    out = []
+    s = copy.deepcopy(base)
+    s["sources"].append({"id": "session", "path": "session.estrec-collection.json"})
+    s["head"] = ["number"]
+    s["panels"] = [
+        {"label": "Panel A: Fuel economy", "stats": [{"metric": "nobs", "label": "N"}]},
+        {
+            "label": "Panel B: Session models",
+            "columns": [{"record": ids[k % len(ids)], "source": "session"} for k in range(3)],
+            "rows": [{"term": "x1", "label": "X one"}],
+            "keep": ["^x"],
+            "stats": [{"metric": "nobs", "label": "N"}, {"label": "Sample", "values": ["a", "b", "c"]}],
+        },
+    ]
+    s["stats"] = [{"vcov": "type", "label": "Std. errors"}, {"fixed_effect": "cyl", "label": "Cylinders FE"}]
+    out.append(s)
+    s = copy.deepcopy(base)
+    s["uncertainty"] = ["std_error", {"sparkline": {"place": "beside"}}]
+    s["panels"] = [
+        {"label": "Panel A: Weight", "rows": [{"term": "wt", "label": "Weight"}], "keep_unlisted": False},
+        {"label": "Panel B: Horsepower", "rows": [{"term": "hp", "label": "Horsepower"}], "keep_unlisted": False},
+    ]
+    out.append(s)
+    s = copy.deepcopy(base)
+    s["panels"] = [
+        {"label": "Estimates"},
+        {"label": "Intervals", "uncertainty": {"sparkline": {"scale": "table"}}, "estimate": False, "stats": []},
+    ]
+    out.append(s)
     return out
 
 
@@ -325,8 +365,10 @@ def test_renderers_match_python(node_result):
         pytest.skip("node not installed")
     all_specs = specs()
     sparks = [s for s in all_specs if "sparkline" in json.dumps(s.get("uncertainty"))]
-    assert len(sparks) == 15
-    for spec in [all_specs[0]] + [s for s in all_specs if "head" in s] + sparks:
+    assert len(sparks) == 16
+    panels = [s for s in all_specs if "panels" in s]
+    assert len(panels) == 3
+    for spec in [all_specs[0]] + [s for s in all_specs if "head" in s] + sparks + panels:
         py = et.build_table(spec, base_dir=EXAMPLES)
         script = (
             "const E=require(process.argv[1]);const t=JSON.parse(require('fs').readFileSync(0,'utf8'));"

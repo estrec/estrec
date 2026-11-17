@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Tables: panels (Panel A, Panel B; spec `panels`, spec/table.md 4.1). Each panel is a block
+  of estimates under a label row, with its own terms, lines and statistics, and its own
+  records if it names `columns` (as many as the table's); the top level's statistics follow
+  all the panels. Every renderer draws them (Python, the viewer, Word, .docx, LaTeX, R
+  through modelsummary blocks and tinytable row groups). The viewer's **Panels** section
+  splits a table into panels, and Each term, Columns, Terms and Statistics edit the panel
+  picked there.
+- Viewer: the Table spec export is `exportSpec` in estrec-table.js; a test reopens every
+  exported spec (open-spec round trip). Export now names sources for panels' columns too.
+
 - Tables: a Word file. `render(t, "docx")` (bytes; `estrec table -f docx -o t.docx`) and the
   viewer's **Save .docx** (Word export) write the table as the Word export lays it out: three
   rules, the same widths (`width`), font size (`font`), term spacing and exact row heights

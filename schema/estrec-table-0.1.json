@@ -117,6 +117,27 @@
       },
       "additionalProperties": false
     },
+    "panels": {
+      "description": "Blocks of estimates stacked under labels (Panel A, Panel B). Each panel takes the top level's columns, rows, keep, drop, keep_unlisted, estimate and uncertainty unless it sets its own; its stats are its own, and the top level's stats follow all the panels.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["label"],
+        "additionalProperties": false,
+        "properties": {
+          "label": {"type": "string"},
+          "columns": {"$ref": "#/properties/columns"},
+          "rows": {"$ref": "#/properties/rows"},
+          "keep": {"$ref": "#/properties/keep"},
+          "drop": {"$ref": "#/properties/drop"},
+          "keep_unlisted": {"$ref": "#/properties/keep_unlisted"},
+          "estimate": {"$ref": "#/properties/estimate"},
+          "uncertainty": {"$ref": "#/properties/uncertainty"},
+          "stats": {"$ref": "#/properties/stats"}
+        }
+      }
+    },
     "notes": {"type": "array", "items": {"type": "string"}}
   },
   "additionalProperties": false,

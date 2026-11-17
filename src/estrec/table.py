@@ -348,24 +348,8 @@ def _structural(spec: dict) -> list[Issue]:
     ids = [s.get("id") for s in spec.get("sources") or [] if isinstance(s, dict)]
     for d in sorted({i for i in ids if ids.count(i) > 1}):
         out.append(Issue("error", "sources", f"duplicate source id {d!r}"))
-    for i, c in enumerate(cols):
-        if not isinstance(c, dict) or not c.get("record"):
-            out.append(Issue("error", f"columns[{i}]", "a column needs `record` (a meta.id)"))
-        elif c.get("source") is not None and c["source"] not in ids:
-            out.append(Issue("error", f"columns[{i}].source", f"no source {c['source']!r}"))
-        if isinstance(c, dict) and "mediation" in c and not isinstance(c["mediation"], bool):
-            out.append(Issue("error", f"columns[{i}].mediation", "true or false"))
-    for key in ("keep", "drop"):
-        for j, pat in enumerate(spec.get(key) or []):
-            try:
-                re.compile(pat)
-            except re.error as e:
-                out.append(Issue("error", f"{key}[{j}]", f"pattern doesn't compile: {e}"))
-    out += _line_issues(spec)
-    if "estimate" in spec and not isinstance(spec["estimate"], bool):
-        out.append(Issue("error", "estimate", "true or false"))
-    elif spec.get("estimate") is False and not uncertainty_lines(spec):
-        out.append(Issue("error", "estimate", "with no estimate and no lines, terms have nothing to show"))
+    out += _column_issues(cols, ids, "columns")
+    out += _block_issues(spec, "")
     head = spec.get("head")
     if head is not None:
         if not isinstance(head, list):
@@ -378,11 +362,92 @@ def _structural(spec: dict) -> list[Issue]:
                     )
                 elif head.index(k) != j:
                     out.append(Issue("error", f"head[{j}]", f"{k!r} appears twice"))
-    for j, s in enumerate(spec.get("stats") or []):
-        if "values" in s and len(s["values"]) != len(cols):
-            out.append(
-                Issue("error", f"stats[{j}].values", f"{len(s['values'])} values for {len(cols)} columns")
-            )
+    out += _stats_issues(spec.get("stats") or [], len(cols), "stats")
+    panels = spec.get("panels")
+    if panels is not None:
+        if not isinstance(panels, list) or not panels:
+            out.append(Issue("error", "panels", "a list of at least one panel"))
+            panels = []
+        for k, pn in enumerate(panels):
+            pre = f"panels[{k}]"
+            if not isinstance(pn, dict):
+                out.append(Issue("error", pre, "a panel is an object with a `label`"))
+                continue
+            if not isinstance(pn.get("label"), str):
+                out.append(Issue("error", f"{pre}.label", "a panel needs a `label` (text)"))
+            if "columns" in pn:
+                pc = pn["columns"]
+                if not isinstance(pc, list) or len(pc) != len(cols):
+                    n = len(pc) if isinstance(pc, list) else 0
+                    out.append(Issue("error", f"{pre}.columns", f"{n} columns; the table has {len(cols)}"))
+                else:
+                    out += _column_issues(pc, ids, f"{pre}.columns")
+            view = dict(spec, **{f: pn[f] for f in PANEL_FIELDS if f in pn})
+            out += _block_issues(view, f"{pre}.", only=[f for f in PANEL_FIELDS if f in pn])
+            out += _stats_issues(pn.get("stats") or [], len(cols), f"{pre}.stats")
+    return out
+
+
+# a panel's own settings, each the top level's unless it sets it (spec/table.md 4.1)
+PANEL_FIELDS = ("rows", "keep", "drop", "keep_unlisted", "estimate", "uncertainty")
+
+
+def _column_issues(cols: list, ids: list, path: str) -> list[Issue]:
+    out = []
+    for i, c in enumerate(cols):
+        if not isinstance(c, dict) or not c.get("record"):
+            out.append(Issue("error", f"{path}[{i}]", "a column needs `record` (a meta.id)"))
+        elif c.get("source") is not None and c["source"] not in ids:
+            out.append(Issue("error", f"{path}[{i}].source", f"no source {c['source']!r}"))
+        if isinstance(c, dict) and "mediation" in c and not isinstance(c["mediation"], bool):
+            out.append(Issue("error", f"{path}[{i}].mediation", "true or false"))
+    return out
+
+
+def _block_issues(spec: dict, pre: str, only: list | None = None) -> list[Issue]:
+    """keep/drop patterns, lines and `estimate` of the top level or (pre "panels[k].") a panel
+    as it sees the spec; `only` limits a panel's checks to the fields it sets."""
+    out = []
+    for key in ("keep", "drop"):
+        if only is not None and key not in only:
+            continue
+        for j, pat in enumerate(spec.get(key) or []):
+            try:
+                re.compile(pat)
+            except re.error as e:
+                out.append(Issue("error", f"{pre}{key}[{j}]", f"pattern doesn't compile: {e}"))
+    if only is None or "uncertainty" in only:
+        out += [Issue(i.level, pre + i.path, i.message) for i in _line_issues(spec)]
+    if only is None or "estimate" in only or "uncertainty" in only:
+        if "estimate" in spec and not isinstance(spec["estimate"], bool):
+            out.append(Issue("error", f"{pre}estimate", "true or false"))
+        elif spec.get("estimate") is False and not uncertainty_lines(spec):
+            out.append(Issue("error", f"{pre}estimate", "with no estimate and no lines, terms have nothing to show"))
+    return out
+
+
+def _stats_issues(stats: list, n: int, path: str) -> list[Issue]:
+    return [
+        Issue("error", f"{path}[{j}].values", f"{len(s['values'])} values for {n} columns")
+        for j, s in enumerate(stats)
+        if "values" in s and len(s["values"]) != n
+    ]
+
+
+def _panel_specs(spec: dict) -> list[dict]:
+    """The table's blocks of estimates, each the spec as that block sees it: without panels,
+    the spec; else one per panel, with the panel's label, columns, rows, keep, drop,
+    keep_unlisted, estimate and uncertainty where it sets them (the top level's otherwise)
+    and only its own stats."""
+    if not spec.get("panels"):
+        return [spec]
+    out = []
+    for pn in spec["panels"]:
+        v = {k: x for k, x in spec.items() if k != "panels"}
+        v.update({f: pn[f] for f in PANEL_FIELDS + ("columns",) if f in pn})
+        v["stats"] = pn.get("stats") or []
+        v["panel_label"] = pn.get("label", "")
+        out.append(v)
     return out
 
 
@@ -403,30 +468,58 @@ def validate_table(
         return issues
     found, read_issues = index_records(spec, base_dir, records)
     issues += read_issues
-    recs = []
-    for i, c in enumerate(spec.get("columns") or []):
-        f = found.get((c.get("source"), c.get("record"))) or found.get((None, c.get("record")))
-        if f is None:
-            issues.append(Issue("error", f"columns[{i}]", f"record {c.get('record')} not found"))
-            recs.append(None)
-            continue
-        recs.append(f.record)
-        if c.get("sha256") and member_sha256(f.record) != c["sha256"]:
-            issues.append(
-                Issue("warning", f"columns[{i}].sha256", "the record has changed since the table was made")
-            )
-        if c.get("vcov") is not None:
-            try:
-                pick_vcov(f.record, c["vcov"])
-            except (ValueError, IndexError) as e:
-                issues.append(Issue("warning", f"columns[{i}].vcov", str(e)))
-    have = [r for r in recs if r is not None]
+
+    def lookup(cols: list, path: str) -> list:
+        recs = []
+        for i, c in enumerate(cols):
+            if not isinstance(c, dict):
+                continue
+            f = found.get((c.get("source"), c.get("record"))) or found.get((None, c.get("record")))
+            if f is None:
+                issues.append(Issue("error", f"{path}[{i}]", f"record {c.get('record')} not found"))
+                continue
+            recs.append(f.record)
+            if c.get("sha256") and member_sha256(f.record) != c["sha256"]:
+                issues.append(
+                    Issue("warning", f"{path}[{i}].sha256", "the record has changed since the table was made")
+                )
+            if c.get("vcov") is not None:
+                try:
+                    pick_vcov(f.record, c["vcov"])
+                except (ValueError, IndexError) as e:
+                    issues.append(Issue("warning", f"{path}[{i}].vcov", str(e)))
+        return recs
+
+    top = lookup(spec.get("columns") or [], "columns")
+    panels = [p for p in spec.get("panels") or [] if isinstance(p, dict)]
+    if not panels:
+        issues += _record_warnings(spec.get("rows") or [], spec.get("stats") or [], top, "")
+        return issues
+    every = list(top)
+    inherit = []  # records of the panels that use the top level's rows
+    for k, pn in enumerate(panels):
+        own = lookup(pn["columns"], f"panels[{k}].columns") if isinstance(pn.get("columns"), list) else top
+        every += own
+        if "rows" in pn:
+            issues += _record_warnings(pn["rows"] or [], [], own, f"panels[{k}].")
+        else:
+            inherit += own
+        issues += _record_warnings([], pn.get("stats") or [], own, f"panels[{k}].")
+    if inherit:
+        issues += _record_warnings(spec.get("rows") or [], [], inherit, "")
+    issues += _record_warnings([], spec.get("stats") or [], every, "")
+    return issues
+
+
+def _record_warnings(rows: list, stats: list, have: list, pre: str) -> list[Issue]:
+    """Rows no record has a term for, and stats no record has (warnings), among `have`."""
+    issues = []
     terms = {p.get("term") for r in have for p in r.get("parameters") or []}
-    for j, row in enumerate(spec.get("rows") or []):
+    for j, row in enumerate(rows):
         names = row.get("terms") or [row.get("term")]
         if not row.get("reference") and not any(n in terms for n in names):
-            issues.append(Issue("warning", f"rows[{j}]", f"no column has {', '.join(map(str, names))}"))
-    for j, s in enumerate(spec.get("stats") or []):
+            issues.append(Issue("warning", f"{pre}rows[{j}]", f"no column has {', '.join(map(str, names))}"))
+    for j, s in enumerate(stats):
         if "metric" in s:
             m = s["metric"]
             ok = any(
@@ -435,17 +528,17 @@ def validate_table(
                 for r in have
             )
             if not ok:
-                issues.append(Issue("warning", f"stats[{j}]", f"no record has metric {m!r}"))
+                issues.append(Issue("warning", f"{pre}stats[{j}]", f"no record has metric {m!r}"))
         elif "fixed_effect" in s:
             if not any(
                 s["fixed_effect"] in ((r.get("specification") or {}).get("fixed_effects") or []) for r in have
             ):
                 issues.append(
-                    Issue("warning", f"stats[{j}]", f"no record has fixed effect {s['fixed_effect']!r}")
+                    Issue("warning", f"{pre}stats[{j}]", f"no record has fixed effect {s['fixed_effect']!r}")
                 )
         elif "test" in s:
             if not any(_find_test(r, s["test"]) for r in have):
-                issues.append(Issue("warning", f"stats[{j}]", f"no record has test {s['test']!r}"))
+                issues.append(Issue("warning", f"{pre}stats[{j}]", f"no record has test {s['test']!r}"))
     return issues
 
 
@@ -872,8 +965,9 @@ def build_table(spec: dict, *, base_dir: str | os.PathLike | None = None, record
     """The table as cells: {"title", "head": [{"kind", "cells"}] (heading rows, top to bottom;
     `kind` "number", "response" or "label"), "header": ["(1)", ...], "column_records":
     [meta.id per column], "rows": [{"label", "cells", "kind"}], "notes": [..], "warnings":
-    [..]}. A row's `kind` is "estimate", "uncertainty" or "stat". Raises ValueError on errors
-    (spec/table.md section 9)."""
+    [..]}. A row's `kind` is "estimate", "uncertainty", "stat" or "panel" (a panel's label
+    row, its cells blank); the first of the top level's stats after panels has `"rule": true`
+    (a rule above it). Raises ValueError on errors (spec/table.md section 9)."""
     issues = validate_table(spec, base_dir=base_dir, records=records, schema=None)
     errors = [i for i in issues if i.level == "error"]
     if errors:
@@ -881,17 +975,57 @@ def build_table(spec: dict, *, base_dir: str | os.PathLike | None = None, record
     found, _ = index_records(spec, base_dir, records)
     fmt = spec.get("format") or {}
     digits = fmt.get("digits", 3)
-    thousands = fmt.get("thousands", ",")
-    missing = fmt.get("missing", "")
     stars = spec.get("stars") or []
     symbols = fmt.get("star_symbols") or ["*" * (i + 1) for i in range(len(stars))]
-    lines = uncertainty_lines(spec)
-    show_est = spec.get("estimate", True) is not False
-    p_digits = fmt.get("p_digits", digits)
-    p_style = fmt.get("p_style", "fixed")
+    ctx = {
+        "found": found,
+        "fmt": fmt,
+        "digits": digits,
+        "thousands": fmt.get("thousands", ","),
+        "missing": fmt.get("missing", ""),
+        "stars": stars,
+        "symbols": symbols,
+        "p_digits": fmt.get("p_digits", digits),
+        "p_style": fmt.get("p_style", "fixed"),
+        "labels": spec.get("response_labels") or {},
+    }
+    cols = _make_columns(spec["columns"], ctx)
+    out_rows: list[dict] = []
+    views = _panel_specs(spec)
+    for v in views:
+        pcols = _make_columns(v["columns"], ctx) if v["columns"] is not spec["columns"] else cols
+        if "panel_label" in v:
+            out_rows.append({"label": v["panel_label"], "cells": [""] * len(cols), "kind": "panel"})
+        out_rows += _term_rows(v, pcols, ctx)
+        out_rows += _stat_rows(v.get("stats") or [], pcols, ctx)
+    if spec.get("panels"):
+        tail = _stat_rows(spec.get("stats") or [], cols, ctx)
+        if tail:
+            tail[0]["rule"] = True
+        out_rows += tail
 
+    notes = list(spec.get("notes") or [])
+    if stars and any(v.get("estimate", True) is not False for v in views):
+        notes.append(", ".join(f"{sym} p < {t:g}" for t, sym in zip(stars, symbols)))
+    for v in views:
+        note = _uncertainty_note(v, uncertainty_lines(v))
+        if note and note not in notes:
+            notes.append(note)
+    return {
+        "title": spec.get("title"),
+        "head": _head_rows(spec, cols),
+        "header": [c["number"] for c in cols],
+        "column_records": [c["found"].record["meta"]["id"] for c in cols],
+        "rows": out_rows,
+        "notes": notes,
+        "warnings": [str(i) for i in issues if i.level == "warning"],
+    }
+
+
+def _make_columns(columns: list[dict], ctx: dict) -> list[dict]:
+    found = ctx["found"]
     cols = []
-    for i, c in enumerate(spec["columns"]):
+    for i, c in enumerate(columns):
         f = found.get((c.get("source"), c["record"])) or found[(None, c["record"])]
         rows = _column_rows(f.record, c)
         label = c.get("header")
@@ -904,12 +1038,21 @@ def build_table(spec: dict, *, base_dir: str | os.PathLike | None = None, record
                 "tidy": {r["term"]: r for r in rows},
                 "order": [r["term"] for r in rows],
                 "number": f"({i + 1})",
-                "response": _column_response(c, f.record, rows, spec.get("response_labels") or {}),
+                "response": _column_response(c, f.record, rows, ctx["labels"]),
                 "label": label,
             }
         )
+    return cols
 
-    # rows: listed first, then the unlisted terms by first appearance, filtered by keep/drop
+
+def _term_rows(spec: dict, cols: list[dict], ctx: dict) -> list[dict]:
+    """A block's estimate rows and the lines under them (the whole table's, or a panel's):
+    listed rows first, then the unlisted terms by first appearance, filtered by keep/drop.
+    Sparkline axes are shared within the block."""
+    digits, missing = ctx["digits"], ctx["missing"]
+    p_digits, p_style = ctx["p_digits"], ctx["p_style"]
+    lines = uncertainty_lines(spec)
+    show_est = spec.get("estimate", True) is not False
     listed = []
     taken = set()
     for row in spec.get("rows") or []:
@@ -949,7 +1092,7 @@ def build_table(spec: dict, *, base_dir: str | os.PathLike | None = None, record
                     b.append(missing if ref is None else "")
                     m.append(({"reference": True} if ref is not None else {}) if isinstance(t, dict) else None)
                 continue
-            est.append(_fixed(r["estimate"], digits) + _stars(r["p_value"], stars, symbols))
+            est.append(_fixed(r["estimate"], digits) + _stars(r["p_value"], ctx["stars"], ctx["symbols"]))
             for b, m, t in zip(below, marks, lines):
                 if isinstance(t, dict):
                     b.append(_fill(_SPARK_TEXT, r, digits, p_digits, p_style, missing))
@@ -970,8 +1113,14 @@ def build_table(spec: dict, *, base_dir: str | os.PathLike | None = None, record
             block[0]["cells"][j] = ref
         out_rows += block
     _spark_domains(out_rows)
+    return out_rows
 
-    for s in spec.get("stats") or []:
+
+def _stat_rows(stats: list[dict], cols: list[dict], ctx: dict) -> list[dict]:
+    fmt, digits, thousands, missing = ctx["fmt"], ctx["digits"], ctx["thousands"], ctx["missing"]
+    p_digits, p_style = ctx["p_digits"], ctx["p_style"]
+    out_rows = []
+    for s in stats:
         d = s.get("digits", digits)
         cells = []
         if "values" in s:
@@ -1019,22 +1168,7 @@ def build_table(spec: dict, *, base_dir: str | os.PathLike | None = None, record
                 else:
                     cells.append(_fixed(v, d))
         out_rows.append({"label": label, "cells": cells, "kind": "stat"})
-
-    notes = list(spec.get("notes") or [])
-    if stars and show_est:
-        notes.append(", ".join(f"{sym} p < {t:g}" for t, sym in zip(stars, symbols)))
-    note = _uncertainty_note(spec, lines)
-    if note:
-        notes.append(note)
-    return {
-        "title": spec.get("title"),
-        "head": _head_rows(spec, cols),
-        "header": [c["number"] for c in cols],
-        "column_records": [c["found"].record["meta"]["id"] for c in cols],
-        "rows": out_rows,
-        "notes": notes,
-        "warnings": [str(i) for i in issues if i.level == "warning"],
-    }
+    return out_rows
 
 
 # ---------------------------------------------------------------- rendering
@@ -1072,6 +1206,9 @@ def _render_markdown(t: dict) -> str:
     for cells in head[1:]:
         lines.append("| | " + " | ".join(map(esc, cells)) + " |")
     for r in t["rows"]:
+        if r["kind"] == "panel":
+            lines.append(f"| *{esc(r['label'])}* | " + " | ".join("" for _ in r["cells"]) + " |")
+            continue
         lines.append(f"| {esc(r['label'])} | " + " | ".join(map(esc, r["cells"])) + " |")
     if t["notes"]:
         lines += [""] + [f"{esc(n)}  " for n in t["notes"]]
@@ -1124,7 +1261,13 @@ def _render_latex(t: dict, escape: bool = True) -> str:
         if plan and i in plan["skip"]:
             continue
         kind = _row_kind(t, plan, i)
-        if kind == "stat" and prev != "stat":
+        if kind == "panel":
+            if prev is not None:
+                lines.append("\\midrule")
+            lines.append(f"\\multicolumn{{{n * (2 if plan else 1) + 1}}}{{l}}{{\\textit{{{e(r['label'])}}}}} \\\\")
+            prev = kind
+            continue
+        if kind == "stat" and (prev != "stat" or r.get("rule")):
             lines.append("\\midrule")
         label = plan["label"].get(i, r["label"]) if plan else r["label"]
         cells = _latex_beside(t, plan, i, e) if plan else _latex_cells(r, e)
@@ -1184,7 +1327,7 @@ def _beside_plan(t: dict) -> dict | None:
     plan: dict = {"align": align, "start": {}, "skip": set(), "inside": {}, "label": {}}
     i = 0
     while i < len(rows):
-        if rows[i]["kind"] == "stat":
+        if rows[i]["kind"] in ("stat", "panel"):
             i += 1
             continue
         j = i + 1
@@ -1236,7 +1379,16 @@ def _render_html(t: dict) -> str:
         if plan and i in plan["skip"]:
             continue
         kind = _row_kind(t, plan, i)
-        cls = kind + (" first-stat" if kind == "stat" and prev != "stat" else "")
+        if kind == "panel":
+            width = len(t["header"]) * (2 if plan else 1) + 1
+            cls = "panel" + (" panel-rule" if prev is not None else "")
+            out.append(
+                f'<tr class="{cls}"><th colspan="{width}" style="text-align:left;font-style:italic">'
+                f'{h(r["label"])}</th></tr>'
+            )
+            prev = kind
+            continue
+        cls = kind + (" first-stat" if kind == "stat" and (prev != "stat" or r.get("rule")) else "")
         cls += " spark-row" if "sparkline" in r else ""
         label = plan["label"].get(i, r["label"]) if plan else r["label"]
         if plan and plan["align"] == "estimate" and (i in plan["start"] or i in plan["inside"]):
@@ -1315,7 +1467,9 @@ def _render_text(t: dict) -> str:
     out += [line(r) for r in head] + [rule]
     prev = None
     for r, src in zip(body, t["rows"]):
-        if src["kind"] == "stat" and prev != "stat":
+        if src["kind"] == "panel" and prev is not None:
+            out.append(rule)
+        if src["kind"] == "stat" and (prev != "stat" or src.get("rule")):
             out.append(rule)
         out.append(line(r))
         prev = src["kind"]
@@ -1458,10 +1612,27 @@ def _render_word(t: dict, width: float | None = None, font: float = 10, term_spa
     for i in shown:
         r = rows[i]
         kind = _row_kind(t, plan, i)
-        top = ".75pt" if kind == "stat" and prev != "stat" else ""
+        top = ".75pt" if kind == "stat" and (prev != "stat" or r.get("rule")) or kind == "panel" and prev is not None else ""
         if i == first and not nh:
             top = "1.5pt"
         bottom = "1.5pt" if i == last else ""
+        if kind == "panel":
+            out.append(
+                "<tr>"
+                + _word_cell(
+                    "",
+                    left=True,
+                    top=top,
+                    bottom=bottom,
+                    raw=f"<i>{h(r['label'])}</i>",
+                    attrs=f' colspan="{len(t["header"]) * (2 if plan else 1) + 1}"',
+                    style_extra=wd(W["total"]) if W else "",
+                    font=fs,
+                )
+                + "</tr>"
+            )
+            prev = kind
+            continue
         sp = r.get("sparkline")
         pad = pads(i)
         label = plan["label"].get(i, r["label"]) if plan else r["label"]
@@ -1684,10 +1855,10 @@ def _dx_p(runs: str, sz: int, align: str = "left", before: int = 0, after: int =
     )
 
 
-def _dx_run(text: str, sz: int, bold: bool = False) -> str:
+def _dx_run(text: str, sz: int, bold: bool = False, italic: bool = False) -> str:
     if not text:
         return ""
-    b = "<w:b/>" if bold else ""
+    b = ("<w:b/>" if bold else "") + ("<w:i/>" if italic else "")
     return f'<w:r><w:rPr>{b}<w:sz w:val="{sz}"/><w:szCs w:val="{sz}"/></w:rPr><w:t xml:space="preserve">{_dx(text)}</w:t></w:r>'
 
 
@@ -1796,11 +1967,20 @@ def _docx_document(t: dict, width: float | None = None, font: float = 10, term_s
     for i in shown:
         r = rows[i]
         kind = _row_kind(t, plan, i)
-        top = ".75pt" if kind == "stat" and prev != "stat" else ""
+        top = ".75pt" if kind == "stat" and (prev != "stat" or r.get("rule")) or kind == "panel" and prev is not None else ""
         if i == first and not nh:
             top = "1.5pt"
         bottom = "1.5pt" if i == last else ""
         bt, bb = _dx_rule(top), _dx_rule(bottom)
+        if kind == "panel":
+            para = _dx_p(_dx_run(r["label"], sz, italic=True), sz)
+            out.append(
+                "<w:tr><w:trPr><w:cantSplit/></w:trPr>"
+                + _dx_tc(para, width=tw(0, len(grid)), span=len(grid), top=bt, bottom=bb)
+                + "</w:tr>"
+            )
+            prev = kind
+            continue
         sp = r.get("sparkline")
         mar = (pad_px * 15, 108, 108) if pads(i) else None
         label = plan["label"].get(i, r["label"]) if plan else r["label"]

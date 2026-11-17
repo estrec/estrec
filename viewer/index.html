@@ -154,6 +154,8 @@ table.estrec-table td.spark-side.to-end { border-bottom: 1.5px solid var(--ink);
 .spark-fields input[type=color] { width: 34px; height: 24px; padding: 0 2px; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); }
 table.estrec-table tbody tr.estimate:not(:first-child) th, table.estrec-table tbody tr.estimate:not(:first-child) td { padding-top: 6px; }
 table.estrec-table tr.first-stat th, table.estrec-table tr.first-stat td { border-top: 0.75px solid var(--ink); padding-top: 5px; }
+table.estrec-table tr.panel th { font-weight: normal; padding-top: 6px; }
+table.estrec-table tr.panel-rule th { border-top: 0.75px solid var(--ink); }
 table.estrec-table tbody tr:last-child th, table.estrec-table tbody tr:last-child td { border-bottom: 1.5px solid var(--ink); padding-bottom: 5px; }
 table.estrec-table tfoot td { font-size: 12.5px; color: var(--muted); padding-top: 8px; white-space: normal; text-align: left; }
 
@@ -269,7 +271,12 @@ details.raw pre { font: 12px/1.45 var(--font-mono); background: var(--bg); paddi
           </fieldset>
 
           <fieldset>
-            <legend>Each term</legend>
+            <legend>Panels</legend>
+            <div id="panels"></div>
+          </fieldset>
+
+          <fieldset>
+            <legend id="lg-lines" data-base="Each term">Each term</legend>
             <div id="lines"></div>
             <div class="addrow">
               <select id="line-add" aria-label="Line to add">
@@ -302,19 +309,19 @@ details.raw pre { font: 12px/1.45 var(--font-mono); background: var(--bg); paddi
           </fieldset>
 
           <fieldset>
-            <legend>Columns</legend>
+            <legend id="lg-columns" data-base="Columns">Columns</legend>
             <div id="columns"></div>
             <p class="empty" id="columns-empty">Add records with <b>+ Table</b> in the list.</p>
           </fieldset>
 
           <fieldset>
-            <legend>Terms</legend>
+            <legend id="lg-terms" data-base="Terms">Terms</legend>
             <label class="inline"><input type="checkbox" id="opt-unlisted"> Show new terms automatically</label>
             <div id="rows"></div>
           </fieldset>
 
           <fieldset>
-            <legend>Statistics</legend>
+            <legend id="lg-stats" data-base="Statistics">Statistics</legend>
             <div id="stats"></div>
             <div class="addrow">
               <select id="stat-add" aria-label="Statistic to add"></select>
@@ -471,7 +478,7 @@ async function loadFiles(files, { examples = false } = {}) {
 
 function clearAll() {
   state.items = []; state.jsonl = new Map(); state.pendingDocs = []; state.selected = null;
-  state.spec = null; state.examples = false; state.loadMsgs = [];
+  state.spec = null; state.examples = false; state.loadMsgs = []; state.edit = null;
   $("example-note").hidden = true;
 }
 
@@ -493,6 +500,7 @@ function exampleTables(specs) {
 function applySpec(spec, name) {
   state.spec = JSON.parse(JSON.stringify(spec));
   state.specName = name;
+  state.edit = null;
   showTab("table");
 }
 
@@ -557,6 +565,7 @@ function freshSpec(items) {
 function tableFrom(items, file) {
   state.spec = freshSpec(items);
   state.specName = null;
+  state.edit = null;
   state.loadMsgs = [];
   renderAll();
   showTab("table");
@@ -566,6 +575,7 @@ function tableFrom(items, file) {
 function newTable() {
   state.spec = E.newSpec([]);
   state.specName = null;
+  state.edit = null;
   state.loadMsgs = [];
   renderAll();
   showTab("table");
@@ -582,6 +592,10 @@ function addColumn(it) {
   // each estimate shows its interval under its standard error
   if (add.length > 1 && first === 1 && (s.uncertainty === undefined || s.uncertainty === "std_error")) s.uncertainty = ["std_error", "conf_int"];
   s.columns.push(...add);
+  // panels with their own columns get the same records (change them under Columns), and every
+  // text row a value per new column
+  for (const p of s.panels || []) if (p.columns) p.columns.push(...JSON.parse(JSON.stringify(add)));
+  for (const st of valueRows()) while (st.values.length < s.columns.length) st.values.push("");
   // and each equation's F test, when the record has one
   const hasF = (it.record.tests || []).some((t) => t.name === "f" && t.response);
   if (add.length > 1 && hasF && !(s.stats || []).some((x) => x.test === "f")) (s.stats = s.stats || []).push({ test: "f", label: "F" });
@@ -615,6 +629,91 @@ function move(arr, i, d) {
   [arr[i], arr[j]] = [arr[j], arr[i]];
 }
 
+// the part of the table that Each term, Columns, Terms and Statistics edit: the whole table
+// (state.edit null) or one of its panels
+function blk() {
+  const ps = (state.spec && state.spec.panels) || [];
+  if (state.edit === null || state.edit === undefined || !ps[state.edit]) { state.edit = null; return state.spec; }
+  return ps[state.edit];
+}
+// that part as it is drawn: a panel takes the table's settings it doesn't set, and only its own statistics
+function blkView() {
+  const b = blk();
+  if (b === state.spec) return b;
+  const v = Object.assign({}, state.spec);
+  for (const f of E.PANEL_FIELDS) if (f in b) v[f] = b[f];
+  v.columns = b.columns || state.spec.columns;
+  v.stats = b.stats || [];
+  return v;
+}
+// every text row (typed values per column): the table's and each panel's
+function valueRows() {
+  const s = state.spec;
+  return [s, ...(s.panels || [])].flatMap((x) => (x.stats || []).filter((st) => Array.isArray(st.values)));
+}
+
+function renderPanels() {
+  const box = $("panels");
+  box.replaceChildren();
+  const s = state.spec;
+  const ps = s.panels || [];
+  if (!ps.length) {
+    box.append(el("p", { class: "hint-line", text: "Stack blocks of estimates under labels (Panel A, Panel B), each with its own terms, lines and statistics, and its own records if you like." }),
+      el("button", { class: "btn small", type: "button", id: "panels-on", text: "Split into panels", onclick: () => { s.panels = [{ label: "Panel A" }, { label: "Panel B" }]; state.edit = 0; update(); } }));
+    return;
+  }
+  const cur = blk() === s ? null : blk();
+  const after = () => {
+    if (!ps.length) delete s.panels;
+    state.edit = cur && ps.includes(cur) ? ps.indexOf(cur) : null;
+    update();
+  };
+  const seg = el("div", { class: "seg", role: "group", "aria-label": "The part of the table the sections below edit" });
+  [[null, "Whole table"], ...ps.map((p, k) => [k, p.label || `Panel ${k + 1}`])].forEach(([k, text]) =>
+    seg.append(el("button", { type: "button", id: `edit-${k === null ? "table" : k}`, "aria-pressed": String(state.edit === k), text, onclick: () => { state.edit = k; update(); } })));
+  box.append(el("p", { class: "hint-line", text: "Each term, Columns, Terms and Statistics below edit:" }), seg);
+  ps.forEach((p, k) => {
+    const lab = el("input", { type: "text", id: `panel-label-${k}`, value: p.label || "", placeholder: `Panel ${String.fromCharCode(65 + k)}`, "aria-label": `Label for panel ${k + 1}` });
+    lab.addEventListener("input", () => { p.label = lab.value; update({ keepControls: true }); });
+    lab.addEventListener("change", () => update());
+    const own = E.PANEL_FIELDS.filter((f) => f in p);
+    const what = [p.columns ? "own columns" : "", own.length ? "own terms or lines" : "", (p.stats || []).length ? `${p.stats.length} statistics` : ""].filter(Boolean).join(" · ");
+    const reset = own.length ? el("button", { class: "btn small", type: "button", id: `panel-reset-${k}`, text: "Use the table's terms and lines",
+      onclick: () => { for (const f of E.PANEL_FIELDS) delete p[f]; update(); } }) : null;
+    box.append(el("div", { class: "item" }, el("div", { class: "fields" }, lab, what ? el("span", { class: "hint", text: what }) : null, reset), toolButtons(ps, k, after)));
+  });
+  box.append(el("button", { class: "btn small", type: "button", id: "panel-add", text: "+ Panel",
+    onclick: () => { ps.push({ label: `Panel ${String.fromCharCode(65 + ps.length)}` }); state.edit = ps.length - 1; update(); } }));
+}
+
+// a panel's columns: the table's, or its own records, one per column
+function renderPanelColumns(b) {
+  const box = $("columns");
+  $("columns-empty").hidden = true;
+  if (!b.columns) {
+    box.append(el("p", { class: "hint-line", text: "This panel shows the table's columns. Give it its own to show other records in the same columns (another outcome or sample, say)." }),
+      el("button", { class: "btn small", type: "button", id: "panel-own-cols", text: "Give this panel its own columns",
+        onclick: () => { b.columns = state.spec.columns.map((c) => { const x = JSON.parse(JSON.stringify(c)); delete x.header; return x; }); update(); } }));
+    return;
+  }
+  const known = new Set((state.spec.sources || []).map((x) => x.id));
+  b.columns.forEach((c, i) => {
+    const sel = el("select", { id: `pcol-rec-${i}`, "aria-label": `Record for column ${i + 1} in this panel` });
+    state.items.forEach((it, k) => sel.append(el("option", { value: String(k), text: `${recordName(it)} · ${it.file}` })));
+    const k = state.items.findIndex((x) => (x.record.meta || {}).id === c.record && (!c.source || x.source === c.source));
+    if (k < 0) sel.prepend(el("option", { value: "", text: `missing: ${c.record}` }));
+    sel.value = k < 0 ? "" : String(k);
+    sel.addEventListener("change", () => {
+      const it = state.items[Number(sel.value)];
+      if (!it) return;
+      b.columns[i] = Object.assign({ record: it.record.meta.id }, it.source && known.has(it.source) ? { source: it.source } : {});
+      update();
+    });
+    box.append(el("div", { class: "item" }, el("div", { class: "fields" }, el("span", { class: "hint", text: `(${i + 1})` }), sel), el("span")));
+  });
+  box.append(el("button", { class: "btn small", type: "button", id: "panel-table-cols", text: "Use the table's columns", onclick: () => { delete b.columns; update(); } }));
+}
+
 function toolButtons(arr, i, after, extra) {
   return el("div", { class: "tools" },
     el("button", { class: "btn icon", type: "button", "aria-label": "Move up", text: "↑", disabled: i === 0, onclick: () => { move(arr, i, -1); after(); } }),
@@ -623,7 +722,7 @@ function toolButtons(arr, i, after, extra) {
 }
 
 function columnRecords(idx) {
-  return (state.spec.columns || []).map((c) => { const f = c.record ? (c.source && idx.get(c.source + "\u0000" + c.record)) || idx.get(c.record) : null; return f ? f.record : null; });
+  return (blkView().columns || []).map((c) => { const f = c.record ? (c.source && idx.get(c.source + "\u0000" + c.record)) || idx.get(c.record) : null; return f ? f.record : null; });
 }
 
 const HEAD_NAMES = { number: "Numbers: (1), (2), ...", response: "Dependent variable", label: "Labels (set under Columns)" };
@@ -680,6 +779,7 @@ function renderResponses(idx) {
 function renderColumns(idx) {
   const box = $("columns");
   box.replaceChildren();
+  if (blk() !== state.spec) { renderPanelColumns(blk()); return; }
   const cols = state.spec.columns;
   $("columns-empty").hidden = cols.length > 0;
   cols.forEach((c, i) => {
@@ -703,22 +803,23 @@ function renderColumns(idx) {
     const head = el("input", { type: "text", id: `col-head-${i}`, value: c.header || "", placeholder: auto || "Label", "aria-label": `Label for column ${i + 1}` });
     head.addEventListener("input", () => { if (head.value) c.header = head.value; else delete c.header; update({ keepControls: true }); });
     const name = f ? recordName(state.items.find((x) => (x.record.meta || {}).id === c.record) || { record: rec, member: f.member, file: "" }) : `missing: ${c.record}`;
-    // moving or removing a column carries the statistics rows' typed values with it
-    const values = () => (state.spec.stats || []).filter((st) => Array.isArray(st.values));
-    const shift = (d) => { const j = i + d; if (j < 0 || j >= cols.length) return; move(cols, i, d); for (const st of values()) move(st.values, i, d); update(); };
+    // moving or removing a column carries the statistics rows' typed values with it, and each
+    // panel's own column there
+    const owns = () => (state.spec.panels || []).filter((p) => Array.isArray(p.columns)).map((p) => p.columns);
+    const shift = (d) => { const j = i + d; if (j < 0 || j >= cols.length) return; move(cols, i, d); for (const st of valueRows()) move(st.values, i, d); for (const pc of owns()) move(pc, i, d); update(); };
     box.append(el("div", { class: "item" + (rec ? "" : " off") },
       el("div", { class: "fields" }, head, el("span", { class: "hint", text: columnPart(c) ? `${name} · ${columnPart(c)}` : name }), vs.length > 1 ? sel : null),
       el("div", { class: "tools" },
         el("button", { class: "btn icon", type: "button", "aria-label": "Move left", title: "Move left", text: "↑", disabled: i === 0, onclick: () => shift(-1) }),
         el("button", { class: "btn icon", type: "button", "aria-label": "Move right", title: "Move right", text: "↓", disabled: i === cols.length - 1, onclick: () => shift(1) }),
         el("button", { class: "btn icon", type: "button", "aria-label": `Remove column ${i + 1}`, title: "Remove this column", text: "×",
-          onclick: () => { cols.splice(i, 1); for (const st of values()) st.values.splice(i, 1); update(); } }))));
+          onclick: () => { cols.splice(i, 1); for (const st of valueRows()) st.values.splice(i, 1); for (const pc of owns()) pc.splice(i, 1); update(); } }))));
   });
 }
 
 // the terms as the builder shows them: listed rows, then (when shown) unlisted terms, then hidden ones
 function termRows(idx) {
-  const s = state.spec;
+  const s = blkView();
   const recs = columnRecords(idx);
   const all = [];
   recs.forEach((r, i) => {
@@ -745,7 +846,7 @@ function termRows(idx) {
 }
 
 function materializeRows(view) {
-  const s = state.spec;
+  const s = blk();
   s.rows = view.filter((r) => r.on).map((r) => {
     const row = r.names.length > 1 ? { terms: r.names } : { term: r.names[0] };
     if (r.label && r.label !== r.names[0]) row.label = r.label;
@@ -761,7 +862,7 @@ function renderRows(idx) {
   const box = $("rows");
   box.replaceChildren();
   const view = termRows(idx);
-  $("opt-unlisted").checked = state.spec.keep_unlisted !== false;
+  $("opt-unlisted").checked = blkView().keep_unlisted !== false;
   if (!view.length) { box.append(el("p", { class: "empty", text: "No terms yet." })); return; }
   const after = () => { materializeRows(view); update(); };
   view.forEach((r, i) => {
@@ -813,7 +914,7 @@ function statKind(s) {
 }
 
 function statCandidates(idx) {
-  const s = state.spec;
+  const s = blk();
   const recs = columnRecords(idx).filter(Boolean);
   const used = new Set((s.stats || []).map((x) => JSON.stringify(Object.fromEntries(Object.entries(x).filter(([k]) => ["metric", "vcov", "fixed_effect", "test", "value"].includes(k))))));
   const out = [];
@@ -854,14 +955,14 @@ function statCandidates(idx) {
 function renderStats(idx) {
   const box = $("stats");
   box.replaceChildren();
-  const s = state.spec;
+  const s = blk();
   s.stats = s.stats || [];
   s.stats.forEach((st, i) => {
     const lab = el("input", { type: "text", id: `stat-label-${i}`, value: st.label || "", placeholder: statLabel(st), "aria-label": "Row label" });
     lab.addEventListener("input", () => { if (lab.value) st.label = lab.value; else if (!("values" in st)) delete st.label; update({ keepControls: true }); });
     const fields = [lab, el("span", { class: "hint", text: statKind(st) })];
     if ("values" in st) {
-      const n = s.columns.length;
+      const n = state.spec.columns.length;
       while (st.values.length < n) st.values.push("");
       if (st.values.length > n) st.values.length = n;
       const grid = el("div", { class: "row2" });
@@ -915,28 +1016,29 @@ function writeOptions() {
 
 // the lines under each estimate: spec.uncertainty as a list in the editor
 function lineList() {
-  const u = state.spec.uncertainty === undefined ? "std_error" : state.spec.uncertainty;
+  const v = blkView();
+  const u = v.uncertainty === undefined ? "std_error" : v.uncertainty;
   return u === null ? [] : Array.isArray(u) ? u.slice() : [u];
 }
 
 function setLines(arr) {
-  state.spec.uncertainty = arr.length === 0 ? null : arr.length === 1 ? arr[0] : arr.slice();
-  if (!arr.length) delete state.spec.estimate;  // a term needs something to show
+  const b = blk();
+  b.uncertainty = arr.length === 0 ? null : arr.length === 1 ? arr[0] : arr.slice();
+  if (!arr.length) { if (b === state.spec) delete b.estimate; else b.estimate = true; }  // a term needs something to show
 }
 
 function renderLines() {
   const box = $("lines");
   box.replaceChildren();
   const arr = lineList();
-  const s = state.spec;
-  const est = s.estimate !== false;
+  const est = blkView().estimate !== false;
   $("line-add-estimate").hidden = est;
   $("line-add-estimate").disabled = est;
   if ($("line-add").value === "estimate" && est) $("line-add").selectedIndex = 1;
   if (est) {
     // the estimate is the first line of each term; it can go, leaving the lines alone
     const drop = el("button", { class: "btn icon", type: "button", "aria-label": "Remove the estimate", text: "\u00d7", disabled: !arr.length,
-      title: arr.length ? "Show only the lines below" : "Add another line first", onclick: () => { s.estimate = false; update(); } });
+      title: arr.length ? "Show only the lines below" : "Add another line first", onclick: () => { blk().estimate = false; update(); } });
     box.append(el("div", { class: "item" }, el("div", { class: "fields" }, el("span", { text: "Estimate, with stars" })), el("div", { class: "tools" }, drop)));
   }
   if (!arr.length) box.append(el("p", { class: "empty", text: "No lines: estimates only." }));
@@ -986,7 +1088,12 @@ async function renderTable({ keepControls = false } = {}) {
     return;
   }
   const idx = index();
-  if (!keepControls) { writeOptions(); renderLines(); renderHeads(); renderResponses(idx); renderColumns(idx); renderRows(idx); renderStats(idx); }
+  if (!keepControls) {
+    writeOptions(); renderPanels(); renderLines(); renderHeads(); renderResponses(idx); renderColumns(idx); renderRows(idx); renderStats(idx);
+    // the sections a panel can set say which part they edit
+    const b = blk(), named = b === state.spec ? ((state.spec.panels || []).length ? "whole table" : "") : b.label || `panel ${state.edit + 1}`;
+    for (const id of ["lg-lines", "lg-columns", "lg-terms", "lg-stats"]) $(id).textContent = $(id).dataset.base + (named ? ` \u2014 ${named}` : "");
+  }
   if (!state.spec.columns.length) {
     $("preview").replaceChildren(el("p", { class: "empty", text: "No columns yet: add records with + Table." }));
     lastTable = null; renderExport(); return;
@@ -1243,13 +1350,13 @@ for (const id of ["opt-stars", "opt-pstyle"]) $(id).addEventListener("change", (
 $("line-add-btn").addEventListener("click", () => {
   const arr = lineList();
   const v = $("line-add").value;
-  if (v === "estimate") { delete state.spec.estimate; update(); return; }
+  if (v === "estimate") { const b = blk(); if (b === state.spec) delete b.estimate; else b.estimate = true; update(); return; }
   arr.push(v === "sparkline" ? { sparkline: { color: E.SPARK_COLOR, scale: "column" } } : v);
   setLines(arr);
   update();
 });
 $("opt-unlisted").addEventListener("change", () => {
-  const s = state.spec;
+  const s = blk();
   if ($("opt-unlisted").checked) s.keep_unlisted = true;
   else { materializeRows(termRows(index())); }
   update();
@@ -1261,14 +1368,16 @@ $("opt-wordf").addEventListener("input", renderExport);
 $("stat-add-btn").addEventListener("click", () => {
   const c = ($("stat-add")._cands || [])[Number($("stat-add").value)];
   if (!c) return;
-  state.spec.stats = state.spec.stats || [];
-  state.spec.stats.push(Object.assign({}, c.o));
+  const b = blk();
+  b.stats = b.stats || [];
+  b.stats.push(Object.assign({}, c.o));
   update();
 });
 $("stat-text").addEventListener("click", () => {
-  const s = ensureSpec();
-  s.stats = s.stats || [];
-  s.stats.push({ label: "Controls", values: s.columns.map(() => "") });
+  ensureSpec();
+  const b = blk();
+  b.stats = b.stats || [];
+  b.stats.push({ label: "Controls", values: state.spec.columns.map(() => "") });
   update();
 });
 $("formats").addEventListener("click", (e) => {

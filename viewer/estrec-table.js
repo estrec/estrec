@@ -451,6 +451,73 @@
     return (col.source && idx.get(col.source + "\u0000" + col.record)) || idx.get(col.record) || null;
   }
 
+  // a panel's own settings, each the top level's unless it sets it (spec/table.md 4.1)
+  const PANEL_FIELDS = ["rows", "keep", "drop", "keep_unlisted", "estimate", "uncertainty"];
+
+  function columnIssues(cols, ids, path) {
+    const out = [];
+    cols.forEach((c, i) => {
+      if (!c || !c.record) out.push(issue("error", `${path}[${i}]`, "a column needs `record` (a meta.id)"));
+      else if (c.source !== undefined && c.source !== null && !ids.includes(c.source)) out.push(issue("error", `${path}[${i}].source`, `no source '${c.source}'`));
+      if (c && "mediation" in c && typeof c.mediation !== "boolean") out.push(issue("error", `${path}[${i}].mediation`, "true or false"));
+    });
+    return out;
+  }
+  // keep/drop patterns, lines and `estimate` of the top level or (pre "panels[k].") a panel as
+  // it sees the spec; `only` limits a panel's checks to the fields it sets
+  function blockIssues(spec, pre, only) {
+    const out = [];
+    for (const key of ["keep", "drop"]) {
+      if (only && !only.includes(key)) continue;
+      (spec[key] || []).forEach((p, j) => {
+        try { new RegExp(p); } catch (e) { out.push(issue("error", `${pre}${key}[${j}]`, `pattern doesn't compile: ${e.message}`)); }
+      });
+    }
+    if (!only || only.includes("uncertainty")) out.push(...lineIssues(spec).map((x) => issue(x.level, pre + x.path, x.message)));
+    if (!only || only.includes("estimate") || only.includes("uncertainty")) {
+      if ("estimate" in spec && typeof spec.estimate !== "boolean") out.push(issue("error", `${pre}estimate`, "true or false"));
+      else if (spec.estimate === false && !uncertaintyLines(spec).length) out.push(issue("error", `${pre}estimate`, "with no estimate and no lines, terms have nothing to show"));
+    }
+    return out;
+  }
+  const statsIssues = (stats, n, path) => stats.flatMap((s, j) => (s && s.values && s.values.length !== n ? [issue("error", `${path}[${j}].values`, `${s.values.length} values for ${n} columns`)] : []));
+
+  // the table's blocks of estimates, each the spec as that block sees it: without panels, the
+  // spec; else one per panel, with its label, columns, rows, keep, drop, keep_unlisted,
+  // estimate and uncertainty where it sets them, and only its own stats
+  function panelSpecs(spec) {
+    if (!spec.panels || !spec.panels.length) return [spec];
+    return spec.panels.map((pn) => {
+      const v = Object.assign({}, spec);
+      delete v.panels;
+      for (const f of [...PANEL_FIELDS, "columns"]) if (f in pn) v[f] = pn[f];
+      v.stats = pn.stats || [];
+      v.panel_label = pn.label === undefined ? "" : pn.label;
+      return v;
+    });
+  }
+
+  // rows no record has a term for, and stats no record has (warnings), among `recs`
+  function recordWarnings(rows, stats, recs, pre) {
+    const out = [];
+    const terms = new Set(recs.flatMap((r) => (r.parameters || []).map((p) => p.term)));
+    rows.forEach((row, j) => {
+      const names = row.terms || [row.term];
+      if (!row.reference && !names.some((n) => terms.has(n))) out.push(issue("warning", `${pre}rows[${j}]`, `no column has ${names.join(", ")}`));
+    });
+    stats.forEach((s, j) => {
+      if ("metric" in s) {
+        const ok = recs.some((r) => s.metric in (r.metrics || {}) || (s.metric === "rmse" && "rss" in (r.metrics || {})) || equations(r).some((e) => s.metric in e));
+        if (!ok) out.push(issue("warning", `${pre}stats[${j}]`, `no record has metric '${s.metric}'`));
+      } else if ("fixed_effect" in s) {
+        if (!recs.some((r) => ((r.specification || {}).fixed_effects || []).includes(s.fixed_effect))) out.push(issue("warning", `${pre}stats[${j}]`, `no record has fixed effect '${s.fixed_effect}'`));
+      } else if ("test" in s) {
+        if (!recs.some((r) => findTest(r, s.test))) out.push(issue("warning", `${pre}stats[${j}]`, `no record has test '${s.test}'`));
+      }
+    });
+    return out;
+  }
+
   function validateTable(spec, idx) {
     const out = [];
     if (spec.schema !== TABLE_SCHEMA) out.push(issue("error", "schema", `expected '${TABLE_SCHEMA}'`));
@@ -458,19 +525,8 @@
     if (!cols.length) out.push(issue("error", "columns", "at least one column"));
     const ids = (spec.sources || []).map((s) => s.id);
     for (const d of new Set(ids.filter((x, i) => ids.indexOf(x) !== i))) out.push(issue("error", "sources", `duplicate source id '${d}'`));
-    cols.forEach((c, i) => {
-      if (!c || !c.record) out.push(issue("error", `columns[${i}]`, "a column needs `record` (a meta.id)"));
-      else if (c.source !== undefined && c.source !== null && !ids.includes(c.source)) out.push(issue("error", `columns[${i}].source`, `no source '${c.source}'`));
-      if (c && "mediation" in c && typeof c.mediation !== "boolean") out.push(issue("error", `columns[${i}].mediation`, "true or false"));
-    });
-    for (const key of ["keep", "drop"]) {
-      (spec[key] || []).forEach((p, j) => {
-        try { new RegExp(p); } catch (e) { out.push(issue("error", `${key}[${j}]`, `pattern doesn't compile: ${e.message}`)); }
-      });
-    }
-    out.push(...lineIssues(spec));
-    if ("estimate" in spec && typeof spec.estimate !== "boolean") out.push(issue("error", "estimate", "true or false"));
-    else if (spec.estimate === false && !uncertaintyLines(spec).length) out.push(issue("error", "estimate", "with no estimate and no lines, terms have nothing to show"));
+    out.push(...columnIssues(cols, ids, "columns"));
+    out.push(...blockIssues(spec, "", null));
     if (spec.head !== undefined && spec.head !== null) {
       if (!Array.isArray(spec.head)) out.push(issue("error", "head", "a list of 'number', 'response', 'label'"));
       else spec.head.forEach((k, j) => {
@@ -478,47 +534,66 @@
         else if (spec.head.indexOf(k) !== j) out.push(issue("error", `head[${j}]`, `'${k}' appears twice`));
       });
     }
-    (spec.stats || []).forEach((s, j) => {
-      if (s.values && s.values.length !== cols.length) out.push(issue("error", `stats[${j}].values`, `${s.values.length} values for ${cols.length} columns`));
-    });
+    out.push(...statsIssues(spec.stats || [], cols.length, "stats"));
+    let panels = spec.panels;
+    if (panels !== undefined && panels !== null) {
+      if (!Array.isArray(panels) || !panels.length) { out.push(issue("error", "panels", "a list of at least one panel")); panels = []; }
+      panels.forEach((pn, k) => {
+        const pre = `panels[${k}]`;
+        if (!pn || typeof pn !== "object" || Array.isArray(pn)) { out.push(issue("error", pre, "a panel is an object with a `label`")); return; }
+        if (typeof pn.label !== "string") out.push(issue("error", `${pre}.label`, "a panel needs a `label` (text)"));
+        if ("columns" in pn) {
+          const pc = pn.columns;
+          if (!Array.isArray(pc) || pc.length !== cols.length) out.push(issue("error", `${pre}.columns`, `${Array.isArray(pc) ? pc.length : 0} columns; the table has ${cols.length}`));
+          else out.push(...columnIssues(pc, ids, `${pre}.columns`));
+        }
+        const view = Object.assign({}, spec);
+        for (const f of PANEL_FIELDS) if (f in pn) view[f] = pn[f];
+        out.push(...blockIssues(view, `${pre}.`, PANEL_FIELDS.filter((f) => f in pn)));
+        out.push(...statsIssues(pn.stats || [], cols.length, `${pre}.stats`));
+      });
+    }
     if (!idx) return out;
-    const recs = [];
-    cols.forEach((c, i) => {
-      if (!c || !c.record) return;
-      const f = lookup(idx, c);
-      if (!f) { out.push(issue("error", `columns[${i}]`, `record ${c.record} not found`)); return; }
-      recs.push(f.record);
-      if (c.vcov !== undefined && c.vcov !== null) {
-        try { pickVcov(f.record, c.vcov); } catch (e) { out.push(issue("warning", `columns[${i}].vcov`, e.message)); }
-      }
+    const find = (list, path) => {
+      const recs = [];
+      list.forEach((c, i) => {
+        if (!c || !c.record) return;
+        const f = lookup(idx, c);
+        if (!f) { out.push(issue("error", `${path}[${i}]`, `record ${c.record} not found`)); return; }
+        recs.push(f.record);
+        if (c.vcov !== undefined && c.vcov !== null) {
+          try { pickVcov(f.record, c.vcov); } catch (e) { out.push(issue("warning", `${path}[${i}].vcov`, e.message)); }
+        }
+      });
+      return recs;
+    };
+    const top = find(cols, "columns");
+    const ps = (Array.isArray(panels) ? panels : []).filter((p) => p && typeof p === "object" && !Array.isArray(p));
+    if (!ps.length) { out.push(...recordWarnings(spec.rows || [], spec.stats || [], top, "")); return out; }
+    const every = [...top], inherit = [];
+    ps.forEach((pn, k) => {
+      const own = Array.isArray(pn.columns) ? find(pn.columns, `panels[${k}].columns`) : top;
+      every.push(...own);
+      if ("rows" in pn) out.push(...recordWarnings(pn.rows || [], [], own, `panels[${k}].`));
+      else inherit.push(...own);
+      out.push(...recordWarnings([], pn.stats || [], own, `panels[${k}].`));
     });
-    const terms = new Set(recs.flatMap((r) => (r.parameters || []).map((p) => p.term)));
-    (spec.rows || []).forEach((row, j) => {
-      const names = row.terms || [row.term];
-      if (!row.reference && !names.some((n) => terms.has(n))) out.push(issue("warning", `rows[${j}]`, `no column has ${names.join(", ")}`));
-    });
-    (spec.stats || []).forEach((s, j) => {
-      if ("metric" in s) {
-        const ok = recs.some((r) => s.metric in (r.metrics || {}) || (s.metric === "rmse" && "rss" in (r.metrics || {})) || equations(r).some((e) => s.metric in e));
-        if (!ok) out.push(issue("warning", `stats[${j}]`, `no record has metric '${s.metric}'`));
-      } else if ("fixed_effect" in s) {
-        if (!recs.some((r) => ((r.specification || {}).fixed_effects || []).includes(s.fixed_effect))) out.push(issue("warning", `stats[${j}]`, `no record has fixed effect '${s.fixed_effect}'`));
-      } else if ("test" in s) {
-        if (!recs.some((r) => findTest(r, s.test))) out.push(issue("warning", `stats[${j}]`, `no record has test '${s.test}'`));
-      }
-    });
+    if (inherit.length) out.push(...recordWarnings(spec.rows || [], [], inherit, ""));
+    out.push(...recordWarnings([], spec.stats || [], every, ""));
     return out;
   }
 
   // Check columns' sha256 pins (async: hashing)
   async function checkPins(spec, idx) {
     const out = [];
-    for (const [i, c] of (spec.columns || []).entries()) {
-      if (!c.sha256) continue;
+    const all = [...(spec.columns || []).map((c, i) => [`columns[${i}]`, c]),
+      ...(spec.panels || []).flatMap((p, k) => (p && Array.isArray(p.columns) ? p.columns.map((c, i) => [`panels[${k}].columns[${i}]`, c]) : []))];
+    for (const [path, c] of all) {
+      if (!c || !c.sha256) continue;
       const f = lookup(idx, c);
       if (!f) continue;
       const h = await recordSha256(f.record);
-      if (h && h !== c.sha256) out.push(issue("warning", `columns[${i}].sha256`, "the record has changed since the table was made"));
+      if (h && h !== c.sha256) out.push(issue("warning", `${path}.sha256`, "the record has changed since the table was made"));
     }
     return out;
   }
@@ -774,25 +849,65 @@
     if (errors.length) throw new Error(errors.map((i) => `${i.path}: ${i.message}`).join("; "));
     const fmt = spec.format || {};
     const digits = fmt.digits !== undefined ? fmt.digits : 3;
-    const thousands = fmt.thousands !== undefined ? fmt.thousands : ",";
-    const missing = fmt.missing !== undefined ? fmt.missing : "";
     const stars = spec.stars || [];
     const symbols = fmt.star_symbols || stars.map((_, i) => "*".repeat(i + 1));
-    const lines = uncertaintyLines(spec);
-    const showEst = spec.estimate !== false;
-    const pDigits = fmt.p_digits !== undefined ? fmt.p_digits : digits;
-    const pStyle = fmt.p_style || "fixed";
+    const ctx = {
+      idx, fmt, digits, stars, symbols,
+      thousands: fmt.thousands !== undefined ? fmt.thousands : ",",
+      missing: fmt.missing !== undefined ? fmt.missing : "",
+      pDigits: fmt.p_digits !== undefined ? fmt.p_digits : digits,
+      pStyle: fmt.p_style || "fixed",
+      labels: spec.response_labels || {},
+    };
+    const cols = makeColumns(spec.columns, ctx);
+    const rows = [];
+    const views = panelSpecs(spec);
+    for (const v of views) {
+      const pcols = v.columns !== spec.columns ? makeColumns(v.columns, ctx) : cols;
+      if ("panel_label" in v) rows.push({ label: v.panel_label, cells: cols.map(() => ""), kind: "panel" });
+      rows.push(...termRows(v, pcols, ctx));
+      rows.push(...statRows(v.stats || [], pcols, ctx));
+    }
+    if (spec.panels && spec.panels.length) {
+      const tail = statRows(spec.stats || [], cols, ctx);
+      if (tail.length) tail[0].rule = true;
+      rows.push(...tail);
+    }
+    const notes = (spec.notes || []).slice();
+    if (stars.length && views.some((v) => v.estimate !== false)) notes.push(stars.map((t, i) => `${symbols[i]} p < ${t}`).join(", "));
+    for (const v of views) {
+      const note = uncertaintyNote(v, uncertaintyLines(v));
+      if (note && !notes.includes(note)) notes.push(note);
+    }
+    return {
+      title: spec.title === undefined ? null : spec.title,
+      head: headRows(spec, cols),
+      header: cols.map((c) => c.number),
+      column_records: cols.map((c) => c.found.record.meta.id),
+      rows,
+      notes,
+      warnings: issues.filter((i) => i.level === "warning").map((i) => `warning: ${i.path}: ${i.message}`),
+    };
+  }
 
-    const cols = spec.columns.map((c, i) => {
-      const f = lookup(idx, c);
+  function makeColumns(columns, ctx) {
+    return columns.map((c, i) => {
+      const f = lookup(ctx.idx, c);
       const rows = columnRows(f.record, c);
       const label = c.header !== undefined ? c.header : (f.member || {}).label || (f.record.meta || {}).title || "";
       return {
         spec: c, found: f, tidy: new Map(rows.map((r) => [r.term, r])), order: rows.map((r) => r.term),
-        number: `(${i + 1})`, response: columnResponse(c, f.record, rows, spec.response_labels || {}), label,
+        number: `(${i + 1})`, response: columnResponse(c, f.record, rows, ctx.labels), label,
       };
     });
+  }
 
+  // a block's estimate rows and the lines under them (the whole table's, or a panel's);
+  // sparkline axes are shared within the block
+  function termRows(spec, cols, ctx) {
+    const { digits, missing, stars, symbols, pDigits, pStyle } = ctx;
+    const lines = uncertaintyLines(spec);
+    const showEst = spec.estimate !== false;
     const listed = [];
     const taken = new Set();
     for (const row of spec.rows || []) {
@@ -854,8 +969,13 @@
       rows.push(...block);
     }
     sparkDomains(rows);
+    return rows;
+  }
 
-    for (const s of spec.stats || []) {
+  function statRows(stats, cols, ctx) {
+    const { fmt, digits, thousands, missing, pDigits, pStyle } = ctx;
+    const rows = [];
+    for (const s of stats) {
       const d = s.digits !== undefined ? s.digits : digits;
       let cells = [], label;
       if ("values" in s) {
@@ -900,19 +1020,7 @@
       rows.push({ label, cells, kind: "stat" });
     }
 
-    const notes = (spec.notes || []).slice();
-    if (stars.length && showEst) notes.push(stars.map((t, i) => `${symbols[i]} p < ${t}`).join(", "));
-    const note = uncertaintyNote(spec, lines);
-    if (note) notes.push(note);
-    return {
-      title: spec.title === undefined ? null : spec.title,
-      head: headRows(spec, cols),
-      header: cols.map((c) => c.number),
-      column_records: cols.map((c) => c.found.record.meta.id),
-      rows,
-      notes,
-      warnings: issues.filter((i) => i.level === "warning").map((i) => `warning: ${i.path}: ${i.message}`),
-    };
+    return rows;
   }
 
   // ------------------------------------------------------------ rendering
@@ -931,7 +1039,10 @@
     lines.push("| | " + head[0].map(esc).join(" | ") + " |");
     lines.push("|---|" + "---:|".repeat(n));
     for (const cells of head.slice(1)) lines.push("| | " + cells.map(esc).join(" | ") + " |");
-    for (const r of t.rows) lines.push(`| ${esc(r.label)} | ` + r.cells.map(esc).join(" | ") + " |");
+    for (const r of t.rows) {
+      if (r.kind === "panel") lines.push(`| *${esc(r.label)}* | ` + r.cells.map(() => "").join(" | ") + " |");
+      else lines.push(`| ${esc(r.label)} | ` + r.cells.map(esc).join(" | ") + " |");
+    }
     if (t.notes.length) lines.push("", ...t.notes.map((n) => `${esc(n)}  `));
     return lines.join("\n").replace(/\s+$/, "") + "\n";
   }
@@ -971,7 +1082,13 @@
     t.rows.forEach((r, i) => {
       if (plan && plan.skip.has(i)) return;
       const kind = rowKind(t, plan, i);
-      if (kind === "stat" && prev !== "stat") lines.push("\\midrule");
+      if (kind === "panel") {
+        if (prev !== null) lines.push("\\midrule");
+        lines.push(`\\multicolumn{${t.header.length * (plan ? 2 : 1) + 1}}{l}{\\textit{${e(r.label)}}} \\\\`);
+        prev = kind;
+        return;
+      }
+      if (kind === "stat" && (prev !== "stat" || r.rule)) lines.push("\\midrule");
       const label = plan && plan.label.has(i) ? plan.label.get(i) : r.label;
       const cells = plan ? latexBeside(t, plan, i, e) : latexCells(r, e);
       lines.push(`${e(label)} & ` + cells.join(" & ") + " \\\\");
@@ -993,7 +1110,7 @@
     const plan = { align, start: new Map(), skip: new Set(), inside: new Map(), label: new Map() };
     let i = 0;
     while (i < rows.length) {
-      if (rows[i].kind === "stat") { i++; continue; }
+      if (rows[i].kind === "stat" || rows[i].kind === "panel") { i++; continue; }
       let j = i + 1;
       while (j < rows.length && rows[j].kind === "uncertainty") j++;
       const side = [], rest = [];
@@ -1027,7 +1144,12 @@
     rows.forEach((r, i) => {
       if (plan && plan.skip.has(i)) return;
       const kind = rowKind(t, plan, i);
-      const cls = kind + (kind === "stat" && prev !== "stat" ? " first-stat" : "") + (r.sparkline ? " spark-row" : "");
+      if (kind === "panel") {
+        out.push(`<tr class="panel${prev !== null ? " panel-rule" : ""}"><th colspan="${t.header.length * (plan ? 2 : 1) + 1}" style="text-align:left;font-style:italic">${escHTML(r.label)}</th></tr>`);
+        prev = kind;
+        return;
+      }
+      const cls = kind + (kind === "stat" && (prev !== "stat" || r.rule) ? " first-stat" : "") + (r.sparkline ? " spark-row" : "");
       const label = plan && plan.label.has(i) ? plan.label.get(i) : r.label;
       let cells;
       if (plan && plan.align === "estimate" && (plan.start.has(i) || plan.inside.has(i))) {
@@ -1071,7 +1193,8 @@
     out.push(...head.map(line), rule);
     let prev = null;
     t.rows.forEach((src, i) => {
-      if (src.kind === "stat" && prev !== "stat") out.push(rule);
+      if (src.kind === "panel" && prev !== null) out.push(rule);
+      if (src.kind === "stat" && (prev !== "stat" || src.rule)) out.push(rule);
       out.push(line(body[i]));
       prev = src.kind;
     });
@@ -1160,9 +1283,14 @@
     for (const i of shown) {
       const r = rows[i];
       const kind = rowKind(t, plan, i);
-      let top = kind === "stat" && prev !== "stat" ? ".75pt" : "";
+      let top = (kind === "stat" && (prev !== "stat" || r.rule)) || (kind === "panel" && prev !== null) ? ".75pt" : "";
       if (i === first && !nh) top = "1.5pt";
       const bottom = i === last ? "1.5pt" : "";
+      if (kind === "panel") {
+        out.push("<tr>" + wordCell("", { left: true, top, bottom, raw: `<i>${h(r.label)}</i>`, attrs: ` colspan="${t.header.length * (plan ? 2 : 1) + 1}"`, styleExtra: W ? wd(W.total) : "", font: fs }) + "</tr>");
+        prev = kind;
+        continue;
+      }
       const sp = r.sparkline;
       const padTop = pads(i);
       const label = plan && plan.label.has(i) ? plan.label.get(i) : r.label;
@@ -1287,9 +1415,9 @@
     const rpr = `<w:rPr>${b}<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/></w:rPr>`;
     return `<w:p><w:pPr><w:spacing w:before="${before || 0}" w:after="${after || 0}"/><w:jc w:val="${align || "left"}"/>${rpr}</w:pPr>` + runs + "</w:p>";
   }
-  function dxRun(text, sz, bold) {
+  function dxRun(text, sz, bold, italic) {
     if (!text) return "";
-    const b = bold ? "<w:b/>" : "";
+    const b = (bold ? "<w:b/>" : "") + (italic ? "<w:i/>" : "");
     return `<w:r><w:rPr>${b}<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/></w:rPr><w:t xml:space="preserve">${dx(text)}</w:t></w:r>`;
   }
   // a cell: width in twips (null: auto), borders top / bottom in eighths of a point, mar
@@ -1367,10 +1495,15 @@
     for (const i of shown) {
       const r = rows[i];
       const kind = rowKind(t, plan, i);
-      let top = kind === "stat" && prev !== "stat" ? ".75pt" : "";
+      let top = (kind === "stat" && (prev !== "stat" || r.rule)) || (kind === "panel" && prev !== null) ? ".75pt" : "";
       if (i === first && !nh) top = "1.5pt";
       const bottom = i === last ? "1.5pt" : "";
       const bt = dxRuleW(top), bb = dxRuleW(bottom);
+      if (kind === "panel") {
+        out.push("<w:tr><w:trPr><w:cantSplit/></w:trPr>" + dxTc(dxP(dxRun(r.label, sz, false, true), sz), { width: tw(0, grid.length), span: grid.length, top: bt, bottom: bb }) + "</w:tr>");
+        prev = kind;
+        continue;
+      }
       const sp = r.sparkline;
       const mar = pads(i) ? [padPx * 15, 108, 108] : null;
       const label = plan && plan.label.has(i) ? plan.label.get(i) : r.label;
@@ -1566,21 +1699,23 @@
   // sha256. Opened again next to those files, it builds the same table (tests/test_viewer.py).
   async function exportSpec(spec, items, opts) {
     const s = JSON.parse(JSON.stringify(spec));
+    // every column: the top level's and each panel's own
+    const all = [...s.columns, ...(s.panels || []).flatMap((p) => (p && Array.isArray(p.columns) ? p.columns : []))];
     if (opts && opts.pin) {
       const idx = indexRecords(items.map((it) => ({ record: it.record, member: it.member, source: it.source })));
-      for (const c of s.columns) {
+      for (const c of all) {
         const f = lookup(idx, c);
         if (f) c.sha256 = await recordSha256(f.record);
       }
     }
     const files = [];
-    for (const c of s.columns) {
+    for (const c of all) {
       const it = items.find((x) => (x.record.meta || {}).id === c.record && (!c.source || x.source === c.source));
       if (it) { if (!files.includes(it.file)) files.push(it.file); c.source = it.source; }
     }
     if (files.length) s.sources = files.map((f) => ({ id: f.replace(/\.(estrec-collection|estrec)?\.json$/, ""), path: f }));
     else delete s.sources;
-    if (s.sources) for (const c of s.columns) if (c.source && !s.sources.some((x) => x.id === c.source)) delete c.source;
+    if (s.sources) for (const c of all) if (c.source && !s.sources.some((x) => x.id === c.source)) delete c.source;
     return s;
   }
 
@@ -1622,6 +1757,8 @@ table.estrec-table td.spark svg { display: block; margin: 0 auto; }
 table.estrec-table td.spark-side.to-end { border-bottom: 1.5px solid var(--ink); }
 table.estrec-table tbody tr.estimate:not(:first-child) th, table.estrec-table tbody tr.estimate:not(:first-child) td { padding-top: 6px; }
 table.estrec-table tr.first-stat th, table.estrec-table tr.first-stat td { border-top: 0.75px solid var(--ink); padding-top: 5px; }
+table.estrec-table tr.panel th { font-weight: normal; padding-top: 6px; }
+table.estrec-table tr.panel-rule th { border-top: 0.75px solid var(--ink); }
 table.estrec-table tbody tr:last-child th, table.estrec-table tbody tr:last-child td { border-bottom: 1.5px solid var(--ink); padding-bottom: 5px; }
 table.estrec-table tfoot td { font-size: 13px; color: var(--muted); padding-top: 8px; white-space: normal; text-align: left; }
 button.col { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; border-bottom: 1px dotted var(--muted); }
@@ -1780,7 +1917,7 @@ ${table}</div>
     NAMED_LINES, PLACEHOLDERS, publishSpec, REFERENCE_TEXT, SPARK_COLOR, SPARK_SCALES, SPARK_PLACES, SPARK_ALIGNS, sparkSVG, sparkTikz, uncertaintyLines, pValue,
     num, vcovs, vcovLabel, pickVcov, tidy, glance, findTest, equationFit,
     canonicalJSON, sha256Hex, recordSha256,
-    indexRecords, validateTable, checkPins, columnResponse, columnRows, mediationColumns, buildTable, render, renderers: RENDERERS,
+    PANEL_FIELDS, indexRecords, validateTable, checkPins, columnResponse, columnRows, mediationColumns, buildTable, render, renderers: RENDERERS,
     redactRecord, renderWebPage, exportSpec,
     recordsIn, newSpec, fixed, statValue,
   };

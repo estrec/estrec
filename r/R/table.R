@@ -14,18 +14,11 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
   }
   if (!identical(spec$schema, "estrec-table/0.1"))
     stop("not an estrec-table/0.1 spec", call. = FALSE)
+  if (!is.null(spec$panels)) return(.tab_panels(spec, output, records, base_dir, ...))
   idx <- .tab_index(spec, records, base_dir)
   cols <- spec$columns
   if (!length(cols)) stop("the spec has no columns", call. = FALSE)
-  src_ids <- vapply(spec$sources %||% list(), function(s) as.character(s$id), "")
-  found <- lapply(seq_along(cols), function(i) {
-    c <- cols[[i]]
-    if (!is.null(c$source) && !c$source %in% src_ids)
-      stop("columns[", i - 1, "].source: no source '", c$source, "'", call. = FALSE)
-    f <- (if (!is.null(c$source)) idx[[paste0(c$source, "\r", c$record)]]) %||% idx[[c$record]]
-    if (is.null(f)) stop("columns[", i - 1, "]: record ", c$record, " not found", call. = FALSE)
-    f
-  })
+  found <- .tab_found(spec, cols, idx, "columns")
   fmt <- spec$format %||% list()
   digits <- fmt$digits %||% 3
   big <- fmt$thousands %||% ","
@@ -82,11 +75,85 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
     coef_map <- c(coef_map, stats::setNames(seen, seen))
   }
 
+  # modelsummary wants each model to have a term shown; a column with none (a panel's term it
+  # lacks) gets a placeholder row, taken out of the data frame again below
+  none <- ".estrec.none"
+  empty <- identical(output, "data.frame") &&
+    any(!vapply(tidies, function(t) any(t$term %in% names(coef_map)), TRUE))
+  if (empty) {
+    tidies <- lapply(tidies, function(t) {
+      if (any(t$term %in% names(coef_map))) return(t)
+      fake <- t[rep(NA_integer_, 1L), , drop = FALSE]
+      for (k in names(fake)) if (is.numeric(fake[[k]])) fake[[k]] <- 0
+      fake$term <- none
+      for (k in grep("^line[0-9]+$", names(fake), value = TRUE)) fake[[k]] <- ""
+      rbind(t, fake)
+    })
+    coef_map <- c(coef_map, stats::setNames(none, none))
+  }
   models <- lapply(tidies, function(t) structure(list(tidy = t, glance = data.frame(nobs = NA)),
                                                  class = "modelsummary_list"))
   names(models) <- headers
 
-  stat_rows <- lapply(spec$stats %||% list(), function(s) {
+  stat_rows <- .tab_stat_rows(spec$stats %||% list(), cols, found, fmt, digits, big, missing, p_digits, p_style)
+  top <- lapply(head[-1], function(h) c("", h))
+  add_rows <- NULL
+  if (length(top) || length(stat_rows)) {
+    add_rows <- as.data.frame(do.call(rbind, c(top, stat_rows)), stringsAsFactors = FALSE)
+    names(add_rows) <- c("term", headers)
+    attr(add_rows, "position") <- c(seq_along(top), rep(NA, length(stat_rows)))
+  }
+
+  stars <- unlist(spec$stars)
+  star_arg <- FALSE
+  if (length(stars)) {
+    sym <- unlist(fmt$star_symbols) %||% strrep("*", seq_along(stars))
+    star_arg <- stats::setNames(stars, sym)
+  }
+  statistic <- if (length(lines)) sprintf("{line%d}", seq_along(lines)) else NULL
+  est_arg <- "estimate"
+  if (isFALSE(spec$estimate)) {
+    # no estimate row: the first line takes its place (spec/table.md 5)
+    if (!length(lines)) stop("estimate: with no estimate and no lines, terms have nothing to show", call. = FALSE)
+    est_arg <- statistic[1]; statistic <- statistic[-1]
+    if (!length(statistic)) statistic <- NULL
+    star_arg <- FALSE
+  }
+  notes <- c(unlist(spec$notes), .tab_unc_note(unc, lines))
+  args <- list(models, output = output, coef_map = coef_map, estimate = est_arg, statistic = statistic,
+               stars = star_arg, fmt = digits, gof_omit = ".*", add_rows = add_rows)
+  if (!is.null(spec$title)) args$title <- spec$title
+  if (length(notes)) args$notes <- as.list(notes)
+  if (!draws) {
+    out <- do.call(modelsummary::modelsummary, c(args, list(...)))
+    if (empty) { out <- out[out$term != none, , drop = FALSE]; rownames(out) <- NULL }
+    return(out)
+  }
+  file <- !output %in% c("default", "tinytable", "html", "latex", "markdown", "typst")
+  if (file) args$output <- "tinytable"
+  x <- .tab_draw(do.call(modelsummary::modelsummary, c(args, list(...))), tidies, sparks,
+                 digits, p_digits, p_style, missing)
+  if (!file) return(x)
+  tinytable::save_tt(x, output, overwrite = TRUE)
+  invisible(x)
+}
+
+# The columns' records, found in the index (spec/table.md 3); `path` names the columns in errors.
+.tab_found <- function(spec, cols, idx, path) {
+  src_ids <- vapply(spec$sources %||% list(), function(s) as.character(s$id), "")
+  lapply(seq_along(cols), function(i) {
+    c <- cols[[i]]
+    if (!is.null(c$source) && !c$source %in% src_ids)
+      stop(path, "[", i - 1, "].source: no source '", c$source, "'", call. = FALSE)
+    f <- (if (!is.null(c$source)) idx[[paste0(c$source, "\r", c$record)]]) %||% idx[[c$record]]
+    if (is.null(f)) stop(path, "[", i - 1, "]: record ", c$record, " not found", call. = FALSE)
+    f
+  })
+}
+
+# Statistics rows (spec/table.md 6): each a character vector, the label then a cell per column.
+.tab_stat_rows <- function(stats, cols, found, fmt, digits, big, missing, p_digits, p_style) {
+  lapply(stats, function(s) {
     d <- s$digits %||% digits
     if (!is.null(s$values)) {
       if (length(s$values) != length(cols))
@@ -130,40 +197,81 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
                            else s$test)
     c(unname(label), cells)
   })
-  top <- lapply(head[-1], function(h) c("", h))
-  add_rows <- NULL
-  if (length(top) || length(stat_rows)) {
-    add_rows <- as.data.frame(do.call(rbind, c(top, stat_rows)), stringsAsFactors = FALSE)
-    names(add_rows) <- c("term", headers)
-    attr(add_rows, "position") <- c(seq_along(top), rep(NA, length(stat_rows)))
-  }
+}
 
+# a panel's own settings, each the top level's unless it sets it (spec/table.md 4.1)
+.tab_panel_fields <- c("rows", "keep", "drop", "keep_unlisted", "estimate", "uncertainty")
+
+# A spec with panels (spec/table.md 4.1): each panel is rendered as a table of its own through
+# modelsummary (its columns, terms, lines and statistics), the blocks stacked, then the top
+# level's statistics. output = "data.frame" gives the cells, each panel's label on a row of its
+# own; other outputs a tinytable whose row groups are the panels (sparklines show as text).
+.tab_panels <- function(spec, output, records, base_dir, ...) {
+  panels <- spec$panels
+  if (!is.list(panels) || !length(panels)) stop("panels: a list of at least one panel", call. = FALSE)
+  idx <- .tab_index(spec, records, base_dir)
+  cols <- spec$columns
+  n <- length(cols)
+  if (!n) stop("the spec has no columns", call. = FALSE)
+  found <- .tab_found(spec, cols, idx, "columns")
+  fmt <- spec$format %||% list()
+  digits <- fmt$digits %||% 3
+  p_digits <- fmt$p_digits %||% digits
+  tidies <- lapply(seq_along(cols), function(i) tidy.estimation_record(found[[i]], component = cols[[i]]$component))
+  head <- .tab_head(spec, cols, found, tidies)
+  terms <- character(); cells <- NULL; at <- list(); notes <- character()
+  for (k in seq_along(panels)) {
+    p <- panels[[k]]
+    if (!is.character(p$label)) stop("panels[", k - 1, "].label: a panel needs a `label` (text)", call. = FALSE)
+    sub <- spec
+    sub$panels <- NULL; sub$title <- NULL; sub$notes <- NULL
+    for (f in c(.tab_panel_fields, "columns")) if (f %in% names(p)) sub[f] <- list(p[[f]])
+    if (length(sub$columns) != n)
+      stop("panels[", k - 1, "].columns: ", length(sub$columns), " columns; the table has ", n, call. = FALSE)
+    sub["stats"] <- list(p$stats %||% list())
+    sub["head"] <- list(list())
+    x <- render_table(sub, output = "data.frame", records = records, base_dir = base_dir)
+    at[[p$label]] <- length(terms) + 1L
+    # a term's label on its first row only, as the Python reference's built table
+    terms <- c(terms, ifelse(x$part == "estimates" & x$statistic != "estimate", "", x$term))
+    cells <- rbind(cells, as.matrix(x[, 3 + seq_len(n), drop = FALSE]))
+    unc <- if ("uncertainty" %in% names(sub)) sub$uncertainty else "std_error"
+    notes <- union(notes, .tab_unc_note(unc, .tab_lines(unc)))
+  }
+  tail <- .tab_stat_rows(spec$stats %||% list(), cols, found, fmt, digits, fmt$thousands %||% ",",
+                         fmt$missing %||% "", p_digits, fmt$p_style %||% "fixed")
+  rule <- if (length(tail)) length(terms) + 1L else NULL
+  for (r in tail) { terms <- c(terms, r[1]); cells <- rbind(cells, r[-1]) }
   stars <- unlist(spec$stars)
-  star_arg <- FALSE
-  if (length(stars)) {
+  if (length(stars) && any(vapply(panels, function(p) !isFALSE(if ("estimate" %in% names(p)) p$estimate else spec$estimate), TRUE))) {
     sym <- unlist(fmt$star_symbols) %||% strrep("*", seq_along(stars))
-    star_arg <- stats::setNames(stars, sym)
+    notes <- c(paste(sprintf("%s p < %s", sym, format(stars, scientific = FALSE, drop0trailing = TRUE, trim = TRUE)), collapse = ", "), notes)
   }
-  statistic <- if (length(lines)) sprintf("{line%d}", seq_along(lines)) else NULL
-  est_arg <- "estimate"
-  if (isFALSE(spec$estimate)) {
-    # no estimate row: the first line takes its place (spec/table.md 5)
-    if (!length(lines)) stop("estimate: with no estimate and no lines, terms have nothing to show", call. = FALSE)
-    est_arg <- statistic[1]; statistic <- statistic[-1]
-    if (!length(statistic)) statistic <- NULL
-    star_arg <- FALSE
+  notes <- c(unlist(spec$notes), notes)
+  headers <- if (length(head)) head[[1]] else rep("", n)
+  top <- head[-1]
+  if (identical(output, "data.frame")) {
+    lab <- character(); out <- NULL
+    starts <- unlist(at)
+    for (r in seq_along(terms)) {
+      if (r %in% starts) { lab <- c(lab, names(starts)[starts == r]); out <- rbind(out, rep("", n)) }
+      lab <- c(lab, terms[r]); out <- rbind(out, cells[r, ])
+    }
+    for (h in rev(top)) { lab <- c("", lab); out <- rbind(h, out) }
+    df <- data.frame(term = lab, out, stringsAsFactors = FALSE, check.names = FALSE, row.names = NULL)
+    names(df) <- c("term", headers)
+    return(df)
   }
-  notes <- c(unlist(spec$notes), .tab_unc_note(unc, lines))
-  args <- list(models, output = output, coef_map = coef_map, estimate = est_arg, statistic = statistic,
-               stars = star_arg, fmt = digits, gof_omit = ".*", add_rows = add_rows)
-  if (!is.null(spec$title)) args$title <- spec$title
-  if (length(notes)) args$notes <- as.list(notes)
-  if (!draws) return(do.call(modelsummary::modelsummary, c(args, list(...))))
-  file <- !output %in% c("default", "tinytable", "html", "latex", "markdown", "typst")
-  if (file) args$output <- "tinytable"
-  x <- .tab_draw(do.call(modelsummary::modelsummary, c(args, list(...))), tidies, sparks,
-                 digits, p_digits, p_style, missing)
-  if (!file) return(x)
+  body <- rbind(do.call(rbind, top), cells)
+  df <- data.frame(c(rep("", length(top)), terms), body, stringsAsFactors = FALSE, check.names = FALSE, row.names = NULL)
+  names(df) <- c(" ", headers)
+  args <- list(df, notes = if (length(notes)) as.list(notes))
+  if (!is.null(spec$title)) args$caption <- spec$title
+  x <- do.call(tinytable::tt, args)
+  if (!is.null(rule)) x <- tinytable::style_tt(x, i = rule + length(top) - 1L, line = "b", line_width = 0.05)
+  x <- tinytable::group_tt(x, i = lapply(at, function(r) r + length(top)))
+  x <- tryCatch(tinytable::style_tt(x, i = "groupi", italic = TRUE), error = function(e) x)
+  if (output %in% c("default", "tinytable", "html", "latex", "markdown", "typst")) return(x)
   tinytable::save_tt(x, output, overwrite = TRUE)
   invisible(x)
 }

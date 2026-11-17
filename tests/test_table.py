@@ -797,3 +797,78 @@ def test_mediation_table():
     # without `mediation`, a column has every row (as before)
     t = et.build_table(dict(process_spec(rec), columns=[{"record": rec["meta"]["id"], "response": "y"}]), records=[rec])
     assert "indirect: x -> m -> y" in [r["label"] for r in t["rows"]]
+
+
+def panel_spec():
+    s = spec()
+    s["sources"].append({"id": "session", "path": "session.estrec-collection.json"})
+    ids = [r["meta"]["id"] for _, _, r in ef.iter_members(ef.read_collection(SESSION))]
+    s["panels"] = [
+        {"label": "Panel A", "stats": [{"metric": "nobs", "label": "N"}]},
+        {
+            "label": "Panel B",
+            "columns": [{"record": ids[k % len(ids)], "source": "session"} for k in range(3)],
+            "rows": [],
+            "keep": ["^x"],
+            "stats": [{"metric": "nobs", "label": "N"}],
+        },
+    ]
+    s["stats"] = [{"vcov": "type", "label": "Std. errors"}]
+    return s
+
+
+def test_panels_build():
+    """Each panel: a label row, its terms, its stats; then the top level's stats, the first
+    with a rule above it. Headings come from the top level's columns."""
+    t = et.build_table(panel_spec(), base_dir=EXAMPLES)
+    kinds = [r["kind"] for r in t["rows"]]
+    labels = [r["label"] for r in t["rows"]]
+    assert kinds[0] == "panel" and labels[0] == "Panel A"
+    b = labels.index("Panel B")
+    assert kinds[b] == "panel" and t["rows"][b]["cells"] == ["", "", ""]
+    assert labels[b - 1] == "N" and labels[b + 1 : b + 2] == ["x1"]
+    assert "Weight (1000 lbs)" in labels[:b] and "Weight (1000 lbs)" not in labels[b:]
+    assert labels[-1] == "Std. errors" and t["rows"][-1].get("rule") is True
+    assert sum(r.get("rule", False) for r in t["rows"]) == 1
+    assert cells(t, "Std. errors") == ["iid", "HC1", "HC1"]  # the top level's columns
+    assert t["header"] == ["(1)", "(2)", "(3)"] and t["warnings"] == []
+    text = et.render(t, "text")
+    assert text.index("Panel A") < text.index("Panel B") < text.index("Std. errors")
+    latex = et.render(t, "latex")
+    assert "\\multicolumn{4}{l}{\\textit{Panel B}} \\\\" in latex
+    assert latex.count("\\midrule") == 5  # heading, A's stats, before B, B's stats, top-level stats
+    page = et.render(t, "html")
+    assert '<tr class="panel"><th colspan="4"' in page and '<tr class="panel panel-rule">' in page
+    assert "| *Panel B* |" in et.render(t, "markdown")
+
+
+def test_panels_validate():
+    s = panel_spec()
+    s["panels"][1]["columns"] = s["panels"][1]["columns"][:2]
+    s["panels"][0]["keep"] = ["("]
+    del s["panels"][0]["label"]
+    s["panels"][1]["stats"].append({"label": "x", "values": ["a"]})
+    paths = {i.path for i in et.validate_table(s, schema=None) if i.level == "error"}
+    assert paths == {"panels[0].label", "panels[0].keep[0]", "panels[1].columns", "panels[1].stats[1].values"}
+    s = panel_spec()
+    s["panels"][1]["columns"][0]["record"] = "00000000-0000-0000-0000-000000000000"
+    s["panels"][1]["rows"] = [{"term": "nope"}]
+    s["panels"][1]["stats"] = [{"metric": "nope"}]
+    got = {(i.level, i.path) for i in et.validate_table(s, base_dir=EXAMPLES)}
+    assert ("error", "panels[1].columns[0]") in got
+    assert ("warning", "panels[1].rows[0]") in got and ("warning", "panels[1].stats[0]") in got
+    assert et.validate_table(panel_spec(), base_dir=EXAMPLES) == []
+    with pytest.raises(ValueError, match="panels"):
+        et.build_table({**panel_spec(), "panels": []}, base_dir=EXAMPLES)
+
+
+@pytest.mark.parametrize("width", [None, 6.5])
+def test_panels_docx(width):
+    import re
+
+    doc = docx_xml(et.render(et.build_table(panel_spec(), base_dir=EXAMPLES), "docx", width=width))
+    grid = re.findall(r'<w:gridCol w:w="(\d+)"/>', doc)
+    for tr in re.findall(r"<w:tr>.*?</w:tr>", doc):
+        spans = [int(m.group(1)) if m else 1 for m in (re.search(r'<w:gridSpan w:val="(\d+)"', tc) for tc in re.findall(r"<w:tc>.*?</w:tc>", tr))]
+        assert sum(spans) == len(grid)
+    assert doc.count("<w:i/>") == 2 and "Panel B" in doc

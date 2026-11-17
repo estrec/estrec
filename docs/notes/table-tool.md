@@ -143,30 +143,31 @@ Decisions so far:
    "text")`, so `estrec show` can't drift from the table spec. It changes `show`'s
    layout; show Ted the before/after first.
 
-Web-page export outside the viewer (backlog 2) is on hold: Ted is unsure about it.
+## Backlog (refreshed 2026-11-17, Table tool backlog chat 3166a120; ask Ted before changing behaviour)
 
-## Backlog (proposals; ask Ted before changing behaviour)
+Done since the earlier lists: `show_table` is a wrapper over the table builder (b9d0d1b);
+the Word paste works in Windows Word (Ted, 2026-11-07/08); the rename to estrec has landed
+(estrec 0.1.0 on PyPI); estrec.org serves the viewer at `/viewer/`; the viewer's
+**Publish** button is wired to `publish.js` (the site chat's work); R has `new_table()` and
+`write_table()` (e29f0d9).
 
-1. ~~Star cuts~~: settled (above). Follow-up: make `show_table` a thin wrapper over
-   `new_table` + `build_table` + `render(..., "text")` so it can't drift (changes `show`'s
-   layout; after the rename).
-   **Word export** (Ted asked for Word copy-paste; first version built, d7b97b1): check the
-   paste in real Word (Windows and Mac) and Google Docs; then perhaps a real .docx file (no
-   library in the browser: a small zip writer) and estrec `render_table(output = "word")`
-   via modelsummary's docx output.
-2. **Web-page export outside the viewer.** Add `render(..., "webpage")` in Python and
-   `render_table(output = "webpage")` in estrec, reusing the viewer's template.
-3. **Ted's first review in a real browser** once Pages serves the viewer. Collect his
-   rough edges.
+1. **Word.**
+   - Check the paste in Mac Word and Google Docs (only Windows Word was tried). Ted's to do.
+   - A real .docx from the viewer: a small zip writer in the browser (no library), and the
+     same from Python (`render(t, "docx")`?, stdlib `zipfile`). Sparklines would be PNG parts.
+   - estrec R: `render_table(output = "x.docx")` already goes to modelsummary/tinytable,
+     but on valiant it stops with "Please install the `pandoc` package" (the R package; the
+     pandoc binary is there). Untested otherwise; no test covers it.
+2. **Web-page export outside the viewer** (`render(..., "webpage")` in Python,
+   `render_table(output = "webpage")` in estrec, reusing the viewer's template). On hold
+   until Ted wants it.
+3. **Ted's review in a real browser**, now that estrec.org serves the viewer. Collect rough
+   edges.
 4. Possible additions:
    - several panels (Panel A/B) or column groups ("spanners") in the spec;
    - significance from a chosen test rather than the coefficient's p;
    - a viewer option to reorder columns by dragging;
-   - an "open spec" round trip test for every exported spec;
+   - an "open spec" round-trip test for every exported spec;
    - per-row `digits` for estimate rows.
-5. The **Publish** button in the viewer depends on the hosting server. That's the other
-   chat's work (`docs/notes/rename-and-site.md`). Leave a hook only.
-
-The rename to estrec (being decided in the other chat) will change type strings, file
-names and the Python package name. Check with Ted whether it has landed before starting
-large edits, so the two chats don't conflict.
+5. Leftovers from the graphics work: tinytable pads rows, so R's HTML sparkline column
+   doesn't join; R ignores `reference` and draws sparklines below only (Ted: leave it).

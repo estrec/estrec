@@ -1220,13 +1220,20 @@
     : `<a:ln w="${w}"` + (cap ? ' cap="rnd"' : "") + `><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></a:ln>`;
   const dxFill = (color, alpha) => color === null ? "<a:noFill/>"
     : `<a:solidFill><a:srgbClr val="${color}">${alpha ? `<a:alpha val="${alpha}"/>` : ""}</a:srgbClr></a:solidFill>`;
-  function dxShape(n, x, y, cx, cy, geom, fill, ln) {
-    const g = geom.startsWith("<") ? geom : `<a:prstGeom prst="${geom}"><a:avLst/></a:prstGeom>`;
+  // one mark as a shape covering the whole drawing (w x h, its child coordinates), the mark a
+  // path in those coordinates: every mark shares one frame, so Word can't place one a fraction
+  // of a pixel off another (it did with a shape per mark, 2026-11-17, Mac Word)
+  function dxShape(n, w, h, path, fill, ln, filled) {
     return `<wps:wsp><wps:cNvPr id="${n}" name="Shape ${n}"/><wps:cNvSpPr/><wps:spPr>`
-      + `<a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>`
-      + `${g}${fill}${ln}</wps:spPr><wps:bodyPr/></wps:wsp>`;
+      + `<a:xfrm><a:off x="0" y="0"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>`
+      + '<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="r" b="b"/>'
+      + `<a:pathLst><a:path w="${w}" h="${h}"` + (filled === false ? ' fill="none"' : "") + `>${path}</a:path></a:pathLst>`
+      + `</a:custGeom>${fill}${ln}</wps:spPr><wps:bodyPr/></wps:wsp>`;
   }
-  const dxDot = (n, x, y, r, fill, w, line) => dxShape(n, x - r, y - r, 2 * r, 2 * r, "ellipse", dxFill(fill), dxLn(w, line));
+  const dxPt = (x, y) => `<a:pt x="${x}" y="${y}"/>`;
+  const dxSegment = (x1, y1, x2, y2) => `<a:moveTo>${dxPt(x1, y1)}</a:moveTo><a:lnTo>${dxPt(x2, y2)}</a:lnTo>`;
+  // a circle of radius r about (x, y): a full arc from its rightmost point
+  const dxCircle = (x, y, r) => `<a:moveTo>${dxPt(x + r, y)}</a:moveTo><a:arcTo wR="${r}" hR="${r}" stAng="0" swAng="21600000"/><a:close/>`;
 
   // a sparkline as an inline group of shapes (a run), drawn as sparkSVG / sparkRule draw it;
   // ids = [the document's last drawing id]
@@ -1238,28 +1245,27 @@
     if (!("estimate" in m) && !m.reference) rule = true;
     const nid = () => ++ids[0];
     const frame = nid();
-    const hh = H * 10;
+    const ww = Wd * 10, hh = H * 10;
     const y = mid === undefined || mid === null ? H * 5 : mid;
     const c = color.slice(1).toUpperCase(), d = sparkDark(color).slice(1).toUpperCase();
     const x0 = sparkX0(m, Wd);
-    const shapes = [dxShape(nid(), x0, 0, 0, hh, "line", dxFill(null), dxLn(DX_RULE, "555555"))];
+    const shape = (path, fill, ln, filled) => dxShape(nid(), ww, hh, path, fill, ln, filled);
+    const dot = (x, r, fill, w, line) => shape(dxCircle(x, y, r), dxFill(fill), dxLn(w, line));
+    const shapes = [shape(dxSegment(x0, 0, x0, hh), dxFill(null), dxLn(DX_RULE, "555555"), false)];
     if (!rule && "estimate" in m) {
       const [, xl, xe, xh] = sparkXs(m, Wd);
-      const cx = xh - xl, ce = xe - xl;
-      if (cx > 0) {
-        const band = '<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="r" b="b"/>'
-          + `<a:pathLst><a:path w="${cx}" h="120"><a:moveTo><a:pt x="0" y="60"/></a:moveTo>`
-          + `<a:quadBezTo><a:pt x="${ce}" y="0"/><a:pt x="${cx}" y="60"/></a:quadBezTo>`
-          + `<a:quadBezTo><a:pt x="${ce}" y="120"/><a:pt x="0" y="60"/></a:quadBezTo>`
-          + "<a:close/></a:path></a:pathLst></a:custGeom>";
-        shapes.push(dxShape(nid(), xl, y - 60, cx, 120, band, dxFill(c, 22000), dxLn(0, null)));
+      if (xh > xl) {
+        const band = `<a:moveTo>${dxPt(xl, y)}</a:moveTo>`
+          + `<a:quadBezTo>${dxPt(xe, y - 60)}${dxPt(xh, y)}</a:quadBezTo>`
+          + `<a:quadBezTo>${dxPt(xe, y + 60)}${dxPt(xl, y)}</a:quadBezTo><a:close/>`;
+        shapes.push(shape(band, dxFill(c, 22000), dxLn(0, null)));
       }
-      shapes.push(dxShape(nid(), xl, y, cx, 0, "line", dxFill(null), dxLn(DX_LINE, c, true)));
-      shapes.push(dxDot(nid(), xl, y, 19, c, DX_END, "FFFFFF"));
-      shapes.push(dxDot(nid(), xh, y, 19, c, DX_END, "FFFFFF"));
-      shapes.push(dxDot(nid(), xe, y, 29, d, DX_EST, "FFFFFF"));
+      shapes.push(shape(dxSegment(xl, y, xh, y), dxFill(null), dxLn(DX_LINE, c, true), false));
+      shapes.push(dot(xl, 19, c, DX_END, "FFFFFF"));
+      shapes.push(dot(xh, 19, c, DX_END, "FFFFFF"));
+      shapes.push(dot(xe, 29, d, DX_EST, "FFFFFF"));
     } else if (!rule) {
-      shapes.push(dxDot(nid(), x0, y, 26, "FFFFFF", DX_RING, d));
+      shapes.push(dot(x0, 26, "FFFFFF", DX_RING, d));
     }
     const ex = Wd * 9525, ey = H * 9525;
     const descr = rule ? "" : dx(sparkLabel(m, label));
@@ -1270,7 +1276,7 @@
       + '<a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup">'
       + "<wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr>"
       + `<a:xfrm><a:off x="0" y="0"/><a:ext cx="${ex}" cy="${ey}"/>`
-      + `<a:chOff x="0" y="0"/><a:chExt cx="${Wd * 10}" cy="${hh}"/></a:xfrm></wpg:grpSpPr>`
+      + `<a:chOff x="0" y="0"/><a:chExt cx="${ww}" cy="${hh}"/></a:xfrm></wpg:grpSpPr>`
       + shapes.join("")
       + "</wpg:wgp></a:graphicData></a:graphic></wp:inline></w:drawing></mc:Choice>"
       + "<mc:Fallback/></mc:AlternateContent></w:r>";

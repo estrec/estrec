@@ -1577,20 +1577,33 @@ def _dx_fill(color: str | None, alpha: int = 0) -> str:
     return f'<a:solidFill><a:srgbClr val="{color}">{a}</a:srgbClr></a:solidFill>'
 
 
-def _dx_shape(n: int, x: int, y: int, cx: int, cy: int, geom: str, fill: str, ln: str) -> str:
-    if geom.startswith("<"):
-        g = geom
-    else:
-        g = f'<a:prstGeom prst="{geom}"><a:avLst/></a:prstGeom>'
+def _dx_shape(n: int, w: int, h: int, path: str, fill: str, ln: str, filled: bool = True) -> str:
+    """One mark as a shape covering the whole drawing (`w` x `h`, its child coordinates), the
+    mark a path in those coordinates: every mark shares one frame, so Word can't place one a
+    fraction of a pixel off another (it did with a shape per mark, 2026-11-17, Mac Word)."""
     return (
         f'<wps:wsp><wps:cNvPr id="{n}" name="Shape {n}"/><wps:cNvSpPr/><wps:spPr>'
-        f'<a:xfrm><a:off x="{x}" y="{y}"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm>'
-        f"{g}{fill}{ln}</wps:spPr><wps:bodyPr/></wps:wsp>"
+        f'<a:xfrm><a:off x="0" y="0"/><a:ext cx="{w}" cy="{h}"/></a:xfrm>'
+        '<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="r" b="b"/>'
+        f'<a:pathLst><a:path w="{w}" h="{h}"' + ("" if filled else ' fill="none"') + f">{path}</a:path></a:pathLst>"
+        f"</a:custGeom>{fill}{ln}</wps:spPr><wps:bodyPr/></wps:wsp>"
     )
 
 
-def _dx_dot(n: int, x: int, y: int, r: int, fill: str, w: int, line: str) -> str:
-    return _dx_shape(n, x - r, y - r, 2 * r, 2 * r, "ellipse", _dx_fill(fill), _dx_ln(w, line))
+def _dx_pt(x: int, y: int) -> str:
+    return f'<a:pt x="{x}" y="{y}"/>'
+
+
+def _dx_segment(x1: int, y1: int, x2: int, y2: int) -> str:
+    return f"<a:moveTo>{_dx_pt(x1, y1)}</a:moveTo><a:lnTo>{_dx_pt(x2, y2)}</a:lnTo>"
+
+
+def _dx_circle(x: int, y: int, r: int) -> str:
+    """A circle of radius r about (x, y): a full arc from its rightmost point."""
+    return (
+        f"<a:moveTo>{_dx_pt(x + r, y)}</a:moveTo>"
+        f'<a:arcTo wR="{r}" hR="{r}" stAng="0" swAng="21600000"/><a:close/>'
+    )
 
 
 def _dx_spark(
@@ -1616,29 +1629,33 @@ def _dx_spark(
         return ids[0]
 
     frame = nid()
-    hh = height * 10
+    ww, hh = width * 10, height * 10
     y = height * 5 if mid is None else mid
     c, d = color[1:].upper(), _spark_dark(color)[1:].upper()
     x0 = _spark_x0(m, width)
-    shapes = [_dx_shape(nid(), x0, 0, 0, hh, "line", _dx_fill(None), _dx_ln(_DX_RULE, "555555"))]
+
+    def shape(path: str, fill: str, ln: str, filled: bool = True) -> str:
+        return _dx_shape(nid(), ww, hh, path, fill, ln, filled)
+
+    def dot(x: int, r: int, fill: str, w: int, line: str) -> str:
+        return shape(_dx_circle(x, y, r), _dx_fill(fill), _dx_ln(w, line))
+
+    shapes = [shape(_dx_segment(x0, 0, x0, hh), _dx_fill(None), _dx_ln(_DX_RULE, "555555"), filled=False)]
     if not rule_only and "estimate" in m:
         _, xl, xe, xh = _spark_xs(m, width)
-        cx, ce = xh - xl, xe - xl
-        if cx > 0:
+        if xh > xl:
             band = (
-                '<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="r" b="b"/>'
-                f'<a:pathLst><a:path w="{cx}" h="120"><a:moveTo><a:pt x="0" y="60"/></a:moveTo>'
-                f'<a:quadBezTo><a:pt x="{ce}" y="0"/><a:pt x="{cx}" y="60"/></a:quadBezTo>'
-                f'<a:quadBezTo><a:pt x="{ce}" y="120"/><a:pt x="0" y="60"/></a:quadBezTo>'
-                "<a:close/></a:path></a:pathLst></a:custGeom>"
+                f"<a:moveTo>{_dx_pt(xl, y)}</a:moveTo>"
+                f"<a:quadBezTo>{_dx_pt(xe, y - 60)}{_dx_pt(xh, y)}</a:quadBezTo>"
+                f"<a:quadBezTo>{_dx_pt(xe, y + 60)}{_dx_pt(xl, y)}</a:quadBezTo><a:close/>"
             )
-            shapes.append(_dx_shape(nid(), xl, y - 60, cx, 120, band, _dx_fill(c, 22000), _dx_ln(0, None)))
-        shapes.append(_dx_shape(nid(), xl, y, cx, 0, "line", _dx_fill(None), _dx_ln(_DX_LINE, c, cap=True)))
-        shapes.append(_dx_dot(nid(), xl, y, 19, c, _DX_END, "FFFFFF"))
-        shapes.append(_dx_dot(nid(), xh, y, 19, c, _DX_END, "FFFFFF"))
-        shapes.append(_dx_dot(nid(), xe, y, 29, d, _DX_EST, "FFFFFF"))
+            shapes.append(shape(band, _dx_fill(c, 22000), _dx_ln(0, None)))
+        shapes.append(shape(_dx_segment(xl, y, xh, y), _dx_fill(None), _dx_ln(_DX_LINE, c, cap=True), filled=False))
+        shapes.append(dot(xl, 19, c, _DX_END, "FFFFFF"))
+        shapes.append(dot(xh, 19, c, _DX_END, "FFFFFF"))
+        shapes.append(dot(xe, 29, d, _DX_EST, "FFFFFF"))
     elif not rule_only:
-        shapes.append(_dx_dot(nid(), x0, y, 26, "FFFFFF", _DX_RING, d))
+        shapes.append(dot(x0, 26, "FFFFFF", _DX_RING, d))
     ex, ey = width * 9525, height * 9525
     descr = "" if rule_only else _dx(_spark_label(m, label))
     return (
@@ -1649,7 +1666,7 @@ def _dx_spark(
         '<a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup">'
         "<wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr>"
         f'<a:xfrm><a:off x="0" y="0"/><a:ext cx="{ex}" cy="{ey}"/>'
-        f'<a:chOff x="0" y="0"/><a:chExt cx="{width * 10}" cy="{hh}"/></a:xfrm></wpg:grpSpPr>'
+        f'<a:chOff x="0" y="0"/><a:chExt cx="{ww}" cy="{hh}"/></a:xfrm></wpg:grpSpPr>'
         + "".join(shapes)
         + "</wpg:wgp></a:graphicData></a:graphic></wp:inline></w:drawing></mc:Choice>"
         "<mc:Fallback/></mc:AlternateContent></w:r>"

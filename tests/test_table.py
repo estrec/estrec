@@ -91,6 +91,12 @@ def test_docx_package(unc, width):
     assert len(ids) == len(set(ids))
     n_marks = sum(1 for r in t["rows"] for m in (r.get("sparkline") or {}).get("marks", []) if m)
     assert doc.count("<wp:inline ") >= n_marks and (n_marks > 0) == ("<wpg:wgp>" in doc)
+    # every mark spans its whole drawing (one frame, so Word can't misplace one against another)
+    for g in re.findall(r"<wpg:wgp>.*?</wpg:wgp>", doc):
+        ch = re.search(r'<a:chExt cx="(\d+)" cy="(\d+)"/>', g).groups()
+        assert re.findall(r'<wps:spPr><a:xfrm><a:off x="(\d+)" y="(\d+)"/><a:ext cx="(\d+)" cy="(\d+)"/>', g) == [
+            ("0", "0", *ch)
+        ] * g.count("<wps:wsp>")
     if width:
         assert sum(map(int, grid)) == 6.5 * 1440 and '<w:tblLayout w:type="fixed"/>' in doc
     if unc and unc[-1]["sparkline"].get("align") == "middle":

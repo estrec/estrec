@@ -286,6 +286,39 @@ def test_tables_match_python(node_result):
         assert js["notes"] == py["notes"], i
 
 
+def _same_table(a, b):
+    keys = ("header", "head", "notes", "column_records")
+    rows = [(r["label"], r["cells"], r.get("sparkline")) for r in a["rows"]], [
+        (r["label"], r["cells"], r.get("sparkline")) for r in b["rows"]
+    ]
+    return all(a[k] == b[k] for k in keys) and rows[0] == rows[1]
+
+
+def test_exported_specs_reopen(node_result, tmp_path):
+    """The open-spec round trip: every spec the viewer exports (Table spec, plain and with
+    pinned record versions; from the spec as written and as the viewer holds a table built by
+    clicking, without sources) validates without issues and, opened again next to the files
+    its records came from, builds the same table, in the viewer and in Python."""
+    _req, out = node_result
+    all_specs = specs()
+    assert len(out["exported"]) == len(all_specs)
+    for i, (spec, pair) in enumerate(zip(all_specs, out["exported"])):
+        want = et.build_table(spec, base_dir=EXAMPLES)
+        assert len(pair) == 4  # as written and as the viewer holds it (bare), each plain and pinned
+        for k, (pin, ex) in enumerate(zip((False, True, False, True), pair)):
+            got = ex["spec"]
+            assert ("sha256" in json.dumps(got)) == pin, (i, pin)
+            assert got["sources"] and {c.get("source") for c in got["columns"]} <= {x["id"] for x in got["sources"]}, i
+            assert [x for x in ex["issues"] if x["level"] == "error"] == [] and ex["pins"] == [], (i, pin, ex["issues"])
+            assert "error" not in ex["table"] and _same_table(ex["table"], want), (i, pin)
+            # Python: written to disk as the viewer saves it, read back, resolved from the examples
+            path = tmp_path / f"t{i}-{k}.estrec-table.json"
+            path.write_text(json.dumps(got, indent=2) + "\n", encoding="utf-8")
+            back = et.read_table(path)
+            assert [x for x in et.validate_table(back, base_dir=EXAMPLES) if x.level in ("error", "warning")] == [], (i, pin)
+            assert _same_table(et.build_table(back, base_dir=EXAMPLES), want), (i, pin)
+
+
 def test_renderers_match_python(node_result):
     """Each format renders the built table the same way (the JS renderers on Python's table)."""
     if NODE is None:

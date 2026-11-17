@@ -1008,24 +1008,7 @@ async function renderTable({ keepControls = false } = {}) {
 }
 
 async function specForExport() {
-  const s = JSON.parse(JSON.stringify(state.spec));
-  if ($("opt-pin").checked) {
-    const idx = index();
-    for (const c of s.columns) {
-      const f = (c.source && idx.get(c.source + "\u0000" + c.record)) || idx.get(c.record);
-      if (f) c.sha256 = await E.recordSha256(f.record);
-    }
-  }
-  // sources: the files the columns' records came from
-  const files = [];
-  for (const c of s.columns) {
-    const it = state.items.find((x) => (x.record.meta || {}).id === c.record && (!c.source || x.source === c.source));
-    if (it) { if (!files.includes(it.file)) files.push(it.file); c.source = it.source; }
-  }
-  if (files.length) s.sources = files.map((f) => ({ id: f.replace(/\.(estrec-collection|estrec)?\.json$/, ""), path: f }));
-  else delete s.sources;
-  if (s.sources) for (const c of s.columns) if (c.source && !s.sources.some((x) => x.id === c.source)) delete c.source;
-  return s;
+  return E.exportSpec(state.spec, state.items, { pin: $("opt-pin").checked });
 }
 
 // the item behind a column of the built table

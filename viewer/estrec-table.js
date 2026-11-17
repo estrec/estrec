@@ -1560,6 +1560,30 @@
     return out;
   }
 
+  // The spec as the viewer exports it (Table spec): `sources` lists the files the columns'
+  // records came from (items: {record, member, source, file}, file a name relative to the
+  // spec), each column names its source, and with opts.pin each column carries its record's
+  // sha256. Opened again next to those files, it builds the same table (tests/test_viewer.py).
+  async function exportSpec(spec, items, opts) {
+    const s = JSON.parse(JSON.stringify(spec));
+    if (opts && opts.pin) {
+      const idx = indexRecords(items.map((it) => ({ record: it.record, member: it.member, source: it.source })));
+      for (const c of s.columns) {
+        const f = lookup(idx, c);
+        if (f) c.sha256 = await recordSha256(f.record);
+      }
+    }
+    const files = [];
+    for (const c of s.columns) {
+      const it = items.find((x) => (x.record.meta || {}).id === c.record && (!c.source || x.source === c.source));
+      if (it) { if (!files.includes(it.file)) files.push(it.file); c.source = it.source; }
+    }
+    if (files.length) s.sources = files.map((f) => ({ id: f.replace(/\.(estrec-collection|estrec)?\.json$/, ""), path: f }));
+    else delete s.sources;
+    if (s.sources) for (const c of s.columns) if (c.source && !s.sources.some((x) => x.id === c.source)) delete c.source;
+    return s;
+  }
+
   // A self-contained HTML page: the table, and the records behind its columns. Hovering a
   // column heading summarizes its record; clicking it opens the full record.
   function renderWebPage(t, records, opts) {
@@ -1757,7 +1781,7 @@ ${table}</div>
     num, vcovs, vcovLabel, pickVcov, tidy, glance, findTest, equationFit,
     canonicalJSON, sha256Hex, recordSha256,
     indexRecords, validateTable, checkPins, columnResponse, columnRows, mediationColumns, buildTable, render, renderers: RENDERERS,
-    redactRecord, renderWebPage,
+    redactRecord, renderWebPage, exportSpec,
     recordsIn, newSpec, fixed, statValue,
   };
 });

@@ -146,13 +146,14 @@ Decisions so far:
 ## Backlog (refreshed 2026-11-17, Table tool backlog chat 3166a120; ask Ted before changing behaviour)
 
 Done since the earlier lists: `show_table` is a wrapper over the table builder (b9d0d1b);
-the Word paste works in Windows Word (Ted, 2026-11-07/08); the rename to estrec has landed
+the Word paste works in Mac Word and Google Docs (Ted, 2026-11-17: those are what he
+tested, not Windows; the earlier "real Word" checks of 2026-11-07/08 were Mac Word); the rename to estrec has landed
 (estrec 0.1.0 on PyPI); estrec.org serves the viewer at `/viewer/`; the viewer's
 **Publish** button is wired to `publish.js` (the site chat's work); R has `new_table()` and
 `write_table()` (e29f0d9).
 
 1. **Word.**
-   - Check the paste in Mac Word and Google Docs (only Windows Word was tried). Ted's to do.
+   - Check the paste in Windows Word (Mac Word and Google Docs work). Ted's to do.
    - A real .docx from the viewer: a small zip writer in the browser (no library), and the
      same from Python (`render(t, "docx")`?, stdlib `zipfile`). Sparklines would be PNG parts.
    - estrec R: `render_table(output = "x.docx")` already goes to modelsummary/tinytable,

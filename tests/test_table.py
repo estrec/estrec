@@ -987,3 +987,18 @@ def test_significance_validate():
     paths = {i.path for i in et.validate_table(s, schema=None)}
     assert paths == {"significance", "columns[2].significance.value", "columns[1].significance"}
     assert et.validate_table(sig_spec(mt, rs), schema="auto") == []
+
+
+def test_r_docx_references_are_current(tmp_path):
+    """r/tests/docx holds the Python Word files R's render_table(output = "x.docx") must match
+    (test-table.R); they must be what this Python writes. After a change to the Word writer:
+    python r/tests/docx/make_refs.py"""
+    import runpy
+    from pathlib import Path
+
+    refs = Path(__file__).resolve().parents[1] / "r" / "tests" / "docx"
+    runpy.run_path(str(refs / "make_refs.py"))["main"](tmp_path)
+    names = sorted(p.name for p in tmp_path.iterdir())
+    assert names == sorted(p.name for p in refs.iterdir() if p.suffix in (".xml", ".json"))
+    for name in names:
+        assert (tmp_path / name).read_bytes() == (refs / name).read_bytes(), f"{name} is stale: run python r/tests/docx/make_refs.py"

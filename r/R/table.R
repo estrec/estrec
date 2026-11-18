@@ -81,8 +81,12 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
 
   # modelsummary wants each model to have a term shown; a column with none (a panel's term it
   # lacks) gets a placeholder row, taken out of the data frame again below
+  # a Word file is written from the table as the Python reference builds it (.tab_built),
+  # which ".built" returns (for panels)
+  docx <- grepl("\\.docx$", output, ignore.case = TRUE)
+  built <- docx || identical(output, ".built")
   none <- ".estrec.none"
-  empty <- identical(output, "data.frame") &&
+  empty <- (identical(output, "data.frame") || built) &&
     any(!vapply(tidies, function(t) any(t$term %in% names(coef_map)), TRUE))
   if (empty) {
     tidies <- lapply(tidies, function(t) {
@@ -131,9 +135,19 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
   if (!is.null(spec$title)) args$title <- spec$title
   if (length(notes)) args$notes <- as.list(notes)
   spans <- .tab_spans(spec, length(cols))
-  # a Word file goes through .tab_save, below
-  docx <- grepl("\\.docx$", output, ignore.case = TRUE)
-  if (!draws && !docx && (is.null(spans) || identical(output, "data.frame"))) {
+  if (built) {
+    args$output <- "data.frame"; args$title <- NULL; args$notes <- NULL
+    df <- do.call(modelsummary::modelsummary, args)
+    df <- df[df$term != none, , drop = FALSE]
+    shows <- !isFALSE(spec$estimate)
+    t <- list(title = spec$title, head = .tab_head_rows(spec, cols, found, tidies), header = sprintf("(%d)", seq_along(cols)),
+              rows = .tab_block_rows(df, length(cols), length(stat_rows), tidies, coef_map, unc, shows),
+              notes = c(unlist(spec$notes), if (length(unlist(spec$stars)) && shows) .tab_stars_note(spec, list(spec)),
+                        .tab_unc_note(unc, lines, drawn = TRUE)))
+    if (!docx) return(t)
+    return(.tab_docx_save(t, output, list(...)))
+  }
+  if (!draws && (is.null(spans) || identical(output, "data.frame"))) {
     out <- do.call(modelsummary::modelsummary, c(args, list(...)))
     if (empty) { out <- out[out$term != none, , drop = FALSE]; rownames(out) <- NULL }
     if (length(spans) && is.data.frame(out)) {
@@ -321,6 +335,8 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
   tidies <- lapply(seq_along(cols), function(i) tidy.estimation_record(found[[i]], component = cols[[i]]$component))
   head <- .tab_head(spec, cols, found, tidies)
   terms <- character(); cells <- NULL; at <- list(); notes <- character(); views <- list()
+  docx <- grepl("\\.docx$", output, ignore.case = TRUE)
+  brows <- list()  # for a Word file, the built table's rows
   for (k in seq_along(panels)) {
     p <- panels[[k]]
     if (!is.character(p$label)) stop("panels[", k - 1, "].label: a panel needs a `label` (text)", call. = FALSE)
@@ -333,12 +349,14 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
     sub["head"] <- list(list())
     views <- c(views, list(sub))
     x <- render_table(sub, output = "data.frame", records = records, base_dir = base_dir)
+    if (docx) brows <- c(brows, list(list(label = p$label, cells = rep("", n), kind = "panel")),
+                         render_table(sub, output = ".built", records = records, base_dir = base_dir)$rows)
     at[[p$label]] <- length(terms) + 1L
     # a term's label on its first row only, as the Python reference's built table
     terms <- c(terms, ifelse(x$part == "estimates" & x$statistic != "estimate", "", x$term))
     cells <- rbind(cells, as.matrix(x[, 3 + seq_len(n), drop = FALSE]))
     unc <- if ("uncertainty" %in% names(sub)) sub$uncertainty else "std_error"
-    notes <- union(notes, .tab_unc_note(unc, .tab_lines(unc)))
+    notes <- union(notes, .tab_unc_note(unc, .tab_lines(unc), drawn = docx))
   }
   tail <- .tab_stat_rows(spec$stats %||% list(), cols, found, fmt, digits, fmt$thousands %||% ",",
                          fmt$missing %||% "", p_digits, fmt$p_style %||% "fixed")
@@ -351,6 +369,13 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
                       .tab_sig_note(views)), notes)
   }
   notes <- c(unlist(spec$notes), notes)
+  if (docx) {
+    for (k in seq_along(tail))
+      brows <- c(brows, list(c(list(label = tail[[k]][1], cells = unname(tail[[k]][-1]), kind = "stat"), if (k == 1L) list(rule = TRUE))))
+    t <- list(title = spec$title, head = .tab_head_rows(spec, cols, found, tidies), header = sprintf("(%d)", seq_len(n)),
+              rows = brows, notes = notes)
+    return(.tab_docx_save(t, output, list(...)))
+  }
   headers <- if (length(head)) head[[1]] else rep("", n)
   top <- head[-1]
   spans <- .tab_spans(spec, n)
@@ -382,43 +407,10 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
   invisible(x)
 }
 
-# Saving a tinytable to a file. A Word file goes through tinytable's markdown and pandoc, which
-# reads a cell that starts like a list item as a list: a column number "(1)" comes out empty
-# and the stars note "* p < 0.1" loses its star. So the marker's punctuation is escaped first.
+# Saving a tinytable to a file (a Word file is written by .tab_docx_save instead).
 .tab_save <- function(x, output) {
-  if (!grepl("\\.docx$", output, ignore.case = TRUE)) {
-    tinytable::save_tt(x, output, overwrite = TRUE)
-    return(invisible(output))
-  }
-  if (!requireNamespace("pandoc", quietly = TRUE))
-    stop("A Word file needs the R package pandoc: install.packages(\"pandoc\")", call. = FALSE)
-  md <- .tab_md_escape(tinytable::save_tt(x, output = "markdown"))
-  if (file.exists(output)) file.remove(output)
-  pandoc::pandoc_convert(text = md, to = "docx", output = output)
+  tinytable::save_tt(x, output, overwrite = TRUE)
   invisible(output)
-}
-
-# In each cell of a pandoc grid table, a leading list marker made literal: a bullet (- + *),
-# a heading or quote mark (# >), or an ordered marker such as 1. 1) (1) a. (a) iv. (@).
-.tab_md_escape <- function(md) {
-  lines <- strsplit(paste(md, collapse = "\n"), "\n", fixed = TRUE)[[1]]
-  # the grid's columns are fixed widths, so the backslash takes a padding space: a trailing
-  # one when the cell has two or more, else the leading one
-  cell <- function(t0) {
-    t <- sub("^(\\s*)([-+*#>])(\\s|$)", "\\1\\\\\\2\\3", t0, perl = TRUE)
-    t <- sub("^(\\s*)\\(([0-9A-Za-z@#]*\\)(\\s|$))", "\\1\\\\(\\2", t, perl = TRUE)
-    t <- sub("^(\\s*[0-9A-Za-z#]+)([.)])(\\s|$)", "\\1\\\\\\2\\3", t, perl = TRUE)
-    if (nchar(t) == nchar(t0)) return(t)
-    if (grepl("  $", t)) sub(" $", "", t) else sub("^ ", "", t)
-  }
-  row <- grepl("^\\|", lines)
-  lines[row] <- vapply(lines[row], function(l) {
-    parts <- strsplit(l, "|", fixed = TRUE)[[1]]
-    if (length(parts) < 2) return(l)
-    parts[-1] <- vapply(parts[-1], cell, "")
-    paste0(paste(parts, collapse = "|"), if (grepl("\\|$", l)) "|" else "")
-  }, "", USE.NAMES = FALSE)
-  paste(lines, collapse = "\n")
 }
 
 # Whether sparklines are drawn: for modelsummary's tinytable outputs (the default, unless
@@ -620,7 +612,8 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
   out
 }
 
-.tab_unc_note <- function(unc, lines) {
+# `drawn`: sparklines are drawn (a Word file), so their lines are named as drawings
+.tab_unc_note <- function(unc, lines, drawn = FALSE) {
   if (is.null(unc) || !length(lines)) return(NULL)
   named <- c(std_error = "Standard errors in parentheses.", statistic = "Test statistics in parentheses.",
              p_value = "p-values in brackets.", conf_int = "Confidence intervals in brackets.")
@@ -633,6 +626,10 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
     for (w in names(words)) t <- gsub(paste0("{", w, "}"), words[[w]], t, fixed = TRUE)
     t
   }, "")
+  if (drawn) {
+    spark <- !vapply(.tab_sparks(unc), is.null, TRUE)
+    parts[spark] <- "confidence interval drawn as a line, the estimate as a dot, 0 as a grey rule"
+  }
   paste0("Under each estimate: ", paste(parts, collapse = "; "), ".")
 }
 

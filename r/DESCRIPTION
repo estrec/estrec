@@ -18,5 +18,5 @@ BugReports: https://github.com/estrec/estrec/issues
 Depends: R (>= 4.1)
 Imports: jsonlite, stats, utils
 Suggests: broom, fixest (>= 0.12), generics, marginaleffects, modelsummary, openssl,
-    pandoc, tinytable
+    tinytable
 Encoding: UTF-8

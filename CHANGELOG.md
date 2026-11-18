@@ -2,11 +2,14 @@
 
 ## Unreleased
 
-- R: `render_table(output = "table.docx")` writes a correct Word file. tinytable's Word output
-  goes through Markdown and pandoc, which read a cell that starts like a list item as a list:
-  the column numbers (1), (2) came out empty and the stars note lost its `*`. estrec now
-  escapes those markers (keeping the grid's widths) and calls pandoc itself, for plain
-  tables, panels and column groups. Needs the R package pandoc (now in Suggests). Tested.
+- R: `render_table(output = "table.docx")` writes the same Word file as the Python reference's
+  `render(t, "docx")` and the viewer's Save .docx: rules, column widths, term spacing, panels
+  and column groups (in `head`'s order), and sparklines as Word drawings, below or beside the
+  estimates, from the cells modelsummary computes. `width`, `font` and `term_space` go in
+  `...`. No other package needed (tinytable's Word output, through pandoc, read "(1)" and
+  "* p < 0.1" as lists). A test compares R's word/document.xml with Python's, byte for
+  byte, for 12 cases (`r/tests/docx`, written by `make_refs.py`; a Python test keeps them
+  current).
 - Viewer: a simpler table editor (Ted 2026-11-18). The sections follow the order a table is
   built in (Columns, Terms, Under each estimate, Statistics, Title and notes), and the less
   used options fold under **More** in their section: heading rows and column groups under

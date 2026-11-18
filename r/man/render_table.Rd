@@ -20,7 +20,10 @@ render_table(spec, output = "default", records = NULL, base_dir = NULL, ...)
 \code{\link{read_collection}}.}
 \item{base_dir}{the folder the spec's \code{sources} are relative to; by default the spec
 file's folder.}
-\item{...}{passed to \code{modelsummary()}.}
+\item{...}{passed to \code{modelsummary()}; for a Word file, \code{width} (inches: a table
+of fixed width, its sparklines drawn to fit; by default the table fits its contents),
+\code{font} (points, default 10) and \code{term_space} (space above each term; by default
+when no line is a sparkline).}
 }
 \details{
 Statistics rows (metrics, the vcov type or cluster counts, fixed effects, tests and text rows)
@@ -32,11 +35,11 @@ A spec with \code{panels} (Panel A, Panel B) renders each panel through modelsum
 table of its own and stacks them: \code{output = "data.frame"} gives the cells with each
 panel's label on a row of its own; other outputs give a tinytable whose row groups are the
 panels (a file output is written with \code{tinytable::save_tt()}). Sparklines in panels show
-as the interval in text.
+as the interval in text, except in a Word file.
 
 Column groups (\code{spanners}) are a first row of labels in \code{output = "data.frame"} and
-tinytable column groups (\code{tinytable::group_tt()}) otherwise, always on top; a file output
-is then written from the tinytable.
+tinytable column groups (\code{tinytable::group_tt()}) otherwise, always on top (a Word file
+follows \code{head}); a file output is then written from the tinytable.
 
 \code{significance} takes the stars' p-values from the rows' adjusted or resampling p-values
 or a test about each term (spec/table.md 5.1); a term without one shows no stars, and
@@ -49,13 +52,13 @@ tinytable outputs (\code{"default"}, \code{"tinytable"}, \code{"html"}, \code{"l
 files): an SVG in HTML and a TikZ picture in LaTeX (the document needs
 \code{\\usepackage\{tikz\}}), the same as the Python reference and the browser viewer draw,
 on the same axes. Other formats (Markdown, Typst, \code{"data.frame"}, other packages'
-tables, PDF, PNG and Word files) show the interval as \code{[low, high]}.
+tables, PDF and PNG files) show the interval as \code{[low, high]}.
 
-A Word file (\code{output = "table.docx"}) needs the R package pandoc. It is written from
-tinytable's Markdown with a cell that starts like a list item (a column number such as
-\code{(1)}, or the stars note \code{* p < 0.1}) escaped, which tinytable's own Word output
-turns into an empty list. For the Word export with sparklines drawn, use the browser viewer's
-Save .docx or the Python \code{render(t, "docx")}.
+A Word file (\code{output = "table.docx"}) is written by estrec, not modelsummary: the same
+file as the Python reference's \code{render(t, "docx")} and the browser viewer's Save .docx
+(its rules, column widths, term spacing, panels and column groups, and sparklines as Word
+drawings, beside the estimates too), with the cells modelsummary computes. It needs no other
+package.
 }
 \examples{
 \dontrun{

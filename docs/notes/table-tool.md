@@ -158,19 +158,26 @@ tested, not Windows; the earlier "real Word" checks of 2026-11-07/08 were Mac Wo
      sparklines aligned). `render(t, "docx")` / the viewer's Save .docx; sparklines are
      DrawingML paths, each mark in a shape spanning the whole drawing (a shape per mark sat
      up to 1 px off in Mac Word). Other apps opening the file: not reported yet.
-   - estrec R: `render_table(output = "x.docx")` already goes to modelsummary/tinytable,
-     but on valiant it stops with "Please install the `pandoc` package" (the R package; the
-     pandoc binary is there). Untested otherwise; no test covers it.
+   - estrec R: `render_table(output = "x.docx")` goes to modelsummary/tinytable, but needs the
+     R package `pandoc`. Ted installed it in his own library, which `dfclaude` can't read;
+     it needs a sudo install into /usr/local/lib/R/site-library. Then test it.
 2. **Web-page export outside the viewer** (`render(..., "webpage")` in Python,
    `render_table(output = "webpage")` in estrec, reusing the viewer's template). On hold
    until Ted wants it.
 3. **Ted's review in a real browser**, now that estrec.org serves the viewer. Collect rough
    edges.
-4. Possible additions:
-   - several panels (Panel A/B) or column groups ("spanners") in the spec;
-   - significance from a chosen test rather than the coefficient's p;
-   - a viewer option to reorder columns by dragging;
-   - an "open spec" round-trip test for every exported spec;
-   - per-row `digits` for estimate rows.
+4. Additions (Ted 2026-11-17: build all but per-row digits), done in chat 3166a120:
+   - ~~open-spec round-trip test~~ (704d256): `exportSpec` in estrec-table.js; every parity
+     spec exported plain/pinned, as written and "bare", reopens to the same table.
+   - ~~panels~~ (5acee26): spec `panels`, 4.1. R stacks modelsummary blocks (tinytable row
+     groups); sparklines in R panels are text.
+   - ~~column groups~~ (79671d7): spec `spanners`, 3.2; R puts them on top regardless of `head`.
+   - ~~significance~~ (8c04cd7): spec `significance`, 5.1. Ted changed the design mid-way:
+     row fields (`p_value_adjusted`, `resampling.p_value`) as well as per-term tests.
+   - ~~drag to reorder columns~~ (82f3aa2), and the heading-link fix with column groups.
+   - per-row `digits`: skipped (Ted unsure; rarely needed).
+   The viewer UI for these was driven only by a node DOM stand-in (38 steps); preview for Ted
+   at https://claude.ai/artifact/En9fanz81wP5ueYEBHkFYB (v14). R: modelsummary leaves out a
+   line blank in every column, which Python keeps (a known difference, in the R help).
 5. Leftovers from the graphics work: tinytable pads rows, so R's HTML sparkline column
    doesn't join; R ignores `reference` and draws sparklines below only (Ted: leave it).

@@ -12,6 +12,11 @@
   leave out the whole table's own settings there. A panel that sets nothing of its own asks
   what it changes (**Other terms** or **Other records**) and takes you to that section.
   Nothing in the spec or the tables changes.
+- Viewer: drag to reorder every list in the editor, by the grip (⠿) in front of each item:
+  columns, terms, lines under each estimate, statistics and heading rows; panels by their tabs.
+  Each list keeps its own drags (a statistic can't land among the terms); a hidden term
+  dragged into place is shown. The arrows stay (touch screens don't drag). Only the grip
+  starts a drag, so a column's label box selects text again.
 - Tables: panels (Panel A, Panel B; spec `panels`, spec/table.md 4.1). Each panel is a block
   of estimates under a label row, with its own terms, lines and statistics, and its own
   records if it names `columns` (as many as the table's); the top level's statistics follow

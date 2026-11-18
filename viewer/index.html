@@ -173,7 +173,12 @@ table.estrec-table tr.panel th { font-weight: normal; padding-top: 6px; }
 table.estrec-table tr.panel-rule th { border-top: 0.75px solid var(--ink); }
 .drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; }
 .dragged { opacity: 0.5; }
-#columns .item[draggable="true"] { cursor: grab; }
+.item.has-grip { grid-template-columns: auto minmax(0, 1fr) auto; }
+.grip { color: var(--muted); cursor: grab; font-size: 15px; line-height: 1; padding: 2px 1px; user-select: none; touch-action: none; }
+.grip:hover { color: var(--accent); }
+.grip.none { visibility: hidden; cursor: default; }
+.grip:active, [draggable="true"]:active { cursor: grabbing; }
+table.estrec-table thead th[draggable="true"], .panelbar .seg button[draggable="true"] { cursor: grab; }
 table.estrec-table th.spanner { background: linear-gradient(var(--ink), var(--ink)) center bottom / calc(100% - 10px) 0.75px no-repeat; }
 table.estrec-table tbody tr:last-child th, table.estrec-table tbody tr:last-child td { border-bottom: 1.5px solid var(--ink); padding-bottom: 5px; }
 table.estrec-table tfoot td { font-size: 12.5px; color: var(--muted); padding-top: 8px; white-space: normal; text-align: left; }
@@ -279,7 +284,6 @@ details.raw pre { font: 12px/1.45 var(--font-mono); background: var(--bg); paddi
             <legend id="lg-columns" data-base="Columns">Columns</legend>
             <div id="columns"></div>
             <p class="empty" id="columns-empty">Add records with <b>+ Table</b> in the list.</p>
-            <p class="hint-line">Drag a column, here or by its heading in the preview, to move it.</p>
             <details class="more" id="more-columns">
               <summary>More: heading rows, column groups</summary>
               <div class="more-body">
@@ -722,8 +726,12 @@ function renderPanels() {
     update();
   };
   const seg = el("div", { class: "seg", role: "group", "aria-label": "The part of the table the sections below edit" });
-  [[null, "Whole table"], ...ps.map((p, k) => [k, p.label || `Panel ${k + 1}`])].forEach(([k, text]) =>
-    seg.append(el("button", { type: "button", id: `edit-${k === null ? "table" : k}`, "aria-pressed": String(state.edit === k), text, onclick: () => { state.edit = k; update(); } })));
+  [[null, "Whole table"], ...ps.map((p, k) => [k, p.label || `Panel ${k + 1}`])].forEach(([k, text]) => {
+    const b = el("button", { type: "button", id: `edit-${k === null ? "table" : k}`, "aria-pressed": String(state.edit === k), text, onclick: () => { state.edit = k; update(); } });
+    // a panel's tab drags to reorder the panels; the tab being edited stays chosen
+    if (k !== null) { b.title = "Drag to reorder the panels"; dragList("panel", b, k, (a, c) => { moveTo(ps, a, c); state.edit = cur ? ps.indexOf(cur) : null; update(); }); }
+    seg.append(b);
+  });
   box.append(el("div", { class: "tabsrow" }, seg, el("button", { class: "btn small", type: "button", id: "panel-add", text: "+ Panel",
     onclick: () => { ps.push({ label: `Panel ${String.fromCharCode(65 + ps.length)}` }); state.edit = ps.length - 1; update(); } })));
   if (!cur) {
@@ -816,7 +824,7 @@ function renderHeads() {
   view.forEach((k, i) => {
     const cb = el("input", { type: "checkbox", id: `head-${k}`, checked: on.includes(k) });
     cb.addEventListener("change", () => { if (cb.checked) on.push(k); else on.splice(on.indexOf(k), 1); save(); });
-    box.append(el("div", { class: "item" + (on.includes(k) ? "" : " off") },
+    box.append(gripItem("head", on.includes(k) ? "" : "off", i, (a, b) => { moveTo(view, a, b); save(); },
       el("label", { class: "fields inline" }, cb, el("span", { text: HEAD_NAMES[k] })),
       toolButtons(view, i, save, el("span"))));
   });
@@ -904,22 +912,46 @@ function moveColumn(i, j) {
   update();
 }
 
-// a column's item or heading: drag it onto another to move it there
-const COL_DRAG = "application/x-estrec-column";
-function columnDrag(node, i) {
-  const ours = (e) => e.dataTransfer && [...(e.dataTransfer.types || [])].includes(COL_DRAG);
-  node.setAttribute("draggable", "true");
-  node.addEventListener("dragstart", (e) => { e.dataTransfer.setData(COL_DRAG, String(i)); e.dataTransfer.effectAllowed = "move"; node.classList.add("dragged"); });
-  node.addEventListener("dragend", () => node.classList.remove("dragged"));
-  node.addEventListener("dragover", (e) => { if (!ours(e)) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; node.classList.add("drop-target"); });
-  node.addEventListener("dragleave", () => node.classList.remove("drop-target"));
-  node.addEventListener("drop", (e) => {
+// drag to reorder, for every list in the editor. Each list has its own drag type, so a term
+// can't land among the statistics. With a grip, only the grip starts a drag (the item's
+// text boxes keep selecting text) and the whole item is the drop target and drag image.
+function dragList(group, item, i, onMove, grip) {
+  const type = `application/x-estrec-${group}`;
+  const ours = (e) => e.dataTransfer && [...(e.dataTransfer.types || [])].includes(type);
+  const src = grip || item;
+  src.setAttribute("draggable", "true");
+  src.addEventListener("dragstart", (e) => {
+    e.stopPropagation();
+    e.dataTransfer.setData(type, String(i));
+    e.dataTransfer.effectAllowed = "move";
+    if (grip && e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(item, 12, 12);
+    item.classList.add("dragged");
+  });
+  src.addEventListener("dragend", () => item.classList.remove("dragged"));
+  item.addEventListener("dragover", (e) => { if (!ours(e)) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; item.classList.add("drop-target"); });
+  item.addEventListener("dragleave", () => item.classList.remove("drop-target"));
+  item.addEventListener("drop", (e) => {
     if (!ours(e)) return;
     e.preventDefault(); e.stopPropagation();
-    node.classList.remove("drop-target");
-    moveColumn(Number(e.dataTransfer.getData(COL_DRAG)), i);
+    item.classList.remove("drop-target");
+    const from = Number(e.dataTransfer.getData(type));
+    if (Number.isInteger(from) && from !== i) onMove(from, i);
   });
 }
+// a list item with a grip in front: drag the grip onto another item to move it there
+function gripItem(group, cls, i, onMove, ...kids) {
+  const grip = el("span", { class: "grip", title: "Drag to move", "aria-hidden": "true", text: "⠿" });
+  const item = el("div", { class: `item has-grip ${cls || ""}`.trim() }, grip, ...kids);
+  dragList(group, item, i, onMove, grip);
+  return item;
+}
+// moving item i of a list to position j, the others closing up
+function moveTo(arr, i, j) {
+  const [x] = arr.splice(i, 1);
+  arr.splice(j, 0, x);
+}
+// a column's heading in the preview: the heading itself is the grip
+function columnDrag(node, i) { dragList("column", node, i, moveColumn); }
 
 function renderColumns(idx) {
   const box = $("columns");
@@ -960,14 +992,13 @@ function renderColumns(idx) {
     // panel's own column there
     const owns = () => (state.spec.panels || []).filter((p) => Array.isArray(p.columns)).map((p) => p.columns);
     const shift = (d) => moveColumn(i, i + d);
-    const item = el("div", { class: "item" + (rec ? "" : " off") },
+    const item = gripItem("column", rec ? "" : "off", i, moveColumn,
       el("div", { class: "fields" }, head, el("span", { class: "hint", text: columnPart(c) ? `${name} · ${columnPart(c)}` : name }), vs.length > 1 ? sel : null, sigSel),
       el("div", { class: "tools" },
         el("button", { class: "btn icon", type: "button", "aria-label": "Move left", title: "Move left", text: "↑", disabled: i === 0, onclick: () => shift(-1) }),
         el("button", { class: "btn icon", type: "button", "aria-label": "Move right", title: "Move right", text: "↓", disabled: i === cols.length - 1, onclick: () => shift(1) }),
         el("button", { class: "btn icon", type: "button", "aria-label": `Remove column ${i + 1}`, title: "Remove this column", text: "×",
           onclick: () => { cols.splice(i, 1); for (const st of valueRows()) st.values.splice(i, 1); for (const pc of owns()) pc.splice(i, 1); dropFromSpanners(i); update(); } })));
-    columnDrag(item, i);
     box.append(item);
   });
 }
@@ -1033,7 +1064,7 @@ function renderRows(idx) {
     refOn.addEventListener("change", () => { setRef(); refText.hidden = !refOn.checked; after(); });
     refText.addEventListener("input", () => { setRef(); materializeRows(view); update({ keepControls: true }); });
     refText.addEventListener("change", () => { setRef(); after(); });
-    box.append(el("div", { class: "item" + (r.on ? "" : " off") },
+    box.append(gripItem("term", r.on ? "" : "off", i, (a, b) => { moveTo(view, a, b); view[b].on = true; after(); },
       el("div", { class: "fields" },
         el("label", { class: "inline" }, on, el("span", { class: "mono", text: r.names.join(" | ") })),
         lab,
@@ -1128,7 +1159,7 @@ function renderStats(idx) {
       });
       fields.push(grid);
     }
-    box.append(el("div", { class: "item" }, el("div", { class: "fields" }, ...fields), toolButtons(s.stats, i, update)));
+    box.append(gripItem("stat", "", i, (a, b) => { moveTo(s.stats, a, b); update(); }, el("div", { class: "fields" }, ...fields), toolButtons(s.stats, i, update)));
   });
   const add = $("stat-add");
   add.replaceChildren();
@@ -1232,9 +1263,10 @@ function renderLines() {
     // the estimate is the first line of each term; it can go, leaving the lines alone
     const drop = el("button", { class: "btn icon", type: "button", "aria-label": "Remove the estimate", text: "\u00d7", disabled: !arr.length,
       title: arr.length ? "Show only the lines below" : "Add another line first", onclick: () => { blk().estimate = false; update(); } });
-    box.append(el("div", { class: "item" }, el("div", { class: "fields" }, el("span", { text: "Estimate, with stars" })), el("div", { class: "tools" }, drop)));
+    box.append(el("div", { class: "item has-grip" }, el("span", { class: "grip none", "aria-hidden": "true" }), el("div", { class: "fields" }, el("span", { text: "Estimate, with stars" })), el("div", { class: "tools" }, drop)));
   }
   if (!arr.length) box.append(el("p", { class: "empty", text: "No lines: estimates only." }));
+  const moveLine = (a, b) => { moveTo(arr, a, b); setLines(arr); update(); };
   arr.forEach((x, i) => {
     if (x && typeof x === "object") {
       const sp = Object.assign({ color: E.SPARK_COLOR, scale: "column", place: "below", align: "estimate" }, x.sparkline);
@@ -1261,12 +1293,12 @@ function renderLines() {
         save();
         update();
       });
-      box.append(el("div", { class: "item" }, el("div", { class: "fields spark-fields" }, el("span", { text: "Interval sparkline" }), color, scale, place), toolButtons(arr, i, () => { setLines(arr); update(); })));
+      box.append(gripItem("line", "", i, moveLine, el("div", { class: "fields spark-fields" }, el("span", { text: "Interval sparkline" }), color, scale, place), toolButtons(arr, i, () => { setLines(arr); update(); })));
       return;
     }
     const inp = el("input", { type: "text", id: `line-${i}`, value: E.NAMED_LINES[x] || x, "aria-label": `Line ${i + 1} under each estimate`, spellcheck: "false", class: "mono" });
     inp.addEventListener("input", () => { arr[i] = inp.value; setLines(arr); update({ keepControls: true }); });
-    box.append(el("div", { class: "item" }, el("div", { class: "fields" }, inp), toolButtons(arr, i, () => { setLines(arr); update(); })));
+    box.append(gripItem("line", "", i, moveLine, el("div", { class: "fields" }, inp), toolButtons(arr, i, () => { setLines(arr); update(); })));
   });
 }
 
@@ -1357,7 +1389,7 @@ function linkHeaders() {
     if (!it) return;
     th.classList.add("linked");
     th.tabIndex = 0;
-    th.title = recordSummary(it.record);
+    th.title = recordSummary(it.record) + "\nDrag to move the column";
     th.innerHTML = `<span>${th.innerHTML}</span>`;
     const open = () => { state.selected = it.key; state.recordVcov = ""; renderRail(); renderRecord(); showTab("record"); };
     th.addEventListener("click", open);

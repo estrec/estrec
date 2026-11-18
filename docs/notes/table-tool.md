@@ -179,5 +179,11 @@ tested, not Windows; the earlier "real Word" checks of 2026-11-07/08 were Mac Wo
    The viewer UI for these was driven only by a node DOM stand-in (38 steps); preview for Ted
    at https://claude.ai/artifact/En9fanz81wP5ueYEBHkFYB (v14). R: modelsummary leaves out a
    line blank in every column, which Python keeps (a known difference, in the R help).
+   Ted 2026-11-18: the editor felt intimidating and he couldn't find how to make Panel A/B.
+   Reorganised (viewer only, no spec change): build order, **More** folds, panel tabs and the
+   "what does this panel change" prompt (CHANGELOG). Kept the default heading rows (number +
+   dependent variable): dropping the response row would change Python and R output too.
+   Stand-in now 47 steps; preview v15. Next idea if this isn't enough: edit from the preview
+   (click a column, term or statistic).
 5. Leftovers from the graphics work: tinytable pads rows, so R's HTML sparkline column
    doesn't join; R ignores `reference` and draws sparklines below only (Ted: leave it).

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Viewer: a simpler table editor (Ted 2026-11-18). The sections follow the order a table is
+  built in (Columns, Terms, Under each estimate, Statistics, Title and notes), and the less
+  used options fold under **More** in their section: heading rows and column groups under
+  Columns; p-value format and Stars from under Under each estimate (per-column stars behind
+  "Different for each column"); the fixed-effect marker under Statistics. A fold opens by
+  itself when something in it is in use. **Split into panels** sits next to New table; panels
+  are tabs (Whole table, Panel A, ...) above the sections, which edit the chosen tab and
+  leave out the whole table's own settings there. A panel that sets nothing of its own asks
+  what it changes (**Other terms** or **Other records**) and takes you to that section.
+  Nothing in the spec or the tables changes.
 - Tables: panels (Panel A, Panel B; spec `panels`, spec/table.md 4.1). Each panel is a block
   of estimates under a label row, with its own terms, lines and statistics, and its own
   records if it names `columns` (as many as the table's); the top level's statistics follow

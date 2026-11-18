@@ -133,6 +133,21 @@ label.stack { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
 .empty { color: var(--muted); font-size: 13px; padding: 4px 0; }
 .hint-line { margin: 0; font-size: 12px; color: var(--muted); }
 .hint-line code { font-size: 11.5px; }
+/* options most tables don't need, folded under each section */
+details.more { border-top: 1px dashed var(--line); padding-top: 4px; }
+details.more > summary { cursor: pointer; font-size: 12px; color: var(--muted); padding: 2px 0; }
+details.more > summary:hover { color: var(--accent); }
+details.more[open] > summary { color: var(--ink); }
+.more-body { display: grid; gap: 6px; padding-top: 6px; }
+/* panels: a tab per part of the table, the sections below follow it */
+.panelbar { display: grid; gap: 8px; }
+.panelbar:empty { display: none; }
+.panelbar .tabsrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.panelbar .seg button { font-size: 13px; font-weight: 500; }
+.callout { display: grid; gap: 6px; padding: 8px 10px; border-radius: var(--r); background: var(--accent-soft); color: var(--ink); font-size: 13px; }
+.callout .btns { display: flex; flex-wrap: wrap; gap: 6px; }
+fieldset.flash { outline: 2px solid var(--accent); outline-offset: 6px; border-radius: 2px; }
+@media (prefers-reduced-motion: no-preference) { fieldset { transition: outline-color 0.6s; } }
 
 /* the table preview: a journal table */
 .preview-wrap { min-width: 0; display: grid; gap: 14px; }
@@ -256,32 +271,33 @@ details.raw pre { font: 12px/1.45 var(--font-mono); background: var(--bg); paddi
           <div class="builder-head">
             <button class="btn small" id="new-table" type="button">New table</button>
             <span class="hint">Clears the table; open records stay.</span>
+            <button class="btn small" id="panels-on" type="button" hidden title="Stack blocks of estimates under labels (Panel A, Panel B), each with its own terms, lines and statistics, and its own records if you like">Split into panels</button>
           </div>
+          <div id="panels" class="panelbar"></div>
+
           <fieldset>
-            <legend>Table</legend>
-            <label class="stack">Title<input type="text" id="opt-title" placeholder="Table 2: ..."></label>
-            <div class="row2">
-              <label class="stack">Stars
-                <select id="opt-stars">
-                  <option value="0.1,0.05,0.01">0.1 / 0.05 / 0.01</option>
-                  <option value="0.05,0.01,0.001">0.05 / 0.01 / 0.001</option>
-                  <option value="">None</option>
-                </select>
-              </label>
-              <label class="stack">Decimals<input type="number" id="opt-digits" min="0" max="8" value="3"></label>
-            </div>
-            <label class="stack" title="The p-value the stars use: the coefficients' own, or another the records hold (adjusted for multiple testing, from resampling, or a test about each term)">Stars from<select id="opt-sig"></select></label>
-            <label class="stack">FE marker<input type="text" id="opt-feyes" value="Y"></label>
-            <label class="stack">Notes (one per line)<textarea id="opt-notes" rows="2"></textarea></label>
+            <legend id="lg-columns" data-base="Columns">Columns</legend>
+            <div id="columns"></div>
+            <p class="empty" id="columns-empty">Add records with <b>+ Table</b> in the list.</p>
+            <p class="hint-line">Drag a column, here or by its heading in the preview, to move it.</p>
+            <details class="more" id="more-columns">
+              <summary>More: heading rows, column groups</summary>
+              <div class="more-body">
+                <div id="heads"></div>
+                <div id="responses"></div>
+                <div id="spanners"></div>
+              </div>
+            </details>
           </fieldset>
 
           <fieldset>
-            <legend>Panels</legend>
-            <div id="panels"></div>
+            <legend id="lg-terms" data-base="Terms">Terms</legend>
+            <label class="inline"><input type="checkbox" id="opt-unlisted"> Show new terms automatically</label>
+            <div id="rows"></div>
           </fieldset>
 
           <fieldset>
-            <legend id="lg-lines" data-base="Each term">Each term</legend>
+            <legend id="lg-lines" data-base="Under each estimate">Under each estimate</legend>
             <div id="lines"></div>
             <div class="addrow">
               <select id="line-add" aria-label="Line to add">
@@ -296,36 +312,23 @@ details.raw pre { font: 12px/1.45 var(--font-mono); background: var(--bg); paddi
               </select>
               <button class="btn small" id="line-add-btn" type="button">Add line</button>
             </div>
-            <p class="hint-line">Each line is a row under the estimate. Edit a line to change its format, using <code>{std_error}</code>, <code>{p_value}</code>, <code>{statistic}</code>, <code>{conf_low}</code>, <code>{conf_high}</code> or <code>{estimate}</code>.</p>
-            <div class="row2">
-              <label class="stack">p-value decimals<input type="number" id="opt-pdigits" min="0" max="8" placeholder="as above"></label>
-              <label class="stack">Small p-values
-                <select id="opt-pstyle">
-                  <option value="fixed">Rounded: 0.000</option>
-                  <option value="less_than">Bounded: &lt;0.001</option>
-                </select>
-              </label>
-            </div>
-          </fieldset>
-
-          <fieldset>
-            <legend>Heading rows</legend>
-            <div id="heads"></div>
-            <div id="responses"></div>
-            <div id="spanners"></div>
-          </fieldset>
-
-          <fieldset>
-            <legend id="lg-columns" data-base="Columns">Columns</legend>
-            <div id="columns"></div>
-            <p class="empty" id="columns-empty">Add records with <b>+ Table</b> in the list.</p>
-            <p class="hint-line">Drag a column, here or by its heading in the preview, to move it.</p>
-          </fieldset>
-
-          <fieldset>
-            <legend id="lg-terms" data-base="Terms">Terms</legend>
-            <label class="inline"><input type="checkbox" id="opt-unlisted"> Show new terms automatically</label>
-            <div id="rows"></div>
+            <details class="more" id="more-lines">
+              <summary>More: p-value format, stars from</summary>
+              <div class="more-body">
+                <p class="hint-line">Edit a line to change its format, using <code>{std_error}</code>, <code>{p_value}</code>, <code>{statistic}</code>, <code>{conf_low}</code>, <code>{conf_high}</code> or <code>{estimate}</code>.</p>
+                <div class="row2">
+                  <label class="stack">p-value decimals<input type="number" id="opt-pdigits" min="0" max="8" placeholder="as the table"></label>
+                  <label class="stack">Small p-values
+                    <select id="opt-pstyle">
+                      <option value="fixed">Rounded: 0.000</option>
+                      <option value="less_than">Bounded: &lt;0.001</option>
+                    </select>
+                  </label>
+                </div>
+                <label class="stack" title="The p-value the stars use: the coefficients' own, or another the records hold (adjusted for multiple testing, from resampling, or a test about each term)">Stars from<select id="opt-sig"></select></label>
+                <label class="inline"><input type="checkbox" id="opt-sig-cols"> Different for each column (set under Columns)</label>
+              </div>
+            </details>
           </fieldset>
 
           <fieldset>
@@ -336,7 +339,30 @@ details.raw pre { font: 12px/1.45 var(--font-mono); background: var(--bg); paddi
               <button class="btn small" id="stat-add-btn" type="button">Add</button>
             </div>
             <button class="btn small" id="stat-text" type="button">Add a text row</button>
+            <details class="more" id="more-stats">
+              <summary>More: fixed-effect marker</summary>
+              <div class="more-body">
+                <label class="stack">Shown in a fixed effect's row when a column has it<input type="text" id="opt-feyes" value="Y"></label>
+              </div>
+            </details>
           </fieldset>
+
+          <fieldset id="fs-table">
+            <legend>Title and notes</legend>
+            <label class="stack">Title<input type="text" id="opt-title" placeholder="Table 2: ..."></label>
+            <div class="row2">
+              <label class="stack">Stars
+                <select id="opt-stars">
+                  <option value="0.1,0.05,0.01">0.1 / 0.05 / 0.01</option>
+                  <option value="0.05,0.01,0.001">0.05 / 0.01 / 0.001</option>
+                  <option value="">None</option>
+                </select>
+              </label>
+              <label class="stack">Decimals<input type="number" id="opt-digits" min="0" max="8" value="3"></label>
+            </div>
+            <label class="stack">Notes (one per line)<textarea id="opt-notes" rows="2"></textarea></label>
+          </fieldset>
+          <p class="hint-line" id="panel-only" hidden>The title, notes, stars, decimals and heading rows are the whole table's: switch to <b>Whole table</b> above to change them.</p>
         </div>
 
         <div class="preview-wrap">
@@ -486,7 +512,7 @@ async function loadFiles(files, { examples = false } = {}) {
 
 function clearAll() {
   state.items = []; state.jsonl = new Map(); state.pendingDocs = []; state.selected = null;
-  state.spec = null; state.examples = false; state.loadMsgs = []; state.edit = null;
+  state.spec = null; state.examples = false; state.loadMsgs = []; state.edit = null; state.sigCols = false;
   $("example-note").hidden = true;
 }
 
@@ -572,6 +598,7 @@ function freshSpec(items) {
 
 function tableFrom(items, file) {
   state.spec = freshSpec(items);
+  state.sigCols = false;
   state.specName = null;
   state.edit = null;
   state.loadMsgs = [];
@@ -582,6 +609,7 @@ function tableFrom(items, file) {
 
 function newTable() {
   state.spec = E.newSpec([]);
+  state.sigCols = false;
   state.specName = null;
   state.edit = null;
   state.loadMsgs = [];
@@ -660,16 +688,33 @@ function valueRows() {
   return [s, ...(s.panels || [])].flatMap((x) => (x.stats || []).filter((st) => Array.isArray(st.values)));
 }
 
+// a section of the controls, brought into view and outlined for a moment
+function point(id) {
+  const fs = $(id) && $(id).closest ? $(id).closest("fieldset") : null;
+  if (!fs) return;
+  if (fs.scrollIntoView) fs.scrollIntoView({ block: "start", behavior: "smooth" });
+  fs.classList.add("flash");
+  setTimeout(() => fs.classList.remove("flash"), 1600);
+}
+
+// panels: a tab for the whole table and one per panel; the sections below edit the chosen one.
+// A panel that sets nothing of its own repeats the table, so its tab asks what it changes.
+function splitPanels() {
+  const s = state.spec;
+  if (!s || !s.columns.length) return;
+  s.panels = [{ label: "Panel A" }, { label: "Panel B" }];
+  state.edit = 1;
+  update();
+}
+
 function renderPanels() {
   const box = $("panels");
   box.replaceChildren();
   const s = state.spec;
   const ps = s.panels || [];
-  if (!ps.length) {
-    box.append(el("p", { class: "hint-line", text: "Stack blocks of estimates under labels (Panel A, Panel B), each with its own terms, lines and statistics, and its own records if you like." }),
-      el("button", { class: "btn small", type: "button", id: "panels-on", text: "Split into panels", onclick: () => { s.panels = [{ label: "Panel A" }, { label: "Panel B" }]; state.edit = 0; update(); } }));
-    return;
-  }
+  $("panels-on").hidden = ps.length > 0;
+  $("panels-on").disabled = !s.columns.length;
+  if (!ps.length) return;
   const cur = blk() === s ? null : blk();
   const after = () => {
     if (!ps.length) delete s.panels;
@@ -679,19 +724,38 @@ function renderPanels() {
   const seg = el("div", { class: "seg", role: "group", "aria-label": "The part of the table the sections below edit" });
   [[null, "Whole table"], ...ps.map((p, k) => [k, p.label || `Panel ${k + 1}`])].forEach(([k, text]) =>
     seg.append(el("button", { type: "button", id: `edit-${k === null ? "table" : k}`, "aria-pressed": String(state.edit === k), text, onclick: () => { state.edit = k; update(); } })));
-  box.append(el("p", { class: "hint-line", text: "Each term, Columns, Terms and Statistics below edit:" }), seg);
-  ps.forEach((p, k) => {
-    const lab = el("input", { type: "text", id: `panel-label-${k}`, value: p.label || "", placeholder: `Panel ${String.fromCharCode(65 + k)}`, "aria-label": `Label for panel ${k + 1}` });
-    lab.addEventListener("input", () => { p.label = lab.value; update({ keepControls: true }); });
-    lab.addEventListener("change", () => update());
-    const own = E.PANEL_FIELDS.filter((f) => f in p);
-    const what = [p.columns ? "own columns" : "", own.length ? "own terms or lines" : "", (p.stats || []).length ? `${p.stats.length} statistics` : ""].filter(Boolean).join(" · ");
-    const reset = own.length ? el("button", { class: "btn small", type: "button", id: `panel-reset-${k}`, text: "Use the table's terms and lines",
-      onclick: () => { for (const f of E.PANEL_FIELDS) delete p[f]; update(); } }) : null;
-    box.append(el("div", { class: "item" }, el("div", { class: "fields" }, lab, what ? el("span", { class: "hint", text: what }) : null, reset), toolButtons(ps, k, after)));
-  });
-  box.append(el("button", { class: "btn small", type: "button", id: "panel-add", text: "+ Panel",
-    onclick: () => { ps.push({ label: `Panel ${String.fromCharCode(65 + ps.length)}` }); state.edit = ps.length - 1; update(); } }));
+  box.append(el("div", { class: "tabsrow" }, seg, el("button", { class: "btn small", type: "button", id: "panel-add", text: "+ Panel",
+    onclick: () => { ps.push({ label: `Panel ${String.fromCharCode(65 + ps.length)}` }); state.edit = ps.length - 1; update(); } })));
+  if (!cur) {
+    box.append(el("p", { class: "hint-line", text: "Editing the whole table: its columns, terms and lines are every panel's unless the panel sets its own, and its statistics go under all the panels." }));
+    return;
+  }
+  const k = ps.indexOf(cur), p = cur;
+  const lab = el("input", { type: "text", id: `panel-label-${k}`, value: p.label || "", placeholder: `Panel ${String.fromCharCode(65 + k)}`, "aria-label": `Label for panel ${k + 1}` });
+  lab.addEventListener("input", () => { p.label = lab.value; update({ keepControls: true }); });
+  lab.addEventListener("change", () => update());
+  const own = E.PANEL_FIELDS.filter((f) => f in p);
+  const what = [p.columns ? "its own records" : "", own.length ? "its own terms or lines" : "", (p.stats || []).length ? `${p.stats.length} statistics` : ""].filter(Boolean).join(" · ");
+  const reset = own.length ? el("button", { class: "btn small", type: "button", id: `panel-reset-${k}`, text: "Use the table's terms and lines",
+    onclick: () => { for (const f of E.PANEL_FIELDS) delete p[f]; update(); } }) : null;
+  box.append(el("div", { class: "item" }, el("div", { class: "fields" }, el("label", { class: "stack" }, "Panel label", lab),
+    el("span", { class: "hint", text: what ? `Shows ${what}.` : "" }), reset), toolButtons(ps, k, after)));
+  if (!p.columns && !own.length && !(p.stats || []).length) {
+    const name = p.label || `Panel ${k + 1}`;
+    box.append(el("div", { class: "callout", id: "panel-ask" },
+      el("span", { text: `${name} shows the whole table's records and terms, so it repeats the others. What should it change?` }),
+      el("div", { class: "btns" },
+        el("button", { class: "btn small", type: "button", id: "panel-ask-terms", text: "Other terms",
+          title: "Same records; tick the terms this panel shows",
+          onclick: () => { materializeRows(termRows(index())); update(); point("rows"); toast(`Untick the terms ${name} leaves out`); } }),
+        el("button", { class: "btn small", type: "button", id: "panel-ask-records", text: "Other records",
+          title: "Other models in the same columns (another outcome or sample, say)",
+          onclick: () => { ownColumns(p); update(); point("columns"); toast(`Pick ${name}'s record for each column`); } }))));
+  }
+}
+
+function ownColumns(b) {
+  b.columns = state.spec.columns.map((c) => { const x = JSON.parse(JSON.stringify(c)); delete x.header; return x; });
 }
 
 // a panel's columns: the table's, or its own records, one per column
@@ -701,7 +765,7 @@ function renderPanelColumns(b) {
   if (!b.columns) {
     box.append(el("p", { class: "hint-line", text: "This panel shows the table's columns. Give it its own to show other records in the same columns (another outcome or sample, say)." }),
       el("button", { class: "btn small", type: "button", id: "panel-own-cols", text: "Give this panel its own columns",
-        onclick: () => { b.columns = state.spec.columns.map((c) => { const x = JSON.parse(JSON.stringify(c)); delete x.header; return x; }); update(); } }));
+        onclick: () => { ownColumns(b); update(); } }));
     return;
   }
   const known = new Set((state.spec.sources || []).map((x) => x.id));
@@ -883,7 +947,7 @@ function renderColumns(idx) {
     // the stars' p-values for this column, when the records offer a choice
     const choices = sigChoices(idx);
     let sigSel = null;
-    if (choices.length > 1 || "significance" in c) {
+    if ((choices.length > 1 && sigPerColumn()) || "significance" in c) {
       sigSel = el("select", { id: `col-sig-${i}`, "aria-label": `Stars from, column ${i + 1}` });
       fillSigSelect(sigSel, choices, "significance" in c ? JSON.stringify(c.significance) : "table", [{ value: "table", text: "Stars: as the table" }]);
       sigSel.addEventListener("change", () => { if (sigSel.value === "table") delete c.significance; else c.significance = JSON.parse(sigSel.value); update({ keepControls: true }); });
@@ -1097,6 +1161,11 @@ function sigChoices(idx) {
   return out;
 }
 
+// stars from a different source in some columns: asked for, or already in the spec
+function sigPerColumn() {
+  return !!state.sigCols || (state.spec.columns || []).some((c) => "significance" in c);
+}
+
 function fillSigSelect(sel, choices, current, extra) {
   sel.replaceChildren();
   for (const x of extra || []) sel.append(el("option", { value: x.value, text: x.text }));
@@ -1207,6 +1276,7 @@ async function renderTable({ keepControls = false } = {}) {
   msgs.replaceChildren();
   for (const m of state.loadMsgs || []) msgs.append(el("div", { class: `msg ${m.level}`, text: m.message }));
   if (!state.spec) {
+    $("panels-on").hidden = true;
     $("preview").replaceChildren(el("p", { class: "empty", text: "Open records, then add them as columns." }));
     $("export-text").value = "";
     return;
@@ -1214,9 +1284,22 @@ async function renderTable({ keepControls = false } = {}) {
   const idx = index();
   if (!keepControls) {
     writeOptions(); renderPanels(); renderLines(); renderHeads(); renderResponses(idx); renderSpanners(); renderColumns(idx); renderRows(idx); renderStats(idx);
-    // the sections a panel can set say which part they edit
+    // the sections a panel can set say which part they edit; the whole table's own settings
+    // are left out on a panel's tab
     const b = blk(), named = b === state.spec ? ((state.spec.panels || []).length ? "whole table" : "") : b.label || `panel ${state.edit + 1}`;
     for (const id of ["lg-lines", "lg-columns", "lg-terms", "lg-stats"]) $(id).textContent = $(id).dataset.base + (named ? ` \u2014 ${named}` : "");
+    const onPanel = b !== state.spec;
+    for (const id of ["fs-table", "more-columns", "more-lines", "more-stats"]) $(id).hidden = onPanel;
+    $("panel-only").hidden = !onPanel;
+    // a fold opens by itself when something in it is in use (it never closes by itself)
+    const s = state.spec, f = s.format || {};
+    const used = {
+      "more-columns": !!(s.head || s.response_labels || (s.spanners || []).length),
+      "more-lines": f.p_digits !== undefined || !!f.p_style || (s.significance !== undefined && s.significance !== null) || sigPerColumn(),
+      "more-stats": !!f.fe_yes,
+    };
+    for (const [id, on] of Object.entries(used)) if (on) $(id).open = true;
+    $("opt-sig-cols").checked = sigPerColumn();
   }
   if (!state.spec.columns.length) {
     $("preview").replaceChildren(el("p", { class: "empty", text: "No columns yet: add records with + Table." }));
@@ -1456,6 +1539,13 @@ $("file-input").addEventListener("change", (e) => { loadFiles([...e.target.files
 $("folder-input").addEventListener("change", (e) => { loadFiles([...e.target.files]); e.target.value = ""; });
 $("load-examples").addEventListener("click", loadExamples);
 $("new-table").addEventListener("click", newTable);
+$("panels-on").addEventListener("click", splitPanels);
+$("opt-sig-cols").addEventListener("change", () => {
+  state.sigCols = $("opt-sig-cols").checked;
+  if (!state.sigCols) for (const c of state.spec.columns || []) delete c.significance;
+  update();
+  if (state.sigCols) point("columns");
+});
 $("clear").addEventListener("click", () => { clearAll(); renderAll(); });
 $("load-spec").addEventListener("click", () => $("spec-input").click());
 $("spec-input").addEventListener("change", async (e) => {

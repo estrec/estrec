@@ -872,3 +872,52 @@ def test_panels_docx(width):
         spans = [int(m.group(1)) if m else 1 for m in (re.search(r'<w:gridSpan w:val="(\d+)"', tc) for tc in re.findall(r"<w:tc>.*?</w:tc>", tr))]
         assert sum(spans) == len(grid)
     assert doc.count("<w:i/>") == 2 and "Panel B" in doc
+
+
+def spanner_spec():
+    s = spec()
+    s["spanners"] = [{"label": "OLS", "columns": [1, 1]}, {"label": "Robust", "columns": [2, 3]}]
+    return s
+
+
+def test_spanners_build_and_render():
+    t = et.build_table(spanner_spec(), base_dir=EXAMPLES)
+    assert [h["kind"] for h in t["head"]] == ["spanner", "number", "response"]
+    assert t["head"][0]["cells"] == ["OLS", "Robust", ""]
+    assert t["head"][0]["spans"] == [{"label": "OLS", "first": 0, "last": 0}, {"label": "Robust", "first": 1, "last": 2}]
+    page = et.render(t, "html")
+    assert '<th colspan="1" class="spanner">OLS</th><th colspan="2" class="spanner">Robust</th>' in page
+    latex = et.render(t, "latex")
+    assert "\\multicolumn{1}{c}{OLS} & \\multicolumn{2}{c}{Robust} \\\\\n\\cmidrule(lr){2-2} \\cmidrule(lr){3-4}" in latex
+    text = et.render(t, "text").splitlines()
+    assert text[1].strip().split() == ["OLS", "Robust"] and set(text[2].strip()) == {"-", " "}
+    word = et.render(t, "word", width=6.5)
+    assert 'colspan="2" style="padding:0 5.4pt;border:none;white-space:nowrap;font-size:10pt;text-align:center;border-top:1.5pt solid windowtext;border-bottom:.75pt solid windowtext' in word
+    assert et.render(t, "csv").splitlines()[0] == ",OLS,Robust,"
+
+
+def test_spanners_validate():
+    s = spanner_spec()
+    s["spanners"] += [{"label": "x", "columns": [3, 4]}, {"label": "y", "columns": [1, 1]}, {"columns": [1, 1]}]
+    got = {(i.path, i.message) for i in et.validate_table(s, schema=None)}
+    assert ("spanners[2].columns", "[first, last], column numbers from 1 to 3") in got
+    assert ("spanners[3].columns", "column 1 is in spanners[0] too") in got
+    assert ("spanners[4]", "a column group needs a `label` (text)") in got
+    s = spanner_spec()
+    s["head"] = ["number", "response"]
+    assert [i.path for i in et.validate_table(s, schema=None)] == ["spanners"]
+    assert et.validate_table(spanner_spec(), base_dir=EXAMPLES) == []
+
+
+def test_spanners_docx_and_great_tables():
+    import re
+
+    t = et.build_table(spanner_spec(), base_dir=EXAMPLES)
+    doc = docx_xml(et.render(t, "docx", width=6.5))
+    grid = re.findall(r'<w:gridCol w:w="(\d+)"/>', doc)
+    for tr in re.findall(r"<w:tr>.*?</w:tr>", doc):
+        spans = [int(m.group(1)) if m else 1 for m in (re.search(r'<w:gridSpan w:val="(\d+)"', tc) for tc in re.findall(r"<w:tc>.*?</w:tc>", tr))]
+        assert sum(spans) == len(grid)
+    pytest.importorskip("great_tables")
+    g = et.to_great_table(t)
+    assert [(s.spanner_label, s.vars) for s in g._spanners] == [("OLS", ["(1)"]), ("Robust", ["(2)", "(3)"])]

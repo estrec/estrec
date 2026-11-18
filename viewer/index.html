@@ -156,6 +156,7 @@ table.estrec-table tbody tr.estimate:not(:first-child) th, table.estrec-table tb
 table.estrec-table tr.first-stat th, table.estrec-table tr.first-stat td { border-top: 0.75px solid var(--ink); padding-top: 5px; }
 table.estrec-table tr.panel th { font-weight: normal; padding-top: 6px; }
 table.estrec-table tr.panel-rule th { border-top: 0.75px solid var(--ink); }
+table.estrec-table th.spanner { background: linear-gradient(var(--ink), var(--ink)) center bottom / calc(100% - 10px) 0.75px no-repeat; }
 table.estrec-table tbody tr:last-child th, table.estrec-table tbody tr:last-child td { border-bottom: 1.5px solid var(--ink); padding-bottom: 5px; }
 table.estrec-table tfoot td { font-size: 12.5px; color: var(--muted); padding-top: 8px; white-space: normal; text-align: left; }
 
@@ -306,6 +307,7 @@ details.raw pre { font: 12px/1.45 var(--font-mono); background: var(--bg); paddi
             <legend>Heading rows</legend>
             <div id="heads"></div>
             <div id="responses"></div>
+            <div id="spanners"></div>
           </fieldset>
 
           <fieldset>
@@ -725,18 +727,20 @@ function columnRecords(idx) {
   return (blkView().columns || []).map((c) => { const f = c.record ? (c.source && idx.get(c.source + "\u0000" + c.record)) || idx.get(c.record) : null; return f ? f.record : null; });
 }
 
-const HEAD_NAMES = { number: "Numbers: (1), (2), ...", response: "Dependent variable", label: "Labels (set under Columns)" };
+const HEAD_NAMES = { number: "Numbers: (1), (2), ...", response: "Dependent variable", label: "Labels (set under Columns)", spanner: "Column groups (set below)" };
+// the heading rows shown when the spec doesn't list them: column groups on top when there are any
+const defaultHead = (s) => [...((s.spanners || []).length ? ["spanner"] : []), ...E.DEFAULT_HEAD];
 
 // heading rows: the ones shown, top to bottom, then the ones switched off
 function renderHeads() {
   const box = $("heads");
   box.replaceChildren();
   const s = state.spec;
-  const on = (s.head || E.DEFAULT_HEAD).slice();
+  const on = (s.head || defaultHead(s)).slice();
   const view = [...on, ...E.HEAD_KINDS.filter((k) => !on.includes(k))];
   const save = () => {
     const head = view.filter((k) => on.includes(k));
-    if (head.join() === E.DEFAULT_HEAD.join()) delete s.head; else s.head = head;
+    if (head.join() === defaultHead(s).join()) delete s.head; else s.head = head;
     update();
   };
   view.forEach((k, i) => {
@@ -762,7 +766,7 @@ function renderResponses(idx) {
     const n = E.columnResponse(c, f.record, rows, {});
     if (n && !names.includes(n)) names.push(n);
   });
-  if (!names.length || !(s.head || E.DEFAULT_HEAD).includes("response")) return;
+  if (!names.length || !(s.head || defaultHead(s)).includes("response")) return;
   box.append(el("p", { class: "hint-line", text: "Dependent variable names (blank keeps the record's):" }));
   names.forEach((n, i) => {
     const inp = el("input", { type: "text", id: `resp-${i}`, value: (s.response_labels || {})[n] || "", placeholder: n, "aria-label": `Name shown for ${n}` });
@@ -774,6 +778,48 @@ function renderResponses(idx) {
     });
     box.append(el("div", { class: "item" }, el("label", { class: "fields" }, el("span", { class: "hint", text: n }), inp), el("span")));
   });
+}
+
+// column groups: a label over a run of columns (numbered as the headings), with a rule under it
+function renderSpanners() {
+  const box = $("spanners");
+  box.replaceChildren();
+  const s = state.spec;
+  const n = s.columns.length;
+  const groups = s.spanners || [];
+  const save = () => { if (!groups.length) delete s.spanners; else s.spanners = groups; update(); };
+  if (groups.length) box.append(el("p", { class: "hint-line", text: "Column groups: a label over columns, first to last:" }));
+  groups.forEach((g, i) => {
+    const lab = el("input", { type: "text", id: `span-label-${i}`, value: g.label, "aria-label": `Label of column group ${i + 1}` });
+    lab.addEventListener("input", () => { g.label = lab.value; update({ keepControls: true }); });
+    const num = (k, what) => {
+      const inp = el("input", { type: "number", id: `span-${what}-${i}`, min: "1", max: String(n), value: String(g.columns[k]), style: "width:4em", "aria-label": `${what === "first" ? "First" : "Last"} column of group ${i + 1}` });
+      inp.addEventListener("change", () => { const v = parseInt(inp.value, 10); if (Number.isInteger(v)) { g.columns[k] = v; save(); } });
+      return inp;
+    };
+    box.append(el("div", { class: "item" }, el("div", { class: "fields" }, lab, el("span", { class: "hint", text: "columns" }), num(0, "first"), el("span", { text: "to" }), num(1, "last")),
+      el("div", { class: "tools" }, el("button", { class: "btn icon", type: "button", "aria-label": `Remove column group ${i + 1}`, text: "\u00d7", onclick: () => { groups.splice(i, 1); save(); } }))));
+  });
+  // a new group over the first column no group has
+  const used = new Set(groups.flatMap((g) => Array.from({ length: g.columns[1] - g.columns[0] + 1 }, (_, k) => g.columns[0] + k)));
+  let free = 1;
+  while (used.has(free)) free++;
+  box.append(el("button", { class: "btn small", type: "button", id: "span-add", text: "+ Column group", disabled: !n || free > n,
+    title: "A label over a run of columns, with a rule under it (OLS over (1)-(2), say)",
+    onclick: () => { groups.push({ label: "Group", columns: [free, free] }); save(); } }));
+}
+
+// removing column i (from 0): groups after it move left, a group holding it shrinks, an empty one goes
+function dropFromSpanners(i) {
+  const s = state.spec;
+  if (!s.spanners) return;
+  const c = i + 1;
+  for (const g of s.spanners) {
+    if (c < g.columns[0]) { g.columns[0]--; g.columns[1]--; }
+    else if (c <= g.columns[1]) g.columns[1]--;
+  }
+  s.spanners = s.spanners.filter((g) => g.columns[0] <= g.columns[1]);
+  if (!s.spanners.length) delete s.spanners;
 }
 
 function renderColumns(idx) {
@@ -813,7 +859,7 @@ function renderColumns(idx) {
         el("button", { class: "btn icon", type: "button", "aria-label": "Move left", title: "Move left", text: "↑", disabled: i === 0, onclick: () => shift(-1) }),
         el("button", { class: "btn icon", type: "button", "aria-label": "Move right", title: "Move right", text: "↓", disabled: i === cols.length - 1, onclick: () => shift(1) }),
         el("button", { class: "btn icon", type: "button", "aria-label": `Remove column ${i + 1}`, title: "Remove this column", text: "×",
-          onclick: () => { cols.splice(i, 1); for (const st of valueRows()) st.values.splice(i, 1); for (const pc of owns()) pc.splice(i, 1); update(); } }))));
+          onclick: () => { cols.splice(i, 1); for (const st of valueRows()) st.values.splice(i, 1); for (const pc of owns()) pc.splice(i, 1); dropFromSpanners(i); update(); } }))));
   });
 }
 
@@ -1089,7 +1135,7 @@ async function renderTable({ keepControls = false } = {}) {
   }
   const idx = index();
   if (!keepControls) {
-    writeOptions(); renderPanels(); renderLines(); renderHeads(); renderResponses(idx); renderColumns(idx); renderRows(idx); renderStats(idx);
+    writeOptions(); renderPanels(); renderLines(); renderHeads(); renderResponses(idx); renderSpanners(); renderColumns(idx); renderRows(idx); renderStats(idx);
     // the sections a panel can set say which part they edit
     const b = blk(), named = b === state.spec ? ((state.spec.panels || []).length ? "whole table" : "") : b.label || `panel ${state.edit + 1}`;
     for (const id of ["lg-lines", "lg-columns", "lg-terms", "lg-stats"]) $(id).textContent = $(id).dataset.base + (named ? ` \u2014 ${named}` : "");

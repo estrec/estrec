@@ -49,6 +49,7 @@ key words MUST, SHOULD and MAY are as in `spec/estrec.md` section 1.1. Schema:
 | `sources` | optional | where to find the records (2) |
 | `columns` | required | one entry per column, left to right (3) |
 | `head`, `response_labels` | optional | the heading rows (3.1) |
+| `spanners` | optional | column groups: a label over a run of columns (3.2) |
 | `rows` | optional | the terms to show, in order, with labels (4) |
 | `keep`, `drop`, `keep_unlisted` | optional | which other terms to show (4) |
 | `uncertainty` | optional | the lines under each estimate (5); default `"std_error"` |
@@ -99,13 +100,26 @@ say).
   rows have (a first stage's), else the record's `meta.responses` joined with `", "`.
   `response_labels` MAY give display names, `{"fare_log": "log(fare)"}`;
 - `"label"`: the column's `header`, else its collection member's label, else the record's
-  title.
+  title;
+- `"spanner"`: the column groups (3.2).
 
-The default is `["number", "response"]`. `["label", "number", "response"]` puts labels on
+The default is `["number", "response"]`, with `"spanner"` first when the spec has column
+groups. `["label", "number", "response"]` puts labels on
 top; `["number", "label"]` shows them instead of the dependent variable; `[]` gives no
 heading. A `response` or `label` row that would be blank in every column is left out. The
 stub (the row labels' column) is blank in heading rows. Formats with one heading row
 (Markdown) show the first as the heading and the others at the top of the body.
+
+### 3.2 Column groups
+
+`spanners` puts a label over a run of columns, with a rule under it:
+`[{"label": "OLS", "columns": [1, 2]}, {"label": "IV", "columns": [3, 4]}]`. `columns` is
+`[first, last]`, numbered from 1 as the `(1)`, `(2)` headings, both included. Groups don't
+overlap; columns outside every group are blank in that row. The groups are the `"spanner"`
+heading row (3.1); a `head` without it leaves them out (a warning). Renderers draw each label
+centred over its columns with a rule under it that stops short of its ends (LaTeX
+`\cmidrule(lr)`); formats without merged cells (CSV, Markdown) put the label in the group's
+first column. estrec for R puts the groups on top whatever their place in `head`.
 
 ## 4. Rows
 
@@ -235,7 +249,8 @@ be found, a `source` naming no source, duplicate source ids, a `keep`/`drop` pat
 doesn't compile, a literal row whose `values` don't match the columns, and an `uncertainty`
 line that is neither a name nor a template, or uses an unknown placeholder, and a `head`
 entry that isn't `number`, `response` or `label` or appears twice, and a panel without a
-`label` or whose `columns` aren't as many as the table's (a panel's own columns, patterns,
-lines and literal rows are checked as the top level's are). As **warnings**: a
+`label` or whose `columns` aren't as many as the table's, a column group without a `label`,
+outside the columns or overlapping another, (a panel's own columns, patterns,
+lines and literal rows are checked as the top level's are). As **warnings**: column groups that `head` leaves out, a
 column whose record's hash isn't its `sha256`, a vcov a record doesn't have, a row term that
 no column has, and a metric, fixed effect or test that no column's record has.

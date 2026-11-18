@@ -179,4 +179,20 @@ if (dir.exists(ex)) {
   bad <- spec; bad$panels[[2]]$columns <- bad$panels[[2]]$columns[1:2]
   stopifnot(grepl("2 columns; the table has 3", tryCatch(render_table(bad, base_dir = ex), error = conditionMessage)))
 }
+# column groups (spec/table.md 3.2): a label row in the data frame (each label in its first
+# column, as the Python reference's spanner cells), tinytable column groups otherwise
+if (dir.exists(ex)) {
+  spec <- jsonlite::fromJSON(file.path(ex, "paper.estrec-table.json"), simplifyVector = FALSE)
+  spec$spanners <- list(list(label = "OLS", columns = list(1, 1)), list(label = "Robust", columns = list(2, 3)))
+  x <- render_table(spec, output = "data.frame", base_dir = ex)
+  stopifnot(identical(unname(unlist(x[1, 4:6])), c("OLS", "Robust", "")),
+            identical(cells(x, "Weight (1000 lbs)"), c("-3.206***", "-3.181***", "-3.310***")))
+  md <- paste(utils::capture.output(print(render_table(spec, base_dir = ex), "markdown")), collapse = "\n")
+  stopifnot(grepl("| OLS       | Robust                |", md, fixed = TRUE))
+  spec$head <- list("number", "response")
+  x <- render_table(spec, output = "data.frame", base_dir = ex)
+  stopifnot(!any(unlist(x[, 4:6]) %in% c("OLS", "Robust")))  # groups left out of head
+  spec$spanners[[2]]$columns <- list(1, 3)
+  stopifnot(grepl("another group", tryCatch(render_table(spec, base_dir = ex), error = conditionMessage)))
+}
 cat("test-table: ok\n")

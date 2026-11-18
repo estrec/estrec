@@ -34,6 +34,10 @@ panel's label on a row of its own; other outputs give a tinytable whose row grou
 panels (a file output is written with \code{tinytable::save_tt()}). Sparklines in panels show
 as the interval in text.
 
+Column groups (\code{spanners}) are a first row of labels in \code{output = "data.frame"} and
+tinytable column groups (\code{tinytable::group_tt()}) otherwise, always on top; a file output
+is then written from the tinytable.
+
 Sparkline lines (\code{{"sparkline": {color, scale}}}) are drawn for modelsummary's
 tinytable outputs (\code{"default"}, \code{"tinytable"}, \code{"html"}, \code{"latex"},
 \code{"markdown"}, \code{"typst"} and \code{.html}, \code{.tex}, \code{.md}, \code{.typ}

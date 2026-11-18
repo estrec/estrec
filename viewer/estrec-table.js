@@ -451,6 +451,29 @@
     return (col.source && idx.get(col.source + "\u0000" + col.record)) || idx.get(col.record) || null;
   }
 
+  // column groups (spec/table.md 3.2): a label over columns [first, last], numbered from 1 as
+  // the (1), (2) headings; ranges in the table and not overlapping
+  function spannerIssues(spec, n) {
+    const sp = spec.spanners;
+    if (sp === undefined || sp === null) return [];
+    if (!Array.isArray(sp)) return [issue("error", "spanners", "a list of {label, columns: [first, last]}")];
+    const out = [];
+    const taken = new Map();
+    sp.forEach((g, j) => {
+      const path = `spanners[${j}]`;
+      if (!g || typeof g !== "object" || typeof g.label !== "string") { out.push(issue("error", path, "a column group needs a `label` (text)")); return; }
+      const c = g.columns;
+      const ok = Array.isArray(c) && c.length === 2 && c.every((x) => Number.isInteger(x));
+      if (!ok || !(1 <= c[0] && c[0] <= c[1] && c[1] <= n)) { out.push(issue("error", `${path}.columns`, `[first, last], column numbers from 1 to ${n}`)); return; }
+      for (let k = c[0]; k <= c[1]; k++) {
+        if (taken.has(k)) { out.push(issue("error", `${path}.columns`, `column ${k} is in spanners[${taken.get(k)}] too`)); break; }
+        taken.set(k, j);
+      }
+    });
+    if (sp.length && Array.isArray(spec.head) && !spec.head.includes("spanner")) out.push(issue("warning", "spanners", "not shown: `head` has no 'spanner' row"));
+    return out;
+  }
+
   // a panel's own settings, each the top level's unless it sets it (spec/table.md 4.1)
   const PANEL_FIELDS = ["rows", "keep", "drop", "keep_unlisted", "estimate", "uncertainty"];
 
@@ -528,12 +551,13 @@
     out.push(...columnIssues(cols, ids, "columns"));
     out.push(...blockIssues(spec, "", null));
     if (spec.head !== undefined && spec.head !== null) {
-      if (!Array.isArray(spec.head)) out.push(issue("error", "head", "a list of 'number', 'response', 'label'"));
+      if (!Array.isArray(spec.head)) out.push(issue("error", "head", "a list of 'number', 'response', 'label', 'spanner'"));
       else spec.head.forEach((k, j) => {
-        if (!HEAD_KINDS.includes(k)) out.push(issue("error", `head[${j}]`, `'${k}' is not one of 'number', 'response', 'label'`));
+        if (!HEAD_KINDS.includes(k)) out.push(issue("error", `head[${j}]`, `'${k}' is not one of 'number', 'response', 'label', 'spanner'`));
         else if (spec.head.indexOf(k) !== j) out.push(issue("error", `head[${j}]`, `'${k}' appears twice`));
       });
     }
+    out.push(...spannerIssues(spec, cols.length));
     out.push(...statsIssues(spec.stats || [], cols.length, "stats"));
     let panels = spec.panels;
     if (panels !== undefined && panels !== null) {
@@ -598,7 +622,7 @@
     return out;
   }
 
-  const HEAD_KINDS = ["number", "response", "label"];
+  const HEAD_KINDS = ["number", "response", "label", "spanner"];
   const REFERENCE_TEXT = "—"; // a reference row's text with "reference": true
   const DEFAULT_HEAD = ["number", "response"];
 
@@ -657,9 +681,25 @@
 
   // The heading rows, top to bottom (spec `head`); a response or label row that would be
   // empty in every column is left out.
+  // the heading rows, top to bottom (spec head; with column groups, by default spanner,
+  // number, response); a spanner row has each group's label in its first column and
+  // spans [{label, first, last}] with columns counted from 0
   function headRows(spec, cols) {
     const out = [];
-    for (const kind of spec.head || DEFAULT_HEAD) {
+    const groups = spec.spanners || [];
+    for (const kind of spec.head || [...(groups.length ? ["spanner"] : []), ...DEFAULT_HEAD]) {
+      if (kind === "spanner") {
+        if (!groups.length) continue;
+        const cells = cols.map(() => "");
+        const spans = [];
+        for (const g of groups.slice().sort((a, b) => a.columns[0] - b.columns[0])) {
+          const first = g.columns[0] - 1, last = g.columns[1] - 1;
+          cells[first] = g.label;
+          spans.push({ label: g.label, first, last });
+        }
+        out.push({ kind: "spanner", cells, spans });
+        continue;
+      }
       const cells = cols.map((c) => c[kind]);
       if (kind !== "number" && !cells.some(Boolean)) continue;
       out.push({ kind, cells });
@@ -1068,6 +1108,19 @@
     return own.map((x) => `\\multicolumn{2}{c}{${x}}`);
   }
 
+  // a spanner row as [label, columns spanned] cells left to right; columns outside a group are
+  // blank cells of one column
+  function spannerCells(h, n) {
+    const starts = new Map(h.spans.map((g) => [g.first, g]));
+    const out = [];
+    for (let j = 0; j < n;) {
+      const g = starts.get(j);
+      if (g) { out.push([g.label, g.last - g.first + 1]); j = g.last + 1; }
+      else { out.push(["", 1]); j++; }
+    }
+    return out;
+  }
+
   function renderLatex(t, opts) {
     const e = opts && opts.escape === false ? (s) => String(s) : tex;
     const n = t.header.length;
@@ -1076,7 +1129,15 @@
     lines.push("\\begin{table}[htbp]", "\\centering");
     if (t.title) lines.push(`\\caption{${e(t.title)}}`);
     lines.push(`\\begin{tabular}{l${(plan ? "cc" : "c").repeat(n)}}`, "\\toprule");
-    for (const h of t.head) lines.push(" & " + h.cells.map((x) => (plan ? `\\multicolumn{2}{c}{${e(x)}}` : e(x))).join(" & ") + " \\\\");
+    const per = plan ? 2 : 1;
+    for (const h of t.head) {
+      if (h.kind === "spanner") {
+        lines.push(" & " + spannerCells(h, n).map(([label, k]) => (label || per > 1 ? `\\multicolumn{${k * per}}{c}{${e(label)}}` : "")).join(" & ") + " \\\\");
+        lines.push(h.spans.map((g) => `\\cmidrule(lr){${2 + g.first * per}-${1 + (g.last + 1) * per}}`).join(" "));
+        continue;
+      }
+      lines.push(" & " + h.cells.map((x) => (plan ? `\\multicolumn{2}{c}{${e(x)}}` : e(x))).join(" & ") + " \\\\");
+    }
     lines.push("\\midrule");
     let prev = null;
     t.rows.forEach((r, i) => {
@@ -1137,7 +1198,9 @@
     const span = plan ? ' colspan="2"' : "";
     const out = ['<table class="estrec-table">'];
     if (t.title) out.push(`<caption>${h(t.title)}</caption>`);
-    out.push("<thead>" + t.head.map((r) => `<tr class="head-${r.kind}"><th></th>` + r.cells.map((x) => `<th${span}>${h(x)}</th>`).join("") + "</tr>").join("") + "</thead>");
+    out.push("<thead>" + t.head.map((r) => `<tr class="head-${r.kind}"><th></th>` + (r.kind === "spanner"
+      ? spannerCells(r, t.header.length).map(([label, k]) => `<th colspan="${k * (plan ? 2 : 1)}"` + (label ? ' class="spanner">' : ">") + `${h(label)}</th>`).join("")
+      : r.cells.map((x) => `<th${span}>${h(x)}</th>`).join("")) + "</tr>").join("") + "</thead>");
     out.push("<tbody>");
     let prev = null;
     const rows = t.rows;
@@ -1182,15 +1245,38 @@
   }
 
   function renderText(t) {
+    const n = t.header.length;
     const head = t.head.map((h) => ["", ...h.cells]);
     const body = t.rows.map((r) => [r.label, ...r.cells]);
-    const rows = [...head, ...body, Array(t.header.length + 1).fill("")];
+    const plain = head.filter((_, k) => t.head[k].kind !== "spanner");
+    const rows = [...plain, ...body, Array(n + 1).fill("")];
     const widths = rows[0].map((_, i) => Math.max(...rows.map((r) => r[i].length)));
+    // a group's label fits over its columns (the last one widens if need be)
+    for (const h of t.head) for (const g of h.spans || []) {
+      let have = 2 * (g.last - g.first);
+      for (let i = 1 + g.first; i <= 1 + g.last; i++) have += widths[i];
+      widths[1 + g.last] += Math.max(0, g.label.length - have);
+    }
     const line = (r) => r.map((c, i) => (i === 0 ? c.padEnd(widths[0]) : c.padStart(widths[i]))).join("  ").replace(/\s+$/, "");
+    // each group's label centred over its columns, and a rule under it
+    const spanner = (h) => {
+      const top = [" ".repeat(widths[0])], under = [" ".repeat(widths[0])];
+      let j = 1;
+      for (const [label, k] of spannerCells(h, n)) {
+        let w = 2 * (k - 1);
+        for (let i = j; i < j + k; i++) w += widths[i];
+        const pad = Math.max(0, w - label.length);
+        top.push(" ".repeat(Math.floor(pad / 2)) + label + " ".repeat(pad - Math.floor(pad / 2)));
+        under.push((label ? "-" : " ").repeat(w));
+        j += k;
+      }
+      return [top.join("  ").replace(/\s+$/, ""), under.join("  ").replace(/\s+$/, "")];
+    };
     const rule = widths.map((w) => "-".repeat(w)).join("  ");
     const out = [];
     if (t.title) out.push(t.title);
-    out.push(...head.map(line), rule);
+    t.head.forEach((h, k) => out.push(...(h.kind === "spanner" ? spanner(h) : [line(head[k])])));
+    out.push(rule);
     let prev = null;
     t.rows.forEach((src, i) => {
       if (src.kind === "panel" && prev !== null) out.push(rule);
@@ -1270,6 +1356,13 @@
     t.head.forEach((hr, k) => {
       const top = k === 0 ? "1.5pt" : "";
       const bottom = k === nh - 1 ? ".75pt" : "";
+      if (hr.kind === "spanner") {
+        const per = plan ? 2 : 1;
+        const cells = [wordCell("", { left: true, top, bottom, styleExtra: W ? wd(W.label) : "", font: fs })];
+        for (const [label, kk] of spannerCells(hr, t.header.length)) cells.push(wordCell(label, { left: false, top, bottom: label || bottom ? ".75pt" : "", attrs: kk * per > 1 ? ` colspan="${kk * per}"` : "", styleExtra: W ? wd(W.col * kk) : "", font: fs }));
+        out.push("<tr>" + cells.join("") + "</tr>");
+        return;
+      }
       out.push("<tr>" + ["", ...hr.cells].map((x, i) => wordCell(x, { left: i === 0, top, bottom, attrs: i ? span : "", styleExtra: W ? wd(i ? W.col : W.label) : "", font: fs })).join("") + "</tr>");
     });
     const rows = t.rows;
@@ -1483,6 +1576,15 @@
       const top = k === 0 ? 12 : 0;
       const bottom = k === nh - 1 ? 6 : 0;
       const cells = [dxTc(dxP("", sz), { width: tw(0), top, bottom })];
+      if (hr.kind === "spanner") {
+        let col = 1;
+        for (const [label, kk] of spannerCells(hr, n)) {
+          cells.push(dxTc(dxP(dxRun(label, sz), sz, "center"), { width: tw(col, kk * per), span: kk * per, top, bottom: label || bottom ? 6 : 0 }));
+          col += kk * per;
+        }
+        out.push("<w:tr><w:trPr><w:cantSplit/><w:tblHeader/></w:trPr>" + cells.join("") + "</w:tr>");
+        return;
+      }
       hr.cells.forEach((x, j) => cells.push(dxTc(dxP(dxRun(x, sz), sz, "center"), { width: tw(1 + per * j, per), span: per, top, bottom })));
       out.push("<w:tr><w:trPr><w:cantSplit/><w:tblHeader/></w:trPr>" + cells.join("") + "</w:tr>");
     });
@@ -1759,6 +1861,7 @@ table.estrec-table tbody tr.estimate:not(:first-child) th, table.estrec-table tb
 table.estrec-table tr.first-stat th, table.estrec-table tr.first-stat td { border-top: 0.75px solid var(--ink); padding-top: 5px; }
 table.estrec-table tr.panel th { font-weight: normal; padding-top: 6px; }
 table.estrec-table tr.panel-rule th { border-top: 0.75px solid var(--ink); }
+table.estrec-table th.spanner { background: linear-gradient(var(--ink), var(--ink)) center bottom / calc(100% - 10px) 0.75px no-repeat; }
 table.estrec-table tbody tr:last-child th, table.estrec-table tbody tr:last-child td { border-bottom: 1.5px solid var(--ink); padding-bottom: 5px; }
 table.estrec-table tfoot td { font-size: 13px; color: var(--muted); padding-top: 8px; white-space: normal; text-align: left; }
 button.col { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; border-bottom: 1px dotted var(--muted); }

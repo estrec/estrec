@@ -243,6 +243,28 @@ def specs():
     s["estimate"] = True
     out.append(s)
     out += panel_specs()
+    out += spanner_specs()
+    return out
+
+
+def spanner_specs():
+    """Column groups (spec/table.md 3.2): the default head (groups on top); beside sparklines
+    with the groups under the numbers; a table with panels and groups."""
+    base = et.read_table(EXAMPLES / "paper.estrec-table.json")
+    s = copy.deepcopy(base)
+    s["spanners"] = [{"label": "OLS", "columns": [1, 1]}, {"label": "Heteroskedasticity-robust", "columns": [2, 3]}]
+    out = [s]
+    s = copy.deepcopy(base)
+    s.update(
+        uncertainty=["std_error", {"sparkline": {"place": "beside"}}],
+        spanners=[{"label": "Robust", "columns": [2, 3]}],
+        head=["number", "spanner", "response"],
+    )
+    out.append(s)
+    s = copy.deepcopy(panel_specs()[0])
+    s["spanners"] = [{"label": "A", "columns": [1, 2]}]
+    s["head"] = ["spanner", "number"]
+    out.append(s)
     return out
 
 
@@ -365,10 +387,12 @@ def test_renderers_match_python(node_result):
         pytest.skip("node not installed")
     all_specs = specs()
     sparks = [s for s in all_specs if "sparkline" in json.dumps(s.get("uncertainty"))]
-    assert len(sparks) == 16
+    assert len(sparks) == 17
     panels = [s for s in all_specs if "panels" in s]
-    assert len(panels) == 3
-    for spec in [all_specs[0]] + [s for s in all_specs if "head" in s] + sparks + panels:
+    assert len(panels) == 4
+    groups = [s for s in all_specs if "spanners" in s]
+    assert len(groups) == 3
+    for spec in [all_specs[0]] + [s for s in all_specs if "head" in s] + sparks + panels + groups:
         py = et.build_table(spec, base_dir=EXAMPLES)
         script = (
             "const E=require(process.argv[1]);const t=JSON.parse(require('fs').readFileSync(0,'utf8'));"

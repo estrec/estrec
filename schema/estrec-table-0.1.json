@@ -93,9 +93,9 @@
     },
     "stats": {"type": "array", "items": {"$ref": "#/$defs/stat"}},
     "head": {
-      "description": "The heading rows, top to bottom: column numbers (1), (2), ...; the dependent variable; the column labels (`header`, else the member label, else the record's title). Default [\"number\", \"response\"]; [] for none.",
+      "description": "The heading rows, top to bottom: column numbers (1), (2), ...; the dependent variable; the column labels (`header`, else the member label, else the record's title). A `spanner` row shows the column groups (`spanners`). Default [\"number\", \"response\"], with `spanner` on top when there are column groups; [] for none.",
       "type": "array",
-      "items": {"enum": ["number", "response", "label"]},
+      "items": {"enum": ["number", "response", "label", "spanner"]},
       "uniqueItems": true
     },
     "response_labels": {
@@ -116,6 +116,19 @@
         "p_style": {"enum": ["fixed", "less_than"], "description": "fixed: 0.000; less_than: <0.001 below the smallest value p_digits can show. Default fixed."}
       },
       "additionalProperties": false
+    },
+    "spanners": {
+      "description": "Column groups: a label over a run of columns, numbered from 1 as the (1), (2) headings, first and last included; groups don't overlap. Shown as the `spanner` heading row (by default the top one).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["label", "columns"],
+        "additionalProperties": false,
+        "properties": {
+          "label": {"type": "string"},
+          "columns": {"type": "array", "items": {"type": "integer", "minimum": 1}, "minItems": 2, "maxItems": 2}
+        }
+      }
     },
     "panels": {
       "description": "Blocks of estimates stacked under labels (Panel A, Panel B). Each panel takes the top level's columns, rows, keep, drop, keep_unlisted, estimate and uncertainty unless it sets its own; its stats are its own, and the top level's stats follow all the panels.",

@@ -9,6 +9,11 @@
   through modelsummary blocks and tinytable row groups). The viewer's **Panels** section
   splits a table into panels, and Each term, Columns, Terms and Statistics edit the panel
   picked there.
+- Tables: column groups (spec `spanners`, spec/table.md 3.2): a label over a run of columns
+  with a rule under it, as the `spanner` heading row (on top by default). Text, Markdown,
+  CSV, LaTeX (`\cmidrule(lr)`), HTML, Word, .docx, great_tables (`tab_spanner`) and R
+  (tinytable `group_tt`). The viewer edits them under Heading rows; removing a column
+  renumbers them.
 - Viewer: the Table spec export is `exportSpec` in estrec-table.js; a test reopens every
   exported spec (open-spec round trip). Export now names sources for panels' columns too.
 

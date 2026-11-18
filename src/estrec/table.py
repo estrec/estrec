@@ -353,15 +353,16 @@ def _structural(spec: dict) -> list[Issue]:
     head = spec.get("head")
     if head is not None:
         if not isinstance(head, list):
-            out.append(Issue("error", "head", "a list of 'number', 'response', 'label'"))
+            out.append(Issue("error", "head", "a list of 'number', 'response', 'label', 'spanner'"))
         else:
             for j, k in enumerate(head):
                 if k not in HEAD_KINDS:
                     out.append(
-                        Issue("error", f"head[{j}]", f"{k!r} is not one of 'number', 'response', 'label'")
+                        Issue("error", f"head[{j}]", f"{k!r} is not one of 'number', 'response', 'label', 'spanner'")
                     )
                 elif head.index(k) != j:
                     out.append(Issue("error", f"head[{j}]", f"{k!r} appears twice"))
+    out += _spanner_issues(spec, len(cols))
     out += _stats_issues(spec.get("stats") or [], len(cols), "stats")
     panels = spec.get("panels")
     if panels is not None:
@@ -385,6 +386,37 @@ def _structural(spec: dict) -> list[Issue]:
             view = dict(spec, **{f: pn[f] for f in PANEL_FIELDS if f in pn})
             out += _block_issues(view, f"{pre}.", only=[f for f in PANEL_FIELDS if f in pn])
             out += _stats_issues(pn.get("stats") or [], len(cols), f"{pre}.stats")
+    return out
+
+
+def _spanner_issues(spec: dict, n: int) -> list[Issue]:
+    """Column groups (spec/table.md 3.2): a label over columns [first, last], numbered from 1
+    as the (1), (2) headings; ranges in the table and not overlapping."""
+    sp = spec.get("spanners")
+    if sp is None:
+        return []
+    if not isinstance(sp, list):
+        return [Issue("error", "spanners", "a list of {label, columns: [first, last]}")]
+    out = []
+    taken: dict[int, int] = {}
+    for j, g in enumerate(sp):
+        path = f"spanners[{j}]"
+        if not isinstance(g, dict) or not isinstance(g.get("label"), str):
+            out.append(Issue("error", path, "a column group needs a `label` (text)"))
+            continue
+        c = g.get("columns")
+        ok = isinstance(c, list) and len(c) == 2 and all(isinstance(x, int) and not isinstance(x, bool) for x in c)
+        if not ok or not 1 <= c[0] <= c[1] <= n:
+            out.append(Issue("error", f"{path}.columns", f"[first, last], column numbers from 1 to {n}"))
+            continue
+        for k in range(c[0], c[1] + 1):
+            if k in taken:
+                out.append(Issue("error", f"{path}.columns", f"column {k} is in spanners[{taken[k]}] too"))
+                break
+            taken[k] = j
+    head = spec.get("head")
+    if sp and isinstance(head, list) and "spanner" not in head:
+        out.append(Issue("warning", "spanners", "not shown: `head` has no 'spanner' row"))
     return out
 
 
@@ -877,7 +909,7 @@ def _stars(p: float, thresholds: list[float], symbols: list[str]) -> str:
     return out
 
 
-HEAD_KINDS = ("number", "response", "label")
+HEAD_KINDS = ("number", "response", "label", "spanner")
 REFERENCE_TEXT = "—"  # a reference row's text with `"reference": true`
 DEFAULT_HEAD = ["number", "response"]
 
@@ -950,10 +982,24 @@ def _column_response(c: dict, record: dict, rows: list[dict], labels: dict) -> s
 
 
 def _head_rows(spec: dict, cols: list[dict]) -> list[dict]:
-    """The heading rows, top to bottom (spec `head`); a response or label row that would be
-    empty in every column is left out."""
+    """The heading rows, top to bottom (spec `head`; with column groups, by default
+    `["spanner", "number", "response"]`); a response or label row that would be empty in every
+    column is left out. A spanner row has each group's label in its first column and `spans`,
+    [{"label", "first", "last"}] with columns counted from 0."""
+    groups = spec.get("spanners") or []
     out = []
-    for kind in spec.get("head", DEFAULT_HEAD):
+    for kind in spec.get("head", (["spanner"] if groups else []) + DEFAULT_HEAD):
+        if kind == "spanner":
+            if not groups:
+                continue
+            cells = [""] * len(cols)
+            spans = []
+            for g in sorted(groups, key=lambda g: g["columns"][0]):
+                first, last = g["columns"][0] - 1, g["columns"][1] - 1
+                cells[first] = g["label"]
+                spans.append({"label": g["label"], "first": first, "last": last})
+            out.append({"kind": "spanner", "cells": cells, "spans": spans})
+            continue
         cells = [c[kind] for c in cols]
         if kind != "number" and not any(cells):
             continue
@@ -1243,6 +1289,30 @@ def _latex_beside(t: dict, plan: dict, i: int, e) -> list[str]:
     return [f"\\multicolumn{{2}}{{c}}{{{x}}}" for x in own]
 
 
+def _spanner_cells(h: dict, n: int) -> list[tuple[str, int]]:
+    """A spanner row as (label, columns spanned) cells left to right; columns outside a group
+    are blank cells of one column."""
+    starts = {g["first"]: g for g in h["spans"]}
+    out = []
+    j = 0
+    while j < n:
+        g = starts.get(j)
+        if g:
+            out.append((g["label"], g["last"] - g["first"] + 1))
+            j = g["last"] + 1
+        else:
+            out.append(("", 1))
+            j += 1
+    return out
+
+
+def _latex_spanner(h: dict, n: int, per: int, e) -> list[str]:
+    return [
+        f"\\multicolumn{{{k * per}}}{{c}}{{{e(label)}}}" if label or per > 1 else ""
+        for label, k in _spanner_cells(h, n)
+    ]
+
+
 def _render_latex(t: dict, escape: bool = True) -> str:
     e = _tex if escape else (lambda s: s)
     n = len(t["header"])
@@ -1252,7 +1322,14 @@ def _render_latex(t: dict, escape: bool = True) -> str:
     if t["title"]:
         lines.append(f"\\caption{{{e(t['title'])}}}")
     lines += [f"\\begin{{tabular}}{{l{('cc' if plan else 'c') * n}}}", "\\toprule"]
+    per = 2 if plan else 1
     for h in t["head"]:
+        if h["kind"] == "spanner":
+            lines.append(" & " + " & ".join(_latex_spanner(h, n, per, e)) + " \\\\")
+            lines.append(
+                " ".join(f"\\cmidrule(lr){{{2 + g['first'] * per}-{1 + (g['last'] + 1) * per}}}" for g in h["spans"])
+            )
+            continue
         cells = [f"\\multicolumn{{2}}{{c}}{{{e(x)}}}" if plan else e(x) for x in h["cells"]]
         lines.append(" & " + " & ".join(cells) + " \\\\")
     lines.append("\\midrule")
@@ -1366,7 +1443,14 @@ def _render_html(t: dict) -> str:
         "<thead>"
         + "".join(
             f'<tr class="head-{r["kind"]}"><th></th>'
-            + "".join(f"<th{span}>{h(x)}</th>" for x in r["cells"])
+            + (
+                "".join(
+                    f'<th colspan="{k * (2 if plan else 1)}"' + (' class="spanner">' if label else ">") + f"{h(label)}</th>"
+                    for label, k in _spanner_cells(r, len(t["header"]))
+                )
+                if r["kind"] == "spanner"
+                else "".join(f"<th{span}>{h(x)}</th>" for x in r["cells"])
+            )
             + "</tr>"
             for r in t["head"]
         )
@@ -1450,21 +1534,41 @@ def _render_csv(t: dict) -> str:
 
 
 def _render_text(t: dict) -> str:
+    n = len(t["header"])
     head = [[""] + h["cells"] for h in t["head"]]
     body = [[r["label"]] + r["cells"] for r in t["rows"]]
-    rows = head + body + [[""] * (len(t["header"]) + 1)]
+    plain = [r for r, h in zip(head, t["head"]) if h["kind"] != "spanner"]
+    rows = plain + body + [[""] * (n + 1)]
     widths = [max(len(r[i]) for r in rows) for i in range(len(rows[0]))]
+    # a group's label fits over its columns (the last one widens if need be)
+    for h in t["head"]:
+        for g in h.get("spans") or []:
+            have = sum(widths[1 + g["first"] : 2 + g["last"]]) + 2 * (g["last"] - g["first"])
+            widths[1 + g["last"]] += max(0, len(g["label"]) - have)
 
     def line(r):
         return "  ".join(
             c.ljust(widths[0]) if i == 0 else c.rjust(widths[i]) for i, c in enumerate(r)
         ).rstrip()
 
+    def spanner(h):
+        # each group's label centred over its columns, and a rule under it
+        top, under, j = [" " * widths[0]], [" " * widths[0]], 1
+        for label, k in _spanner_cells(h, n):
+            w = sum(widths[j : j + k]) + 2 * (k - 1)
+            pad = max(0, w - len(label))
+            top.append(" " * (pad // 2) + label + " " * (pad - pad // 2))
+            under.append(("-" if label else " ") * w)
+            j += k
+        return ["  ".join(top).rstrip(), "  ".join(under).rstrip()]
+
     rule = "  ".join("-" * w for w in widths)
     out = []
     if t["title"]:
         out.append(t["title"])
-    out += [line(r) for r in head] + [rule]
+    for r, h in zip(head, t["head"]):
+        out += spanner(h) if h["kind"] == "spanner" else [line(r)]
+    out.append(rule)
     prev = None
     for r, src in zip(body, t["rows"]):
         if src["kind"] == "panel" and prev is not None:
@@ -1581,6 +1685,23 @@ def _render_word(t: dict, width: float | None = None, font: float = 10, term_spa
     for k, hr in enumerate(t["head"]):
         top = "1.5pt" if k == 0 else ""
         bottom = ".75pt" if k == nh - 1 else ""
+        if hr["kind"] == "spanner":
+            per = 2 if plan else 1
+            cells = [_word_cell("", left=True, top=top, bottom=bottom, style_extra=wd(W["label"]) if W else "", font=fs)]
+            for label, kk in _spanner_cells(hr, len(t["header"])):
+                cells.append(
+                    _word_cell(
+                        label,
+                        left=False,
+                        top=top,
+                        bottom=".75pt" if label or bottom else "",
+                        attrs=f' colspan="{kk * per}"' if kk * per > 1 else "",
+                        style_extra=wd(W["col"] * kk) if W else "",
+                        font=fs,
+                    )
+                )
+            out.append("<tr>" + "".join(cells) + "</tr>")
+            continue
         out.append(
             "<tr>"
             + "".join(
@@ -1948,6 +2069,21 @@ def _docx_document(t: dict, width: float | None = None, font: float = 10, term_s
         top = 12 if k == 0 else 0
         bottom = 6 if k == nh - 1 else 0
         cells = [_dx_tc(_dx_p("", sz), width=tw(0), top=top, bottom=bottom)]
+        if hr["kind"] == "spanner":
+            col = 1
+            for label, kk in _spanner_cells(hr, n):
+                cells.append(
+                    _dx_tc(
+                        _dx_p(_dx_run(label, sz), sz, "center"),
+                        width=tw(col, kk * per),
+                        span=kk * per,
+                        top=top,
+                        bottom=6 if label or bottom else 0,
+                    )
+                )
+                col += kk * per
+            out.append("<w:tr><w:trPr><w:cantSplit/><w:tblHeader/></w:trPr>" + "".join(cells) + "</w:tr>")
+            continue
         for j, x in enumerate(hr["cells"]):
             cells.append(
                 _dx_tc(_dx_p(_dx_run(x, sz), sz, "center"), width=tw(1 + per * j, per), span=per, top=top, bottom=bottom)
@@ -2192,13 +2328,17 @@ def to_great_table(table: dict):
             }
         )
     g = gt.GT(frame)
-    if table["head"]:
+    plain = [r for r in table["head"] if r["kind"] != "spanner"]
+    if plain:
         g = g.cols_label(
             **{
-                h: gt.html("<br>".join(html.escape(r["cells"][i]) for r in table["head"]))
+                h: gt.html("<br>".join(html.escape(r["cells"][i]) for r in plain))
                 for i, h in enumerate(table["header"])
             }
         )
+    for r in table["head"]:
+        for sp in r.get("spans") or []:
+            g = g.tab_spanner(label=sp["label"], columns=table["header"][sp["first"] : sp["last"] + 1])
     if table["title"]:
         g = g.tab_header(title=table["title"])
     for n in table["notes"]:

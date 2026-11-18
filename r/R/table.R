@@ -124,15 +124,23 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
                stars = star_arg, fmt = digits, gof_omit = ".*", add_rows = add_rows)
   if (!is.null(spec$title)) args$title <- spec$title
   if (length(notes)) args$notes <- as.list(notes)
-  if (!draws) {
+  spans <- .tab_spans(spec, length(cols))
+  if (!draws && (is.null(spans) || identical(output, "data.frame"))) {
     out <- do.call(modelsummary::modelsummary, c(args, list(...)))
     if (empty) { out <- out[out$term != none, , drop = FALSE]; rownames(out) <- NULL }
+    if (length(spans) && is.data.frame(out)) {
+      top <- out[1, , drop = FALSE]
+      top[1, ] <- c("manual", "", "", .tab_span_row(spans, length(cols)))
+      out <- rbind(top, out)
+      rownames(out) <- NULL
+    }
     return(out)
   }
   file <- !output %in% c("default", "tinytable", "html", "latex", "markdown", "typst")
   if (file) args$output <- "tinytable"
-  x <- .tab_draw(do.call(modelsummary::modelsummary, c(args, list(...))), tidies, sparks,
-                 digits, p_digits, p_style, missing)
+  x <- do.call(modelsummary::modelsummary, c(args, list(...)))
+  if (draws) x <- .tab_draw(x, tidies, sparks, digits, p_digits, p_style, missing)
+  x <- .tab_group_cols(x, spans)
   if (!file) return(x)
   tinytable::save_tt(x, output, overwrite = TRUE)
   invisible(x)
@@ -199,6 +207,41 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
   })
 }
 
+# Column groups shown (spec/table.md 3.2): a list of list(label, first, last), columns from 1,
+# sorted; NULL when there are none or `head` leaves them out. Checked as the Python reference does.
+.tab_spans <- function(spec, n) {
+  groups <- spec$spanners
+  if (!length(groups)) return(NULL)
+  taken <- integer()
+  for (j in seq_along(groups)) {
+    g <- groups[[j]]
+    if (!is.character(g$label)) stop("spanners[", j - 1, "]: a column group needs a `label` (text)", call. = FALSE)
+    c <- unlist(g$columns)
+    if (length(c) != 2L || any(c != round(c)) || c[1] < 1 || c[1] > c[2] || c[2] > n)
+      stop("spanners[", j - 1, "].columns: [first, last], column numbers from 1 to ", n, call. = FALSE)
+    if (any(c[1]:c[2] %in% taken)) stop("spanners[", j - 1, "].columns: columns in another group too", call. = FALSE)
+    taken <- c(taken, c[1]:c[2])
+  }
+  if ("head" %in% names(spec) && !"spanner" %in% unlist(spec$head)) return(NULL)
+  spans <- lapply(groups, function(g) list(label = g$label, first = as.integer(g$columns[[1]]), last = as.integer(g$columns[[2]])))
+  spans[order(vapply(spans, function(g) g$first, 0L))]
+}
+
+# the groups as a row of cells: each label in its group's first column
+.tab_span_row <- function(spans, n) {
+  cells <- rep("", n)
+  for (g in spans) cells[g$first] <- g$label
+  cells
+}
+
+# tinytable column groups over the model columns (after the stub column)
+.tab_group_cols <- function(x, spans) {
+  if (!length(spans) || !inherits(x, "tinytable")) return(x)
+  j <- lapply(spans, function(g) g$first:g$last + 1L)
+  names(j) <- vapply(spans, function(g) g$label, "")
+  tinytable::group_tt(x, j = j)
+}
+
 # a panel's own settings, each the top level's unless it sets it (spec/table.md 4.1)
 .tab_panel_fields <- c("rows", "keep", "drop", "keep_unlisted", "estimate", "uncertainty")
 
@@ -250,6 +293,8 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
   notes <- c(unlist(spec$notes), notes)
   headers <- if (length(head)) head[[1]] else rep("", n)
   top <- head[-1]
+  spans <- .tab_spans(spec, n)
+  if (length(spans) && identical(output, "data.frame")) top <- c(list(.tab_span_row(spans, n)), top)
   if (identical(output, "data.frame")) {
     lab <- character(); out <- NULL
     starts <- unlist(at)
@@ -270,6 +315,7 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
   x <- do.call(tinytable::tt, args)
   if (!is.null(rule)) x <- tinytable::style_tt(x, i = rule + length(top) - 1L, line = "b", line_width = 0.05)
   x <- tinytable::group_tt(x, i = lapply(at, function(r) r + length(top)))
+  x <- .tab_group_cols(x, spans)
   x <- tryCatch(tinytable::style_tt(x, i = "groupi", italic = TRUE), error = function(e) x)
   if (output %in% c("default", "tinytable", "html", "latex", "markdown", "typst")) return(x)
   tinytable::save_tt(x, output, overwrite = TRUE)
@@ -382,14 +428,14 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
     "}")
 }
 
-.tab_head_kinds <- c("number", "response", "label")
+.tab_head_kinds <- c("number", "response", "label", "spanner")
 
 # The heading rows' cells, top to bottom: a list of character vectors, one per row; a
 # response or label row blank in every column is left out.
 .tab_head <- function(spec, cols, found, tidies) {
   kinds <- if ("head" %in% names(spec)) as.character(unlist(spec$head)) else c("number", "response")
   bad <- setdiff(kinds, .tab_head_kinds)
-  if (length(bad)) stop("head: '", bad[1], "' is not one of 'number', 'response', 'label'", call. = FALSE)
+  if (length(bad)) stop("head: '", bad[1], "' is not one of 'number', 'response', 'label', 'spanner'", call. = FALSE)
   if (anyDuplicated(kinds)) stop("head: '", kinds[anyDuplicated(kinds)], "' appears twice", call. = FALSE)
   labels <- spec$response_labels %||% list()
   cells <- list(
@@ -407,6 +453,7 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
     label = vapply(seq_along(cols), function(i)
       as.character(cols[[i]]$header %||% attr(found[[i]], "member")$label %||% found[[i]]$meta$title %||% ""), "")
   )
+  kinds <- setdiff(kinds, "spanner")  # column groups: .tab_spans()
   out <- lapply(kinds, function(k) cells[[k]])
   Filter(Negate(is.null), Map(function(k, x) if (k != "number" && !any(nzchar(x))) NULL else x, kinds, out))
 }

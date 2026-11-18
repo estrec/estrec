@@ -54,7 +54,7 @@ NAMED_LINES = {
     "p_value": "[{p_value}]",
     "conf_int": "[{conf_low}, {conf_high}]",
 }
-PLACEHOLDERS = ("estimate", "std_error", "statistic", "p_value", "conf_low", "conf_high")
+PLACEHOLDERS = ("estimate", "std_error", "statistic", "p_value", "conf_low", "conf_high", "star_p")
 _PLACEHOLDER = re.compile(r"\{([^{}]*)\}")
 _NAMED_NOTES = {
     "std_error": "Standard errors in parentheses.",
@@ -69,6 +69,7 @@ _WORDS = {
     "p_value": "p-value",
     "conf_low": "lower bound",
     "conf_high": "upper bound",
+    "star_p": "p-value of the stars",
 }
 
 
@@ -363,6 +364,7 @@ def _structural(spec: dict) -> list[Issue]:
                 elif head.index(k) != j:
                     out.append(Issue("error", f"head[{j}]", f"{k!r} appears twice"))
     out += _spanner_issues(spec, len(cols))
+    out += _sig_issues(spec.get("significance"), "significance")
     out += _stats_issues(spec.get("stats") or [], len(cols), "stats")
     panels = spec.get("panels")
     if panels is not None:
@@ -387,6 +389,20 @@ def _structural(spec: dict) -> list[Issue]:
             out += _block_issues(view, f"{pre}.", only=[f for f in PANEL_FIELDS if f in pn])
             out += _stats_issues(pn.get("stats") or [], len(cols), f"{pre}.stats")
     return out
+
+
+SIG_ROW = ("p_value_adjusted", "resampling")
+
+
+def _sig_issues(sig: Any, path: str) -> list[Issue]:
+    """`significance` (spec/table.md 5.1): "p_value_adjusted", "resampling", {test, value} or null."""
+    if sig is None or sig in SIG_ROW:
+        return []
+    if isinstance(sig, dict) and isinstance(sig.get("test"), str) and set(sig) <= {"test", "value"}:
+        if sig.get("value", "p_value") in ("p_value", "p_value_adjusted"):
+            return []
+        return [Issue("error", f"{path}.value", "'p_value' or 'p_value_adjusted'")]
+    return [Issue("error", path, "'p_value_adjusted', 'resampling', or {test, value}")]
 
 
 def _spanner_issues(spec: dict, n: int) -> list[Issue]:
@@ -433,6 +449,8 @@ def _column_issues(cols: list, ids: list, path: str) -> list[Issue]:
             out.append(Issue("error", f"{path}[{i}].source", f"no source {c['source']!r}"))
         if isinstance(c, dict) and "mediation" in c and not isinstance(c["mediation"], bool):
             out.append(Issue("error", f"{path}[{i}].mediation", "true or false"))
+        if isinstance(c, dict) and "significance" in c:
+            out += _sig_issues(c["significance"], f"{path}[{i}].significance")
     return out
 
 
@@ -481,6 +499,54 @@ def _panel_specs(spec: dict) -> list[dict]:
         v["panel_label"] = pn.get("label", "")
         out.append(v)
     return out
+
+
+def _sig_of(spec: dict, col: dict) -> Any:
+    """The p-value a column's stars use: its own `significance`, else the table's."""
+    return col["significance"] if "significance" in col else spec.get("significance")
+
+
+def _sig_p(sig: Any, r: dict, c: dict) -> float | None:
+    """The p-value for row r's stars and {star_p}: the coefficient's; the row's adjusted or
+    resampling p-value; or the named test's about this term alone. None when missing."""
+    if sig is None:
+        x = r.get("p_value")
+    elif sig == "p_value_adjusted":
+        x = r.get("p_value_adjusted")
+    elif sig == "resampling":
+        x = r.get("resampling_p_value")
+    else:
+        rec = c["found"].record
+        tests = [t for t in rec.get("tests") or [] if list(t.get("terms") or []) == [r["term"]]]
+        col = c["spec"]
+        if col.get("response"):
+            tests = [t for t in tests if t.get("response") in (None, col["response"])]
+        t = next((t for t in tests if t.get("label") == sig["test"]), None) or next(
+            (t for t in tests if t.get("name") == sig["test"]), None
+        )
+        x = t.get(sig.get("value", "p_value")) if t else None
+    x = _num(x) if x is not None else math.nan
+    return None if math.isnan(x) else x
+
+
+def _sig_what(sig: Any) -> str:
+    """A missing p-value, for warnings."""
+    if sig == "p_value_adjusted":
+        return "adjusted p-value"
+    if sig == "resampling":
+        return "resampling p-value"
+    return f"{sig['test']} test" + (" adjusted p-value" if sig.get("value") == "p_value_adjusted" else "")
+
+
+def _sig_desc(sig: Any) -> str:
+    if sig is None:
+        return "the coefficients' p-values"
+    if sig == "p_value_adjusted":
+        return "p-values adjusted for multiple testing"
+    if sig == "resampling":
+        return "resampling p-values"
+    adj = " adjusted" if sig.get("value") == "p_value_adjusted" else ""
+    return f"the {sig['test']} test's{adj} p-values"
 
 
 def validate_table(
@@ -656,7 +722,7 @@ def _fill(template: str, row: dict, digits: int, p_digits: int, p_style: str, mi
         x = row.get(name, math.nan)
         if x is None or math.isnan(x):
             return missing
-        vals[name] = _p_value(x, p_digits, p_style) if name == "p_value" else _fixed(x, digits)
+        vals[name] = _p_value(x, p_digits, p_style) if name in ("p_value", "star_p") else _fixed(x, digits)
     return _PLACEHOLDER.sub(lambda m: vals[m.group(1)], template)
 
 
@@ -919,6 +985,17 @@ def _column_rows(record: dict, c: dict) -> list[dict]:
     `response`; `mediation: true` keeps only effect rows (`parameters[*].mediation`), false
     leaves them out."""
     rows = tidy(record, vcov=c.get("vcov"), component=c.get("component"))
+    # the rows' other p-values (spec/table.md 5.1), from the parameters tidy() kept, in order
+    comp = c.get("component")
+    kept = [
+        p
+        for p in record.get("parameters") or []
+        if p.get("component") == comp and p.get("dropped") is None
+    ]
+    if len(kept) == len(rows):
+        for r, p in zip(rows, kept):
+            r["p_value_adjusted"] = _num(p.get("p_value_adjusted"))
+            r["resampling_p_value"] = _num((p.get("resampling") or {}).get("p_value"))
     if c.get("mediation") is True:
         return [r for r in rows if r.get("mediation") is not None]
     if c.get("mediation") is False:
@@ -1034,6 +1111,7 @@ def build_table(spec: dict, *, base_dir: str | os.PathLike | None = None, record
         "p_digits": fmt.get("p_digits", digits),
         "p_style": fmt.get("p_style", "fixed"),
         "labels": spec.get("response_labels") or {},
+        "sig_missing": {},
     }
     cols = _make_columns(spec["columns"], ctx)
     out_rows: list[dict] = []
@@ -1052,7 +1130,8 @@ def build_table(spec: dict, *, base_dir: str | os.PathLike | None = None, record
 
     notes = list(spec.get("notes") or [])
     if stars and any(v.get("estimate", True) is not False for v in views):
-        notes.append(", ".join(f"{sym} p < {t:g}" for t, sym in zip(stars, symbols)))
+        note = ", ".join(f"{sym} p < {t:g}" for t, sym in zip(stars, symbols))
+        notes.append(note + _sig_note(views))
     for v in views:
         note = _uncertainty_note(v, uncertainty_lines(v))
         if note and note not in notes:
@@ -1064,8 +1143,35 @@ def build_table(spec: dict, *, base_dir: str | os.PathLike | None = None, record
         "column_records": [c["found"].record["meta"]["id"] for c in cols],
         "rows": out_rows,
         "notes": notes,
-        "warnings": [str(i) for i in issues if i.level == "warning"],
+        "warnings": [str(i) for i in issues if i.level == "warning"]
+        + [
+            str(
+                Issue(
+                    "warning",
+                    "significance",
+                    f"column ({j + 1}){f' in {pl}' if pl else ''}: no {_sig_what(json.loads(sg))} "
+                    f"for {', '.join(ts)}; shown without stars",
+                )
+            )
+            for (pl, j, sg), ts in ctx["sig_missing"].items()
+        ],
     }
+
+
+def _sig_note(views: list[dict]) -> str:
+    """What the stars' p-values are when some column doesn't use the coefficients' own:
+    "; stars from <source>", or per source with the columns that use it."""
+    by: dict[str, list[str]] = {}
+    for v in views:
+        for j, c in enumerate(v["columns"]):
+            d = _sig_desc(_sig_of(v, c))
+            if f"({j + 1})" not in by.setdefault(d, []):
+                by[d].append(f"({j + 1})")
+    if list(by) == [_sig_desc(None)]:
+        return ""
+    if len(by) == 1:
+        return f"; stars from {next(iter(by))}"
+    return "; stars from " + "; ".join(f"{d} in {', '.join(cs)}" for d, cs in by.items())
 
 
 def _make_columns(columns: list[dict], ctx: dict) -> list[dict]:
@@ -1138,7 +1244,12 @@ def _term_rows(spec: dict, cols: list[dict], ctx: dict) -> list[dict]:
                     b.append(missing if ref is None else "")
                     m.append(({"reference": True} if ref is not None else {}) if isinstance(t, dict) else None)
                 continue
-            est.append(_fixed(r["estimate"], digits) + _stars(r["p_value"], ctx["stars"], ctx["symbols"]))
+            sig = _sig_of(spec, c["spec"])
+            sp = _sig_p(sig, r, c)
+            if sp is None and sig is not None and ctx["stars"] and show_est:
+                ctx["sig_missing"].setdefault((spec.get("panel_label"), j, json.dumps(sig)), []).append(r["term"])
+            r = dict(r, star_p=sp)
+            est.append(_fixed(r["estimate"], digits) + _stars(sp, ctx["stars"], ctx["symbols"]))
             for b, m, t in zip(below, marks, lines):
                 if isinstance(t, dict):
                     b.append(_fill(_SPARK_TEXT, r, digits, p_digits, p_style, missing))

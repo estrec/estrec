@@ -921,3 +921,69 @@ def test_spanners_docx_and_great_tables():
     pytest.importorskip("great_tables")
     g = et.to_great_table(t)
     assert [(s.spanner_label, s.vars) for s in g._spanners] == [("OLS", ["(1)"]), ("Robust", ["(2)", "(3)"])]
+
+
+def sig_records():
+    mt = json.loads((EXAMPLES / "multiple-testing.estrec.json").read_text(encoding="utf-8"))
+    rs = json.loads((EXAMPLES / "resampling.estrec.json").read_text(encoding="utf-8"))
+    rs = copy.deepcopy(rs)
+    rs["tests"] = [
+        {"id": "w1", "name": "wild", "label": "Wild bootstrap", "terms": ["X2"], "p_value": 0.07, "statistic": 1.8},
+        {"id": "w2", "name": "wild", "terms": ["X1", "X2"], "p_value": 0.5},  # about two terms: not used
+    ]
+    return mt, rs
+
+
+def sig_spec(mt, rs):
+    return {
+        "schema": "estrec-table/0.1",
+        "meta": {"id": "5b0f1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2e", "created": "2026-11-17T00:00:00Z"},
+        "columns": [
+            {"record": mt["meta"]["id"], "response": "Y"},
+            {"record": mt["meta"]["id"], "response": "Y2"},
+            {"record": rs["meta"]["id"], "significance": {"test": "Wild bootstrap"}},
+        ],
+        "stars": [0.1, 0.05, 0.01],
+        "uncertainty": ["std_error", "[{star_p}]"],
+        "significance": "p_value_adjusted",
+    }
+
+
+def test_significance_sources():
+    """Stars from the rows' adjusted p-values (columns 1-2) and a per-term test (column 3);
+    {star_p} shows the p-value used; X1 has no such test, so no stars and a warning."""
+    mt, rs = sig_records()
+    t = et.build_table(sig_spec(mt, rs), records=[mt, rs])
+    assert cells(t, "X2") == ["-0.174***", "-0.131***", "-0.174*"]  # 0.0001, 0.0046, 0.07
+    x2 = next(i for i, r in enumerate(t["rows"]) if r["label"] == "X2")
+    assert t["rows"][x2 + 2]["cells"] == ["[0.000]", "[0.005]", "[0.070]"]
+    assert cells(t, "X1") == ["", "", "-0.950"]
+    assert t["warnings"] == ["warning: significance: column (3): no Wild bootstrap test for X1; shown without stars"]
+    assert (
+        "* p < 0.1, ** p < 0.05, *** p < 0.01; stars from p-values adjusted for multiple testing in (1), (2); "
+        "the Wild bootstrap test's p-values in (3)"
+    ) in t["notes"]
+    assert any("p-value of the stars" in n for n in t["notes"])
+    # the coefficients' own p-values everywhere: no note about the source
+    s = sig_spec(mt, rs)
+    del s["significance"], s["columns"][2]["significance"]
+    t = et.build_table(s, records=[mt, rs])
+    assert cells(t, "X2")[2] == "-0.174***" and t["warnings"] == []
+    assert "* p < 0.1, ** p < 0.05, *** p < 0.01" in t["notes"]
+    # resampling p-values; a column back on the coefficient's (null)
+    s = sig_spec(mt, rs)
+    s["significance"] = "resampling"
+    s["columns"][0]["significance"] = None
+    t = et.build_table(s, records=[mt, rs])
+    assert cells(t, "X2") == ["-0.174***", "-0.131", "-0.174*"]  # (2): no resampling p; (3) keeps its test
+
+
+def test_significance_validate():
+    mt, rs = sig_records()
+    s = sig_spec(mt, rs)
+    s["significance"] = "bootstrap"
+    s["columns"][2]["significance"] = {"test": "w", "value": "statistic"}
+    s["columns"][1]["significance"] = {"name": "w"}
+    paths = {i.path for i in et.validate_table(s, schema=None)}
+    assert paths == {"significance", "columns[2].significance.value", "columns[1].significance"}
+    assert et.validate_table(sig_spec(mt, rs), schema="auto") == []

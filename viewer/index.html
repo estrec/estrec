@@ -267,6 +267,7 @@ details.raw pre { font: 12px/1.45 var(--font-mono); background: var(--bg); paddi
               </label>
               <label class="stack">Decimals<input type="number" id="opt-digits" min="0" max="8" value="3"></label>
             </div>
+            <label class="stack" title="The p-value the stars use: the coefficients' own, or another the records hold (adjusted for multiple testing, from resampling, or a test about each term)">Stars from<select id="opt-sig"></select></label>
             <label class="stack">FE marker<input type="text" id="opt-feyes" value="Y"></label>
             <label class="stack">Notes (one per line)<textarea id="opt-notes" rows="2"></textarea></label>
           </fieldset>
@@ -287,6 +288,7 @@ details.raw pre { font: 12px/1.45 var(--font-mono); background: var(--bg); paddi
                 <option value="({statistic})">t / z statistic: (-4.25)</option>
                 <option value="[{conf_low}, {conf_high}]">Confidence interval: [-4.75, -1.66]</option>
                 <option value="p = {p_value}">p-value: p = 0.012</option>
+                <option value="[{star_p}]">p-value of the stars: [0.012] (as Stars from)</option>
                 <option value="sparkline">Interval sparkline: a small plot of the interval</option>
               </select>
               <button class="btn small" id="line-add-btn" type="button">Add line</button>
@@ -845,6 +847,14 @@ function renderColumns(idx) {
       else { const v = vs[Number(sel.value)]; c.vcov = vs.filter((x) => x.type === v.type).length === 1 ? v.type : Number(sel.value); }
       update();
     });
+    // the stars' p-values for this column, when the records offer a choice
+    const choices = sigChoices(idx);
+    let sigSel = null;
+    if (choices.length > 1 || "significance" in c) {
+      sigSel = el("select", { id: `col-sig-${i}`, "aria-label": `Stars from, column ${i + 1}` });
+      fillSigSelect(sigSel, choices, "significance" in c ? JSON.stringify(c.significance) : "table", [{ value: "table", text: "Stars: as the table" }]);
+      sigSel.addEventListener("change", () => { if (sigSel.value === "table") delete c.significance; else c.significance = JSON.parse(sigSel.value); update({ keepControls: true }); });
+    }
     const auto = (f && ((f.member || {}).label || (rec.meta || {}).title)) || "";
     const head = el("input", { type: "text", id: `col-head-${i}`, value: c.header || "", placeholder: auto || "Label", "aria-label": `Label for column ${i + 1}` });
     head.addEventListener("input", () => { if (head.value) c.header = head.value; else delete c.header; update({ keepControls: true }); });
@@ -854,7 +864,7 @@ function renderColumns(idx) {
     const owns = () => (state.spec.panels || []).filter((p) => Array.isArray(p.columns)).map((p) => p.columns);
     const shift = (d) => { const j = i + d; if (j < 0 || j >= cols.length) return; move(cols, i, d); for (const st of valueRows()) move(st.values, i, d); for (const pc of owns()) move(pc, i, d); update(); };
     box.append(el("div", { class: "item" + (rec ? "" : " off") },
-      el("div", { class: "fields" }, head, el("span", { class: "hint", text: columnPart(c) ? `${name} · ${columnPart(c)}` : name }), vs.length > 1 ? sel : null),
+      el("div", { class: "fields" }, head, el("span", { class: "hint", text: columnPart(c) ? `${name} · ${columnPart(c)}` : name }), vs.length > 1 ? sel : null, sigSel),
       el("div", { class: "tools" },
         el("button", { class: "btn icon", type: "button", "aria-label": "Move left", title: "Move left", text: "↑", disabled: i === 0, onclick: () => shift(-1) }),
         el("button", { class: "btn icon", type: "button", "aria-label": "Move right", title: "Move right", text: "↓", disabled: i === cols.length - 1, onclick: () => shift(1) }),
@@ -1029,6 +1039,37 @@ function renderStats(idx) {
   $("stat-add-btn").disabled = !cands.length;
 }
 
+// where the stars' p-values can come from, among what the table's records hold: the
+// coefficients' own, the rows' adjusted or resampling p-values, a test about each term
+function sigChoices(idx) {
+  const s = state.spec;
+  const recs = [s, ...(s.panels || [])].flatMap((x) => x.columns || []).map((c) => {
+    const f = c.record ? (c.source && idx.get(c.source + "\u0000" + c.record)) || idx.get(c.record) : null;
+    return f ? f.record : null;
+  }).filter(Boolean);
+  const out = [{ v: null, text: "The coefficients' own p-values" }];
+  const params = recs.flatMap((r) => r.parameters || []);
+  if (params.some((p) => p.p_value_adjusted !== undefined && p.p_value_adjusted !== null)) out.push({ v: "p_value_adjusted", text: "Adjusted for multiple testing" });
+  if (params.some((p) => p.resampling && p.resampling.p_value !== undefined)) out.push({ v: "resampling", text: "Resampling (bootstrap, permutation)" });
+  const seen = new Set();
+  for (const r of recs) for (const t of r.tests || []) {
+    if (!Array.isArray(t.terms) || t.terms.length !== 1) continue;
+    const key = t.label || t.name;
+    if (!key) continue;
+    if (!seen.has(key)) { seen.add(key); out.push({ v: { test: key }, text: `Test ${key}: p-value` }); }
+    if (t.p_value_adjusted !== undefined && !seen.has(key + "\u0000adj")) { seen.add(key + "\u0000adj"); out.push({ v: { test: key, value: "p_value_adjusted" }, text: `Test ${key}: adjusted p-value` }); }
+  }
+  return out;
+}
+
+function fillSigSelect(sel, choices, current, extra) {
+  sel.replaceChildren();
+  for (const x of extra || []) sel.append(el("option", { value: x.value, text: x.text }));
+  for (const c of choices) sel.append(el("option", { value: JSON.stringify(c.v), text: c.text }));
+  if (current !== undefined && ![...sel.options].some((o) => o.value === current)) sel.append(el("option", { value: current, text: `${current} (not in these records)` }));
+  if (current !== undefined) sel.value = current;
+}
+
 function readOptions() {
   const s = state.spec;
   const t = $("opt-title").value.trim();
@@ -1046,6 +1087,7 @@ function readOptions() {
   if (!Object.keys(s.format).length) delete s.format;
   const notes = $("opt-notes").value.split("\n").map((x) => x.trim()).filter(Boolean);
   if (notes.length) s.notes = notes; else delete s.notes;
+  if ($("opt-sig").value) { const v = JSON.parse($("opt-sig").value); if (v === null) delete s.significance; else s.significance = v; }
 }
 
 function writeOptions() {
@@ -1058,6 +1100,7 @@ function writeOptions() {
   $("opt-pdigits").value = (s.format || {}).p_digits !== undefined ? s.format.p_digits : "";
   $("opt-pstyle").value = (s.format || {}).p_style === "less_than" ? "less_than" : "fixed";
   $("opt-notes").value = (s.notes || []).join("\n");
+  fillSigSelect($("opt-sig"), sigChoices(index()), JSON.stringify(s.significance === undefined ? null : s.significance));
 }
 
 // the lines under each estimate: spec.uncertainty as a list in the editor
@@ -1392,7 +1435,7 @@ $("spec-input").addEventListener("change", async (e) => {
   } catch (err) { state.loadMsgs = [{ level: "error", message: err.message }]; renderTable(); }
 });
 for (const id of ["opt-title", "opt-notes", "opt-feyes", "opt-digits", "opt-pdigits"]) $(id).addEventListener("input", () => update({ keepControls: true }));
-for (const id of ["opt-stars", "opt-pstyle"]) $(id).addEventListener("change", () => update({ keepControls: true }));
+for (const id of ["opt-stars", "opt-pstyle", "opt-sig"]) $(id).addEventListener("change", () => update({ keepControls: true }));
 $("line-add-btn").addEventListener("click", () => {
   const arr = lineList();
   const v = $("line-add").value;

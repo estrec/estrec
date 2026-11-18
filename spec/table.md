@@ -55,6 +55,7 @@ key words MUST, SHOULD and MAY are as in `spec/estrec.md` section 1.1. Schema:
 | `uncertainty` | optional | the lines under each estimate (5); default `"std_error"` |
 | `estimate` | optional | `false` leaves out the estimate row (5); default `true` |
 | `stars` | optional | significance thresholds (5); default none |
+| `significance` | optional | the p-value the stars use (5.1); default the coefficient's |
 | `stats` | optional | rows under the estimates (6); with panels, under all of them |
 | `panels` | optional | blocks of estimates under labels, Panel A, Panel B (4.1) |
 | `format` | optional | number display (7) |
@@ -77,6 +78,7 @@ some other way (loaded in a browser, passed to a function); sources are where to
 | `vcov` | optional | another vcov in the record: its `type`, its cluster variables (`"firm"`, `"firm & year"`), or its position (0-based). Standard errors, tests and intervals are computed from it (8) |
 | `component` | optional | a `parameters[*].component` to show (`"first_stage"`); default the rows with none |
 | `response` | optional | for a record with several responses, which one |
+| `significance` | optional | this column's source for the stars' p-values (5.1), or `null` for the coefficient's |
 | `mediation` | optional | `true`: only the record's effect rows (`parameters[*].mediation`: direct, indirect, total effects, ...); `false`: none of them. Default: all rows |
 
 A mediation record with several equations (PROCESS, a path model) is shown the way such
@@ -166,7 +168,7 @@ row per line:
 - a **name**: `"std_error"` (in parentheses), `"statistic"` (in parentheses), `"p_value"`
   (in brackets) or `"conf_int"` (`[low, high]`);
 - a **template**: text with placeholders `{estimate}`, `{std_error}`, `{statistic}`,
-  `{p_value}`, `{conf_low}` and `{conf_high}`, such as `"[{p_value}]"`, `"p = {p_value}"` or
+  `{p_value}`, `{conf_low}`, `{conf_high}` and `{star_p}` (the p-value the stars use, 5.1), such as `"[{p_value}]"`, `"p = {p_value}"` or
   `"({conf_low} to {conf_high})"`;
 - a **sparkline**: `{"sparkline": {"color": "#2b5f8e", "scale": "column"}}` draws the
   confidence interval as a small horizontal line: a dot at each end in `color` (`#rrggbb`,
@@ -209,6 +211,28 @@ spec that wants stars lists them. Tools that create specs SHOULD offer `[0.1, 0.
 as their default (the reference tools, the viewer and `estrec show` use it). Renderers
 add a note saying what the stars and the lines under the estimates are.
 
+### 5.1 Significance from another p-value
+
+By default stars come from each coefficient's `p_value`. `significance` takes them from
+another p-value the record holds, for every column, or for one column (a column's
+`significance` overrides the table's; `null` goes back to the coefficient's):
+
+- `"p_value_adjusted"`: the row's p-value adjusted for multiple testing
+  (`parameters[*].p_value_adjusted`, profile `multiple-testing/0.1`);
+- `"resampling"`: the row's resampling p-value (`parameters[*].resampling.p_value`, profile
+  `resampling/0.1`: a wild bootstrap, randomization inference);
+- `{"test": "Wild bootstrap", "value": "p_value"}`: the p-value (or, with `"value":
+  "p_value_adjusted"`, the adjusted one) of the test labelled so, else named so, whose
+  `terms` are just the row's term; in a column with `response`, tests of other equations
+  are passed over.
+
+A term without that p-value shows no stars, and the renderer warns, naming the column and
+the terms; it never falls back to the coefficient's p-value. `{star_p}` in a line shows the
+p-value used (blank where there is none), with the p-value format (5). When any column's
+stars don't come from the coefficients' p-values, the stars' note says where they come from:
+`* p < 0.1, ...; stars from p-values adjusted for multiple testing`, or each source with its
+columns.
+
 ## 6. Statistics rows
 
 Each entry of `stats` is one row, of one of these kinds:
@@ -250,7 +274,8 @@ doesn't compile, a literal row whose `values` don't match the columns, and an `u
 line that is neither a name nor a template, or uses an unknown placeholder, and a `head`
 entry that isn't `number`, `response` or `label` or appears twice, and a panel without a
 `label` or whose `columns` aren't as many as the table's, a column group without a `label`,
-outside the columns or overlapping another, (a panel's own columns, patterns,
-lines and literal rows are checked as the top level's are). As **warnings**: column groups that `head` leaves out, a
+outside the columns or overlapping another, a `significance` that is none of 5.1's, (a panel's own columns, patterns,
+lines and literal rows are checked as the top level's are). As **warnings**: column groups that `head` leaves out, terms without the p-value their
+stars come from (5.1), a
 column whose record's hash isn't its `sha256`, a vcov a record doesn't have, a row term that
 no column has, and a metric, fixed effect or test that no column's record has.

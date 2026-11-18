@@ -51,7 +51,8 @@
           "vcov": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "integer", "minimum": 0}]},
           "component": {"type": "string"},
           "response": {"type": "string"},
-          "mediation": {"type": "boolean", "description": "true: only the record's effect rows (parameters with a mediation object); false: none of them."}
+          "mediation": {"type": "boolean", "description": "true: only the record's effect rows (parameters with a mediation object); false: none of them."},
+          "significance": {"$ref": "#/$defs/significance"}
         },
         "additionalProperties": false
       }
@@ -77,7 +78,7 @@
     "drop": {"type": "array", "items": {"type": "string"}},
     "keep_unlisted": {"type": "boolean"},
     "uncertainty": {
-      "description": "The lines under each estimate: one name, a template, a list of names, templates and sparklines (one row each), or null for none. Templates use {estimate}, {std_error}, {statistic}, {p_value}, {conf_low}, {conf_high}.",
+      "description": "The lines under each estimate: one name, a template, a list of names, templates and sparklines (one row each), or null for none. Templates use {estimate}, {std_error}, {statistic}, {p_value}, {conf_low}, {conf_high} and {star_p} (the p-value the stars use).",
       "anyOf": [
         {"type": "null"},
         {"$ref": "#/$defs/line"},
@@ -117,6 +118,7 @@
       },
       "additionalProperties": false
     },
+    "significance": {"$ref": "#/$defs/significance"},
     "spanners": {
       "description": "Column groups: a label over a run of columns, numbered from 1 as the (1), (2) headings, first and last included; groups don't overlap. Shown as the `spanner` heading row (by default the top one).",
       "type": "array",
@@ -155,10 +157,23 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "significance": {
+      "description": "The p-value the stars use (and {star_p} shows): absent or null, the coefficient's own; \"p_value_adjusted\", the row's multiple-testing adjusted p-value; \"resampling\", the row's resampling p-value; {test, value}, the p-value of the test so labelled (else named) whose terms are just the row's term. A term without it has no stars.",
+      "oneOf": [
+        {"type": "null"},
+        {"enum": ["p_value_adjusted", "resampling"]},
+        {
+          "type": "object",
+          "required": ["test"],
+          "additionalProperties": false,
+          "properties": {"test": {"type": "string"}, "value": {"enum": ["p_value", "p_value_adjusted"]}}
+        }
+      ]
+    },
     "line": {
       "anyOf": [
         {"enum": ["std_error", "statistic", "p_value", "conf_int"]},
-        {"type": "string", "pattern": "\\{(estimate|std_error|statistic|p_value|conf_low|conf_high)\\}"},
+        {"type": "string", "pattern": "\\{(estimate|std_error|statistic|p_value|conf_low|conf_high|star_p)\\}"},
         {
           "type": "object",
           "description": "The confidence interval drawn as a small line: a dot at each end in `color`, the estimate as a darker dot, 0 as a grey rule. `scale`: one axis down each column (default), along each row, or across the table. Formats that can't draw show [conf_low, conf_high].",

@@ -20,10 +20,10 @@
 
   // lines under each estimate (spec/table.md section 5)
   const NAMED_LINES = { std_error: "({std_error})", statistic: "({statistic})", p_value: "[{p_value}]", conf_int: "[{conf_low}, {conf_high}]" };
-  const PLACEHOLDERS = ["estimate", "std_error", "statistic", "p_value", "conf_low", "conf_high"];
+  const PLACEHOLDERS = ["estimate", "std_error", "statistic", "p_value", "conf_low", "conf_high", "star_p"];
   const PLACEHOLDER = /\{([^{}]*)\}/g;
   const NAMED_NOTES = { std_error: "Standard errors in parentheses.", statistic: "Test statistics in parentheses.", p_value: "p-values in brackets.", conf_int: "Confidence intervals in brackets." };
-  const WORDS = { estimate: "estimate", std_error: "standard error", statistic: "test statistic", p_value: "p-value", conf_low: "lower bound", conf_high: "upper bound" };
+  const WORDS = { estimate: "estimate", std_error: "standard error", statistic: "test statistic", p_value: "p-value", conf_low: "lower bound", conf_high: "upper bound", star_p: "p-value of the stars" };
 
   const SPARK_COLOR = "#2b5f8e";
   const SPARK_SCALES = ["column", "row", "table"];
@@ -421,7 +421,7 @@
     for (const m of template.matchAll(PLACEHOLDER)) {
       const x = row[m[1]];
       if (x === null || x === undefined || Number.isNaN(x)) return missing;
-      vals[m[1]] = m[1] === "p_value" ? pValue(x, pDigits, pStyle) : fixed(x, digits);
+      vals[m[1]] = m[1] === "p_value" || m[1] === "star_p" ? pValue(x, pDigits, pStyle) : fixed(x, digits);
     }
     return template.replace(PLACEHOLDER, (_, n) => vals[n]);
   }
@@ -483,6 +483,7 @@
       if (!c || !c.record) out.push(issue("error", `${path}[${i}]`, "a column needs `record` (a meta.id)"));
       else if (c.source !== undefined && c.source !== null && !ids.includes(c.source)) out.push(issue("error", `${path}[${i}].source`, `no source '${c.source}'`));
       if (c && "mediation" in c && typeof c.mediation !== "boolean") out.push(issue("error", `${path}[${i}].mediation`, "true or false"));
+      if (c && "significance" in c) out.push(...sigIssues(c.significance, `${path}[${i}].significance`));
     });
     return out;
   }
@@ -504,6 +505,59 @@
     return out;
   }
   const statsIssues = (stats, n, path) => stats.flatMap((s, j) => (s && s.values && s.values.length !== n ? [issue("error", `${path}[${j}].values`, `${s.values.length} values for ${n} columns`)] : []));
+
+  // significance (spec/table.md 5.1): "p_value_adjusted", "resampling", {test, value} or null
+  const SIG_ROW = ["p_value_adjusted", "resampling"];
+  function sigIssues(sig, path) {
+    if (sig === undefined || sig === null || SIG_ROW.includes(sig)) return [];
+    if (sig && typeof sig === "object" && !Array.isArray(sig) && typeof sig.test === "string" && Object.keys(sig).every((k) => k === "test" || k === "value")) {
+      const v = sig.value === undefined ? "p_value" : sig.value;
+      return v === "p_value" || v === "p_value_adjusted" ? [] : [issue("error", `${path}.value`, "'p_value' or 'p_value_adjusted'")];
+    }
+    return [issue("error", path, "'p_value_adjusted', 'resampling', or {test, value}")];
+  }
+  // the p-value a column's stars use: its own significance, else the table's
+  const sigOf = (spec, col) => ("significance" in col ? col.significance : spec.significance === undefined ? null : spec.significance);
+  // the p-value for row r's stars and {star_p}: the coefficient's; the row's adjusted or
+  // resampling p-value; or the named test's about this term alone. null when missing
+  function sigP(sig, r, c) {
+    let x;
+    if (sig === null || sig === undefined) x = r.p_value;
+    else if (sig === "p_value_adjusted") x = r.p_value_adjusted;
+    else if (sig === "resampling") x = r.resampling_p_value;
+    else {
+      let tests = (c.found.record.tests || []).filter((t) => Array.isArray(t.terms) && t.terms.length === 1 && t.terms[0] === r.term);
+      if (c.spec.response) tests = tests.filter((t) => t.response === undefined || t.response === null || t.response === c.spec.response);
+      const t = tests.find((t) => t.label === sig.test) || tests.find((t) => t.name === sig.test);
+      x = t ? t[sig.value || "p_value"] : undefined;
+    }
+    x = x === undefined || x === null ? NaN : num(x);
+    return Number.isNaN(x) ? null : x;
+  }
+  function sigWhat(sig) {
+    if (sig === "p_value_adjusted") return "adjusted p-value";
+    if (sig === "resampling") return "resampling p-value";
+    return `${sig.test} test` + (sig.value === "p_value_adjusted" ? " adjusted p-value" : "");
+  }
+  function sigDesc(sig) {
+    if (sig === null || sig === undefined) return "the coefficients' p-values";
+    if (sig === "p_value_adjusted") return "p-values adjusted for multiple testing";
+    if (sig === "resampling") return "resampling p-values";
+    return `the ${sig.test} test's${sig.value === "p_value_adjusted" ? " adjusted" : ""} p-values`;
+  }
+  // what the stars' p-values are when some column doesn't use the coefficients' own
+  function sigNote(views) {
+    const by = new Map();
+    for (const v of views) v.columns.forEach((c, j) => {
+      const d = sigDesc(sigOf(v, c));
+      if (!by.has(d)) by.set(d, []);
+      if (!by.get(d).includes(`(${j + 1})`)) by.get(d).push(`(${j + 1})`);
+    });
+    const keys = [...by.keys()];
+    if (keys.length === 1 && keys[0] === sigDesc(null)) return "";
+    if (keys.length === 1) return `; stars from ${keys[0]}`;
+    return "; stars from " + keys.map((d) => `${d} in ${by.get(d).join(", ")}`).join("; ");
+  }
 
   // the table's blocks of estimates, each the spec as that block sees it: without panels, the
   // spec; else one per panel, with its label, columns, rows, keep, drop, keep_unlisted,
@@ -558,6 +612,7 @@
       });
     }
     out.push(...spannerIssues(spec, cols.length));
+    out.push(...sigIssues(spec.significance, "significance"));
     out.push(...statsIssues(spec.stats || [], cols.length, "stats"));
     let panels = spec.panels;
     if (panels !== undefined && panels !== null) {
@@ -632,6 +687,13 @@
   // response; mediation true keeps only effect rows (parameters[*].mediation), false leaves them out
   function columnRows(record, c) {
     let rows = tidy(record, { vcov: c.vcov, component: c.component });
+    // the rows' other p-values (spec/table.md 5.1), from the parameters tidy() kept, in order
+    const comp = c.component === undefined ? null : c.component;
+    const kept = (record.parameters || []).filter((p) => (p.component === undefined ? null : p.component) === comp && (p.dropped === undefined || p.dropped === null));
+    if (kept.length === rows.length) rows.forEach((r, i) => {
+      r.p_value_adjusted = num(kept[i].p_value_adjusted);
+      r.resampling_p_value = num((kept[i].resampling || {}).p_value);
+    });
     if (c.mediation === true) return rows.filter((r) => r.mediation !== undefined);
     if (c.mediation === false) rows = rows.filter((r) => r.mediation === undefined);
     if (c.response) rows = rows.filter((r) => r.response === c.response);
@@ -898,6 +960,7 @@
       pDigits: fmt.p_digits !== undefined ? fmt.p_digits : digits,
       pStyle: fmt.p_style || "fixed",
       labels: spec.response_labels || {},
+      sigMissing: new Map(),
     };
     const cols = makeColumns(spec.columns, ctx);
     const rows = [];
@@ -914,7 +977,7 @@
       rows.push(...tail);
     }
     const notes = (spec.notes || []).slice();
-    if (stars.length && views.some((v) => v.estimate !== false)) notes.push(stars.map((t, i) => `${symbols[i]} p < ${t}`).join(", "));
+    if (stars.length && views.some((v) => v.estimate !== false)) notes.push(stars.map((t, i) => `${symbols[i]} p < ${t}`).join(", ") + sigNote(views));
     for (const v of views) {
       const note = uncertaintyNote(v, uncertaintyLines(v));
       if (note && !notes.includes(note)) notes.push(note);
@@ -926,7 +989,8 @@
       column_records: cols.map((c) => c.found.record.meta.id),
       rows,
       notes,
-      warnings: issues.filter((i) => i.level === "warning").map((i) => `warning: ${i.path}: ${i.message}`),
+      warnings: [...issues.filter((i) => i.level === "warning").map((i) => `warning: ${i.path}: ${i.message}`),
+        ...[...ctx.sigMissing.values()].map((m) => `warning: significance: column (${m.j + 1})${m.pl ? ` in ${m.pl}` : ""}: no ${sigWhat(m.sig)} for ${m.terms.join(", ")}; shown without stars`)],
     };
   }
 
@@ -979,7 +1043,7 @@
       const refs = []; // the columns showing the reference text
       cols.forEach((c, j) => {
         const n = names.find((x) => c.tidy.has(x));
-        const r = n === undefined ? null : c.tidy.get(n);
+        let r = n === undefined ? null : c.tidy.get(n);
         if (!r) {
           // a sparkline keeps its 0 rule (and a reference row's, a hollow dot at 0)
           est.push(ref === null ? missing : ref);
@@ -990,7 +1054,15 @@
           });
           return;
         }
-        est.push(fixed(r.estimate, digits) + starsFor(r.p_value, stars, symbols));
+        const sig = sigOf(spec, c.spec);
+        const sp = sigP(sig, r, c);
+        if (sp === null && sig !== null && stars.length && showEst) {
+          const key = JSON.stringify([spec.panel_label === undefined ? null : spec.panel_label, j, JSON.stringify(sig)]);
+          if (!ctx.sigMissing.has(key)) ctx.sigMissing.set(key, { pl: spec.panel_label, j, sig, terms: [] });
+          ctx.sigMissing.get(key).terms.push(r.term);
+        }
+        r = Object.assign({}, r, { star_p: sp });
+        est.push(fixed(r.estimate, digits) + starsFor(sp, stars, symbols));
         lines.forEach((t, k) => {
           if (isObj(t)) { below[k].push(fill(SPARK_TEXT, r, digits, pDigits, pStyle, missing)); marks[k].push(sparkMark(r)); }
           else below[k].push(fill(t, r, digits, pDigits, pStyle, missing));

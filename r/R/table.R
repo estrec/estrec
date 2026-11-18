@@ -37,10 +37,14 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
     vc <- c$vcov
     if (is.numeric(vc)) vc <- vc + 1   # the spec counts from 0, tidy() from 1
     t <- tidy.estimation_record(found[[i]], vcov = vc, component = c$component)
+    t <- .tab_row_p(t, found[[i]], c)
     if (!is.null(c$response) && "response" %in% names(t)) t <- t[t$response %in% c$response, , drop = FALSE]
+    # the p-value the stars use, and {star_p} shows (spec/table.md 5.1)
+    t$star.p <- .tab_sig_p(.tab_sig_of(spec, c), t, found[[i]], c)
     for (k in seq_along(lines))
       t[[paste0("line", k)]] <- vapply(seq_len(nrow(t)), function(j)
         .tab_fill(lines[[k]], t[j, , drop = FALSE], digits, p_digits, p_style, missing), "")
+    t$p.value <- t$star.p  # modelsummary's stars
     # a sparkline cell holds a placeholder here; .tab_draw() puts the drawing in its place
     if (draws) for (k in which(!vapply(sparks, is.null, TRUE)))
       t[[paste0("line", k)]] <- sprintf("estrecspark%dc%dr%d", k, i, seq_len(nrow(t)))
@@ -120,6 +124,8 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
     star_arg <- FALSE
   }
   notes <- c(unlist(spec$notes), .tab_unc_note(unc, lines))
+  src <- .tab_sig_note(list(spec))
+  if (length(spec$stars) && !isFALSE(spec$estimate) && nzchar(src)) notes <- c(notes, paste0("Stars from ", substring(src, 14), "."))
   args <- list(models, output = output, coef_map = coef_map, estimate = est_arg, statistic = statistic,
                stars = star_arg, fmt = digits, gof_omit = ".*", add_rows = add_rows)
   if (!is.null(spec$title)) args$title <- spec$title
@@ -207,6 +213,56 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
   })
 }
 
+# The rows' other p-values (spec/table.md 5.1): each tidy row's multiple-testing adjusted and
+# resampling p-values, from the parameters tidy() kept (the same rows, in order).
+.tab_row_p <- function(t, rec, c) {
+  comp <- c$component
+  kept <- Filter(function(p) identical(p$component, comp) && is.null(p$dropped), rec$parameters %||% list())
+  ok <- length(kept) == nrow(t)
+  t$p.adjusted <- if (ok) vapply(kept, function(p) .est_dbl(p$p_value_adjusted), 0) else rep(NA_real_, nrow(t))
+  t$p.resampling <- if (ok) vapply(kept, function(p) .est_dbl(p$resampling$p_value), 0) else rep(NA_real_, nrow(t))
+  t
+}
+
+# The p-value a column's stars use: its own `significance` (null for the coefficient's), else the table's.
+.tab_sig_of <- function(spec, c) if ("significance" %in% names(c)) c$significance else spec$significance
+
+.tab_sig_p <- function(sig, t, rec, c) {
+  if (is.null(sig)) return(t$p.value)
+  if (identical(sig, "p_value_adjusted")) return(t$p.adjusted)
+  if (identical(sig, "resampling")) return(t$p.resampling)
+  if (!is.list(sig) || !is.character(sig$test))
+    stop("significance: 'p_value_adjusted', 'resampling', or {test, value}", call. = FALSE)
+  which <- sig$value %||% "p_value"
+  vapply(t$term, function(term) {
+    tests <- Filter(function(x) identical(as.character(unlist(x$terms)), term), rec$tests %||% list())
+    if (!is.null(c$response)) tests <- Filter(function(x) is.null(x$response) || identical(x$response, c$response), tests)
+    hit <- Filter(function(x) identical(x$label, sig$test), tests)
+    if (!length(hit)) hit <- Filter(function(x) identical(x$name, sig$test), tests)
+    if (length(hit)) .est_dbl(hit[[1]][[which]]) else NA_real_
+  }, 0, USE.NAMES = FALSE)
+}
+
+.tab_sig_desc <- function(sig) {
+  if (is.null(sig)) return("the coefficients' p-values")
+  if (identical(sig, "p_value_adjusted")) return("p-values adjusted for multiple testing")
+  if (identical(sig, "resampling")) return("resampling p-values")
+  paste0("the ", sig$test, " test's", if (identical(sig$value, "p_value_adjusted")) " adjusted" else "", " p-values")
+}
+
+# "; stars from <source>" when some column doesn't use the coefficients' own p-values, or per
+# source with its columns (as the Python reference's notes); "" otherwise
+.tab_sig_note <- function(views) {
+  by <- list()
+  for (v in views) for (j in seq_along(v$columns)) {
+    d <- .tab_sig_desc(.tab_sig_of(v, v$columns[[j]]))
+    by[[d]] <- union(by[[d]], sprintf("(%d)", j))
+  }
+  if (identical(names(by), .tab_sig_desc(NULL))) return("")
+  if (length(by) == 1L) return(paste0("; stars from ", names(by)))
+  paste0("; stars from ", paste(vapply(names(by), function(d) paste0(d, " in ", paste(by[[d]], collapse = ", ")), ""), collapse = "; "))
+}
+
 # Column groups shown (spec/table.md 3.2): a list of list(label, first, last), columns from 1,
 # sorted; NULL when there are none or `head` leaves them out. Checked as the Python reference does.
 .tab_spans <- function(spec, n) {
@@ -262,7 +318,7 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
   p_digits <- fmt$p_digits %||% digits
   tidies <- lapply(seq_along(cols), function(i) tidy.estimation_record(found[[i]], component = cols[[i]]$component))
   head <- .tab_head(spec, cols, found, tidies)
-  terms <- character(); cells <- NULL; at <- list(); notes <- character()
+  terms <- character(); cells <- NULL; at <- list(); notes <- character(); views <- list()
   for (k in seq_along(panels)) {
     p <- panels[[k]]
     if (!is.character(p$label)) stop("panels[", k - 1, "].label: a panel needs a `label` (text)", call. = FALSE)
@@ -273,6 +329,7 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
       stop("panels[", k - 1, "].columns: ", length(sub$columns), " columns; the table has ", n, call. = FALSE)
     sub["stats"] <- list(p$stats %||% list())
     sub["head"] <- list(list())
+    views <- c(views, list(sub))
     x <- render_table(sub, output = "data.frame", records = records, base_dir = base_dir)
     at[[p$label]] <- length(terms) + 1L
     # a term's label on its first row only, as the Python reference's built table
@@ -288,7 +345,8 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
   stars <- unlist(spec$stars)
   if (length(stars) && any(vapply(panels, function(p) !isFALSE(if ("estimate" %in% names(p)) p$estimate else spec$estimate), TRUE))) {
     sym <- unlist(fmt$star_symbols) %||% strrep("*", seq_along(stars))
-    notes <- c(paste(sprintf("%s p < %s", sym, format(stars, scientific = FALSE, drop0trailing = TRUE, trim = TRUE)), collapse = ", "), notes)
+    notes <- c(paste0(paste(sprintf("%s p < %s", sym, format(stars, scientific = FALSE, drop0trailing = TRUE, trim = TRUE)), collapse = ", "),
+                      .tab_sig_note(views)), notes)
   }
   notes <- c(unlist(spec$notes), notes)
   headers <- if (length(head)) head[[1]] else rep("", n)
@@ -468,7 +526,7 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
 .tab_named_lines <- c(std_error = "({std_error})", statistic = "({statistic})", p_value = "[{p_value}]",
                       conf_int = "[{conf_low}, {conf_high}]")
 .tab_placeholders <- c(estimate = "estimate", std_error = "std.error", statistic = "statistic",
-                       p_value = "p.value", conf_low = "conf.low", conf_high = "conf.high")
+                       p_value = "p.value", conf_low = "conf.low", conf_high = "conf.high", star_p = "star.p")
 
 .tab_lines <- function(unc) {
   if (is.null(unc)) return(character())
@@ -515,7 +573,7 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
     name <- substr(m, 2, nchar(m) - 1)
     x <- row[[.tab_placeholders[[name]]]]
     if (is.null(x) || is.na(x)) return(missing)
-    val <- if (name == "p_value") .tab_p(x, p_digits, p_style) else .tab_fixed(x, digits)
+    val <- if (name %in% c("p_value", "star_p")) .tab_p(x, p_digits, p_style) else .tab_fixed(x, digits)
     out <- gsub(m, val, out, fixed = TRUE)
   }
   out
@@ -527,7 +585,8 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
              p_value = "p-values in brackets.", conf_int = "Confidence intervals in brackets.")
   if (is.character(unc) && length(unc) == 1L && unc %in% names(named)) return(unname(named[unc]))
   words <- c(estimate = "estimate", std_error = "standard error", statistic = "test statistic",
-             p_value = "p-value", conf_low = "lower bound", conf_high = "upper bound")
+             p_value = "p-value", conf_low = "lower bound", conf_high = "upper bound",
+             star_p = "p-value of the stars")
   parts <- vapply(lines, function(t) {
     t <- sub("{conf_low}, {conf_high}", "confidence interval", t, fixed = TRUE)
     for (w in names(words)) t <- gsub(paste0("{", w, "}"), words[[w]], t, fixed = TRUE)

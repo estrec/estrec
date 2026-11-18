@@ -38,6 +38,11 @@ Column groups (\code{spanners}) are a first row of labels in \code{output = "dat
 tinytable column groups (\code{tinytable::group_tt()}) otherwise, always on top; a file output
 is then written from the tinytable.
 
+\code{significance} takes the stars' p-values from the rows' adjusted or resampling p-values
+or a test about each term (spec/table.md 5.1); a term without one shows no stars, and
+\code{\{star_p\}} in a line shows the p-value used. modelsummary leaves out a line that is
+blank in every column, which the Python reference keeps.
+
 Sparkline lines (\code{{"sparkline": {color, scale}}}) are drawn for modelsummary's
 tinytable outputs (\code{"default"}, \code{"tinytable"}, \code{"html"}, \code{"latex"},
 \code{"markdown"}, \code{"typst"} and \code{.html}, \code{.tex}, \code{.md}, \code{.typ}

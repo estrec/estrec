@@ -195,4 +195,23 @@ if (dir.exists(ex)) {
   spec$spanners[[2]]$columns <- list(1, 3)
   stopifnot(grepl("another group", tryCatch(render_table(spec, base_dir = ex), error = conditionMessage)))
 }
+# stars from other p-values (spec/table.md 5.1): the rows' adjusted p-values, a per-term test,
+# {star_p}; the Python reference's cells
+if (dir.exists(ex)) {
+  mt <- read_estimation(file.path(ex, "multiple-testing.estrec.json"))
+  rs <- read_estimation(file.path(ex, "resampling.estrec.json"))
+  rs$tests <- list(list(id = "w1", name = "wild", label = "Wild bootstrap", terms = list("X2"), p_value = 0.07, statistic = 1.8),
+                   list(id = "w2", name = "wild", terms = list("X1", "X2"), p_value = 0.5))
+  spec <- list(schema = "estrec-table/0.1", meta = list(id = "5b0f1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2e", created = "2026-11-17T00:00:00Z"),
+               columns = list(list(record = mt$meta$id, response = "Y"), list(record = mt$meta$id, response = "Y2"),
+                              list(record = rs$meta$id, significance = list(test = "Wild bootstrap"))),
+               stars = list(0.1, 0.05, 0.01), uncertainty = list("std_error", "[{star_p}]"), significance = "p_value_adjusted")
+  x <- render_table(spec, output = "data.frame", records = list(mt, rs))
+  stopifnot(identical(cells(x, "X2"), c("-0.174***", "-0.131***", "-0.174*")),
+            identical(unname(unlist(x[3, 4:6])), c("[0.000]", "[0.005]", "[0.070]")),
+            identical(cells(x, "X1"), c("", "", "-0.950")))
+  spec$significance <- NULL; spec$columns[[3]]$significance <- NULL
+  x <- render_table(spec, output = "data.frame", records = list(mt, rs))
+  stopifnot(identical(cells(x, "X2"), c("-0.174***", "-0.131***", "-0.174***")))
+}
 cat("test-table: ok\n")

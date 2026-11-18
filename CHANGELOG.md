@@ -14,6 +14,11 @@
   CSV, LaTeX (`\cmidrule(lr)`), HTML, Word, .docx, great_tables (`tab_spanner`) and R
   (tinytable `group_tt`). The viewer edits them under Heading rows; removing a column
   renumbers them.
+- Tables: stars from another p-value (spec `significance`, spec/table.md 5.1): the rows'
+  multiple-testing adjusted p-values, their resampling p-values, or a test about each term
+  (`{test, value}`); per table or per column (`null`: the coefficient's). A term without
+  it shows no stars and a warning; `{star_p}` shows the p-value used; the stars' note names
+  the source. Python, the viewer (**Stars from**, per column too), R.
 - Viewer: the Table spec export is `exportSpec` in estrec-table.js; a test reopens every
   exported spec (open-spec round trip). Export now names sources for panels' columns too.
 

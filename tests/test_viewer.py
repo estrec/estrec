@@ -155,6 +155,8 @@ FILES = {
     "replication.estrec-collection.json": "replication",
     "replication.members.jsonl": None,
     "csdid.estrec.json": "csdid",
+    "multiple-testing.estrec.json": "multiple-testing",
+    "resampling.estrec.json": "resampling",
 }
 
 
@@ -244,6 +246,41 @@ def specs():
     out.append(s)
     out += panel_specs()
     out += spanner_specs()
+    out += significance_specs()
+    return out
+
+
+def significance_specs():
+    """Stars from other p-values (spec/table.md 5.1): the rows' adjusted and resampling
+    p-values, a per-term test, a column override, {star_p}; and a term without one."""
+    mt = json.loads((EXAMPLES / "multiple-testing.estrec.json").read_text(encoding="utf-8"))["meta"]["id"]
+    rs = json.loads((EXAMPLES / "resampling.estrec.json").read_text(encoding="utf-8"))["meta"]["id"]
+    base = {
+        "schema": "estrec-table/0.1",
+        "meta": {"id": "5b0f1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d", "created": "2026-11-17T00:00:00Z"},
+        "sources": [
+            {"id": "multiple-testing", "path": "multiple-testing.estrec.json"},
+            {"id": "resampling", "path": "resampling.estrec.json"},
+        ],
+        "columns": [
+            {"record": mt, "source": "multiple-testing", "response": "Y"},
+            {"record": mt, "source": "multiple-testing", "response": "Y2"},
+            {"record": rs, "source": "resampling", "significance": "resampling"},
+        ],
+        "stars": [0.1, 0.05, 0.01],
+        "uncertainty": ["std_error", "[{star_p}]"],
+        "significance": "p_value_adjusted",
+        "stats": [{"metric": "nobs"}],
+    }
+    out = [base]
+    s = copy.deepcopy(base)
+    s["format"] = {"p_digits": 4, "p_style": "less_than"}
+    del s["columns"][2]["significance"]  # the resampling record has no adjusted p-values
+    out.append(s)
+    s = copy.deepcopy(base)
+    s["significance"] = {"test": "wild", "value": "p_value"}
+    s["columns"][2]["significance"] = None
+    out.append(s)
     return out
 
 
@@ -392,7 +429,9 @@ def test_renderers_match_python(node_result):
     assert len(panels) == 4
     groups = [s for s in all_specs if "spanners" in s]
     assert len(groups) == 3
-    for spec in [all_specs[0]] + [s for s in all_specs if "head" in s] + sparks + panels + groups:
+    sigs = [s for s in all_specs if "significance" in s]
+    assert len(sigs) == 3
+    for spec in [all_specs[0]] + [s for s in all_specs if "head" in s] + sparks + panels + groups + sigs:
         py = et.build_table(spec, base_dir=EXAMPLES)
         script = (
             "const E=require(process.argv[1]);const t=JSON.parse(require('fs').readFileSync(0,'utf8'));"

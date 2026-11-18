@@ -191,5 +191,8 @@ tested, not Windows; the earlier "real Word" checks of 2026-11-07/08 were Mac Wo
    under the preview, landing lines and the dragged column dimmed (`previewColumn` finds a
    column's cells from its heading's colspan). Not seen in a real browser yet; stand-in 57
    steps; preview v17.
+   R docx (pandoc installed system-wide 2026-11-18): tinytable's docx turned "(1)" and
+   "* p < 0.1" into lists (empty headings, lost star); fixed in `.tab_save`/`.tab_md_escape`,
+   test in r/tests/test-table.R. Sparklines stay text in R's Word files.
 5. Leftovers from the graphics work: tinytable pads rows, so R's HTML sparkline column
    doesn't join; R ignores `reference` and draws sparklines below only (Ted: leave it).

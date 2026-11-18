@@ -214,4 +214,23 @@ if (dir.exists(ex)) {
   x <- render_table(spec, output = "data.frame", records = list(mt, rs))
   stopifnot(identical(cells(x, "X2"), c("-0.174***", "-0.131***", "-0.174***")))
 }
+# Word files: pandoc reads a grid-table cell that starts like a list item as a list, so the
+# markers are escaped, each cell keeping its width
+esc <- estrec:::.tab_md_escape(c("+-----+-----+", "| (1) | * p |", "| (0.754) | -3.2*** |", "| a.  | - |"))
+stopifnot(identical(strsplit(esc, "\n")[[1]], c("+-----+-----+", "|\\(1) |\\* p |", "| (0.754) | -3.2*** |", "| a\\. |\\- |")))
+if (dir.exists(ex) && requireNamespace("pandoc", quietly = TRUE) && isTRUE(pandoc::pandoc_available())) {
+  docx_text <- function(f) {
+    d <- tempfile(); utils::unzip(f, files = "word/document.xml", exdir = d)
+    x <- paste(readLines(file.path(d, "word", "document.xml"), warn = FALSE, encoding = "UTF-8"), collapse = "")
+    list(text = gsub("<[^>]+>", "|", x), lists = grepl("<w:numPr>", x, fixed = TRUE))
+  }
+  spec <- jsonlite::fromJSON(file.path(ex, "paper.estrec-table.json"), simplifyVector = FALSE)
+  for (case in list(spec, utils::modifyList(spec, list(spanners = list(list(label = "OLS", columns = list(1, 2))))))) {
+    f <- tempfile(fileext = ".docx")
+    render_table(case, output = f, base_dir = ex)
+    w <- docx_text(f)
+    stopifnot(!w$lists, grepl("|(1)|", w$text, fixed = TRUE), grepl("|(3)|", w$text, fixed = TRUE),
+              grepl("* p &lt; 0.1", w$text, fixed = TRUE), grepl("|-3.206***|", w$text, fixed = TRUE))
+  }
+}
 cat("test-table: ok\n")

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- R: `render_table(output = "table.docx")` writes a correct Word file. tinytable's Word output
+  goes through Markdown and pandoc, which read a cell that starts like a list item as a list:
+  the column numbers (1), (2) came out empty and the stars note lost its `*`. estrec now
+  escapes those markers (keeping the grid's widths) and calls pandoc itself, for plain
+  tables, panels and column groups. Needs the R package pandoc (now in Suggests). Tested.
 - Viewer: a simpler table editor (Ted 2026-11-18). The sections follow the order a table is
   built in (Columns, Terms, Under each estimate, Statistics, Title and notes), and the less
   used options fold under **More** in their section: heading rows and column groups under

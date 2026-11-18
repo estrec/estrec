@@ -50,6 +50,12 @@ files): an SVG in HTML and a TikZ picture in LaTeX (the document needs
 \code{\\usepackage\{tikz\}}), the same as the Python reference and the browser viewer draw,
 on the same axes. Other formats (Markdown, Typst, \code{"data.frame"}, other packages'
 tables, PDF, PNG and Word files) show the interval as \code{[low, high]}.
+
+A Word file (\code{output = "table.docx"}) needs the R package pandoc. It is written from
+tinytable's Markdown with a cell that starts like a list item (a column number such as
+\code{(1)}, or the stars note \code{* p < 0.1}) escaped, which tinytable's own Word output
+turns into an empty list. For the Word export with sparklines drawn, use the browser viewer's
+Save .docx or the Python \code{render(t, "docx")}.
 }
 \examples{
 \dontrun{

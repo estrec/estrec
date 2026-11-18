@@ -131,7 +131,9 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
   if (!is.null(spec$title)) args$title <- spec$title
   if (length(notes)) args$notes <- as.list(notes)
   spans <- .tab_spans(spec, length(cols))
-  if (!draws && (is.null(spans) || identical(output, "data.frame"))) {
+  # a Word file goes through .tab_save, below
+  docx <- grepl("\\.docx$", output, ignore.case = TRUE)
+  if (!draws && !docx && (is.null(spans) || identical(output, "data.frame"))) {
     out <- do.call(modelsummary::modelsummary, c(args, list(...)))
     if (empty) { out <- out[out$term != none, , drop = FALSE]; rownames(out) <- NULL }
     if (length(spans) && is.data.frame(out)) {
@@ -148,7 +150,7 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
   if (draws) x <- .tab_draw(x, tidies, sparks, digits, p_digits, p_style, missing)
   x <- .tab_group_cols(x, spans)
   if (!file) return(x)
-  tinytable::save_tt(x, output, overwrite = TRUE)
+  .tab_save(x, output)
   invisible(x)
 }
 
@@ -376,8 +378,47 @@ render_table <- function(spec, output = "default", records = NULL, base_dir = NU
   x <- .tab_group_cols(x, spans)
   x <- tryCatch(tinytable::style_tt(x, i = "groupi", italic = TRUE), error = function(e) x)
   if (output %in% c("default", "tinytable", "html", "latex", "markdown", "typst")) return(x)
-  tinytable::save_tt(x, output, overwrite = TRUE)
+  .tab_save(x, output)
   invisible(x)
+}
+
+# Saving a tinytable to a file. A Word file goes through tinytable's markdown and pandoc, which
+# reads a cell that starts like a list item as a list: a column number "(1)" comes out empty
+# and the stars note "* p < 0.1" loses its star. So the marker's punctuation is escaped first.
+.tab_save <- function(x, output) {
+  if (!grepl("\\.docx$", output, ignore.case = TRUE)) {
+    tinytable::save_tt(x, output, overwrite = TRUE)
+    return(invisible(output))
+  }
+  if (!requireNamespace("pandoc", quietly = TRUE))
+    stop("A Word file needs the R package pandoc: install.packages(\"pandoc\")", call. = FALSE)
+  md <- .tab_md_escape(tinytable::save_tt(x, output = "markdown"))
+  if (file.exists(output)) file.remove(output)
+  pandoc::pandoc_convert(text = md, to = "docx", output = output)
+  invisible(output)
+}
+
+# In each cell of a pandoc grid table, a leading list marker made literal: a bullet (- + *),
+# a heading or quote mark (# >), or an ordered marker such as 1. 1) (1) a. (a) iv. (@).
+.tab_md_escape <- function(md) {
+  lines <- strsplit(paste(md, collapse = "\n"), "\n", fixed = TRUE)[[1]]
+  # the grid's columns are fixed widths, so the backslash takes a padding space: a trailing
+  # one when the cell has two or more, else the leading one
+  cell <- function(t0) {
+    t <- sub("^(\\s*)([-+*#>])(\\s|$)", "\\1\\\\\\2\\3", t0, perl = TRUE)
+    t <- sub("^(\\s*)\\(([0-9A-Za-z@#]*\\)(\\s|$))", "\\1\\\\(\\2", t, perl = TRUE)
+    t <- sub("^(\\s*[0-9A-Za-z#]+)([.)])(\\s|$)", "\\1\\\\\\2\\3", t, perl = TRUE)
+    if (nchar(t) == nchar(t0)) return(t)
+    if (grepl("  $", t)) sub(" $", "", t) else sub("^ ", "", t)
+  }
+  row <- grepl("^\\|", lines)
+  lines[row] <- vapply(lines[row], function(l) {
+    parts <- strsplit(l, "|", fixed = TRUE)[[1]]
+    if (length(parts) < 2) return(l)
+    parts[-1] <- vapply(parts[-1], cell, "")
+    paste0(paste(parts, collapse = "|"), if (grepl("\\|$", l)) "|" else "")
+  }, "", USE.NAMES = FALSE)
+  paste(lines, collapse = "\n")
 }
 
 # Whether sparklines are drawn: for modelsummary's tinytable outputs (the default, unless

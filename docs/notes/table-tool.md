@@ -187,5 +187,9 @@ tested, not Windows; the earlier "real Word" checks of 2026-11-07/08 were Mac Wo
    (click a column, term or statistic).
    Ted 2026-11-18: dragging columns wasn't obvious; every list now drags by a grip
    (`dragList`/`gripItem` in index.html), panel tabs too. Stand-in 54 steps; preview v16.
+   Then (Ted: make column dragging more obvious): hover grip on preview headings, a hint
+   under the preview, landing lines and the dragged column dimmed (`previewColumn` finds a
+   column's cells from its heading's colspan). Not seen in a real browser yet; stand-in 57
+   steps; preview v17.
 5. Leftovers from the graphics work: tinytable pads rows, so R's HTML sparkline column
    doesn't join; R ignores `reference` and draws sparklines below only (Ted: leave it).

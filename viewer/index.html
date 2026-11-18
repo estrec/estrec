@@ -171,8 +171,22 @@ table.estrec-table tbody tr.estimate:not(:first-child) th, table.estrec-table tb
 table.estrec-table tr.first-stat th, table.estrec-table tr.first-stat td { border-top: 0.75px solid var(--ink); padding-top: 5px; }
 table.estrec-table tr.panel th { font-weight: normal; padding-top: 6px; }
 table.estrec-table tr.panel-rule th { border-top: 0.75px solid var(--ink); }
-.drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; }
-.dragged { opacity: 0.5; }
+/* dragging: the item lifted, a line where it will land */
+.dragged, .col-dragged { opacity: 0.4; }
+.item.drop-before { box-shadow: 0 -3px 0 var(--accent); }
+.item.drop-after { box-shadow: 0 3px 0 var(--accent); }
+.seg button.drop-before { box-shadow: inset 3px 0 0 var(--accent); }
+.seg button.drop-after { box-shadow: inset -3px 0 0 var(--accent); }
+table.estrec-table .col-before { box-shadow: inset 3px 0 0 var(--accent); background: var(--accent-soft); }
+table.estrec-table .col-after { box-shadow: inset -3px 0 0 var(--accent); background: var(--accent-soft); }
+/* a column's heading in the preview shows a grip on hover */
+table.estrec-table thead th[draggable="true"] { position: relative; }
+table.estrec-table thead th[draggable="true"]::before {
+  content: "\283f"; position: absolute; left: 2px; top: 50%; transform: translateY(-50%);
+  font: 13px/1 var(--font-ui); color: var(--muted); opacity: 0; pointer-events: none;
+}
+table.estrec-table thead th[draggable="true"]:hover::before, table.estrec-table thead th[draggable="true"]:focus-visible::before { opacity: 1; }
+@media (prefers-reduced-motion: no-preference) { table.estrec-table thead th[draggable="true"]::before { transition: opacity 0.15s; } }
 .item.has-grip { grid-template-columns: auto minmax(0, 1fr) auto; }
 .grip { color: var(--muted); cursor: grab; font-size: 15px; line-height: 1; padding: 2px 1px; user-select: none; touch-action: none; }
 .grip:hover { color: var(--accent); }
@@ -233,10 +247,11 @@ details.raw pre { font: 12px/1.45 var(--font-mono); background: var(--bg); paddi
   }
   @page { margin: 1in; }
   body { background: #ffffff; padding: 0; }
-  header.bar, #rail, .controls, .export, .msgs, .tabs, .toast, #view-record { display: none !important; }
+  header.bar, #rail, .controls, .export, .msgs, .tabs, .toast, #view-record, #preview-hint { display: none !important; }
   .layout, .builder, .preview-wrap { display: block; }
   .panel, .paper { border: 0; padding: 0; background: #ffffff; border-radius: 0; overflow: visible; }
   table.estrec-table thead th.linked span { border-bottom: 0; }
+  table.estrec-table thead th[draggable="true"]::before { display: none; }
 }
 </style>
 </head>
@@ -372,6 +387,7 @@ details.raw pre { font: 12px/1.45 var(--font-mono); background: var(--bg); paddi
         <div class="preview-wrap">
           <div class="msgs" id="table-msgs"></div>
           <div class="paper" id="preview"></div>
+          <p class="hint-line" id="preview-hint" hidden>Drag a column's heading to move the column; click it to open its record.</p>
           <div class="export">
             <div class="export-head">
               <div class="seg" id="formats" role="group" aria-label="Export format">
@@ -915,25 +931,59 @@ function moveColumn(i, j) {
 // drag to reorder, for every list in the editor. Each list has its own drag type, so a term
 // can't land among the statistics. With a grip, only the grip starts a drag (the item's
 // text boxes keep selecting text) and the whole item is the drop target and drag image.
+// While dragging, the item (and, for a column, its cells in the preview) is shown as lifted,
+// and the target gets a line on the side the item will land: before it when moving up or
+// left, after it when moving down or right.
+let dragging = null;  // {group, i}
+const DRAG_MARKS = ["dragged", "drop-before", "drop-after", "col-dragged", "col-before", "col-after"];
+const COL_MARK = { dragged: "col-dragged", "drop-before": "col-before", "drop-after": "col-after" };
+function clearDragMarks() {
+  for (const c of DRAG_MARKS) for (const n of document.querySelectorAll("." + c)) n.classList.remove(c);
+}
+// the preview's cells of column i (from 0), the heading rows' and the body's
+function previewColumn(i) {
+  const t = $("preview").querySelector("table.estrec-table");
+  if (!t) return [];
+  // the column's span, from its heading (a sparkline beside it makes it two wide)
+  const head = t.querySelector("thead tr:not(.head-spanner)");
+  if (!head) return [];
+  let start = 0, width = 1, k = 0;
+  for (const c of head.children) { const w = c.colSpan || 1; if (k === i + 1) { width = w; break; } start += w; k++; }
+  if (k !== i + 1) return [];
+  const inSpan = (tr) => { let at = 0; const out = []; for (const c of tr.children) { const w = c.colSpan || 1; if (at >= start && at < start + width && w <= width) out.push(c); at += w; } return out; };
+  return [...t.querySelectorAll("tr:not(.head-spanner):not(.panel)")].flatMap(inSpan);
+}
 function dragList(group, item, i, onMove, grip) {
   const type = `application/x-estrec-${group}`;
   const ours = (e) => e.dataTransfer && [...(e.dataTransfer.types || [])].includes(type);
   const src = grip || item;
+  const marks = (cls) => { item.classList.add(cls); if (group === "column") for (const c of previewColumn(i)) c.classList.add(COL_MARK[cls]); };
   src.setAttribute("draggable", "true");
   src.addEventListener("dragstart", (e) => {
     e.stopPropagation();
     e.dataTransfer.setData(type, String(i));
     e.dataTransfer.effectAllowed = "move";
     if (grip && e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(item, 12, 12);
-    item.classList.add("dragged");
+    dragging = { group, i };
+    marks("dragged");
   });
-  src.addEventListener("dragend", () => item.classList.remove("dragged"));
-  item.addEventListener("dragover", (e) => { if (!ours(e)) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; item.classList.add("drop-target"); });
-  item.addEventListener("dragleave", () => item.classList.remove("drop-target"));
+  src.addEventListener("dragend", () => { dragging = null; clearDragMarks(); });
+  item.addEventListener("dragover", (e) => {
+    if (!ours(e)) return;
+    e.preventDefault(); e.stopPropagation();
+    e.dataTransfer.dropEffect = "move";
+    if (!dragging || dragging.group !== group || dragging.i === i) return;
+    const side = dragging.i < i ? "drop-after" : "drop-before";
+    if (item.classList.contains(side)) return;
+    for (const c of ["drop-before", "drop-after", "col-before", "col-after"]) for (const n of document.querySelectorAll("." + c)) n.classList.remove(c);
+    marks(side);
+  });
+  item.addEventListener("dragleave", (e) => { if (!e.relatedTarget || !item.contains || !item.contains(e.relatedTarget)) { item.classList.remove("drop-before", "drop-after"); } });
   item.addEventListener("drop", (e) => {
     if (!ours(e)) return;
     e.preventDefault(); e.stopPropagation();
-    item.classList.remove("drop-target");
+    dragging = null;
+    clearDragMarks();
     const from = Number(e.dataTransfer.getData(type));
     if (Number.isInteger(from) && from !== i) onMove(from, i);
   });
@@ -1337,8 +1387,10 @@ async function renderTable({ keepControls = false } = {}) {
     $("preview").replaceChildren(el("p", { class: "empty", text: "No columns yet: add records with + Table." }));
     lastTable = null; renderExport(); return;
   }
+  $("preview-hint").hidden = true;
   try {
     lastTable = E.buildTable(state.spec, idx);
+    $("preview-hint").hidden = false;
     $("preview").innerHTML = E.render(lastTable, "html");
     linkHeaders();
     for (const w of lastTable.warnings) msgs.append(el("div", { class: "msg warning", text: w.replace(/^warning: /, "") }));

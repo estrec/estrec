@@ -17,6 +17,10 @@
   Each list keeps its own drags (a statistic can't land among the terms); a hidden term
   dragged into place is shown. The arrows stay (touch screens don't drag). Only the grip
   starts a drag, so a column's label box selects text again.
+- Viewer: column dragging shows itself. A preview heading shows a grip on hover, and a line
+  under the preview says headings drag (and open their record). While dragging, the column
+  (its cells in the preview too) is dimmed and the target gets a line on the side it will
+  land, in every list. Print leaves the grip and the line out.
 - Tables: panels (Panel A, Panel B; spec `panels`, spec/table.md 4.1). Each panel is a block
   of estimates under a label row, with its own terms, lines and statistics, and its own
   records if it names `columns` (as many as the table's); the top level's statistics follow

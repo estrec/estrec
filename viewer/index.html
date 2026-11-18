@@ -156,6 +156,9 @@ table.estrec-table tbody tr.estimate:not(:first-child) th, table.estrec-table tb
 table.estrec-table tr.first-stat th, table.estrec-table tr.first-stat td { border-top: 0.75px solid var(--ink); padding-top: 5px; }
 table.estrec-table tr.panel th { font-weight: normal; padding-top: 6px; }
 table.estrec-table tr.panel-rule th { border-top: 0.75px solid var(--ink); }
+.drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; }
+.dragged { opacity: 0.5; }
+#columns .item[draggable="true"] { cursor: grab; }
 table.estrec-table th.spanner { background: linear-gradient(var(--ink), var(--ink)) center bottom / calc(100% - 10px) 0.75px no-repeat; }
 table.estrec-table tbody tr:last-child th, table.estrec-table tbody tr:last-child td { border-bottom: 1.5px solid var(--ink); padding-bottom: 5px; }
 table.estrec-table tfoot td { font-size: 12.5px; color: var(--muted); padding-top: 8px; white-space: normal; text-align: left; }
@@ -316,6 +319,7 @@ details.raw pre { font: 12px/1.45 var(--font-mono); background: var(--bg); paddi
             <legend id="lg-columns" data-base="Columns">Columns</legend>
             <div id="columns"></div>
             <p class="empty" id="columns-empty">Add records with <b>+ Table</b> in the list.</p>
+            <p class="hint-line">Drag a column, here or by its heading in the preview, to move it.</p>
           </fieldset>
 
           <fieldset>
@@ -824,6 +828,35 @@ function dropFromSpanners(i) {
   if (!s.spanners.length) delete s.spanners;
 }
 
+// moving column i to position j (from 0): its text-row values and each panel's own column go with it
+function moveColumn(i, j) {
+  const s = state.spec;
+  const n = s.columns.length;
+  if (i === j || !(i >= 0 && i < n && j >= 0 && j < n)) return;
+  const mv = (arr) => { const [x] = arr.splice(i, 1); arr.splice(j, 0, x); };
+  mv(s.columns);
+  for (const st of valueRows()) mv(st.values);
+  for (const p of s.panels || []) if (Array.isArray(p.columns)) mv(p.columns);
+  update();
+}
+
+// a column's item or heading: drag it onto another to move it there
+const COL_DRAG = "application/x-estrec-column";
+function columnDrag(node, i) {
+  const ours = (e) => e.dataTransfer && [...(e.dataTransfer.types || [])].includes(COL_DRAG);
+  node.setAttribute("draggable", "true");
+  node.addEventListener("dragstart", (e) => { e.dataTransfer.setData(COL_DRAG, String(i)); e.dataTransfer.effectAllowed = "move"; node.classList.add("dragged"); });
+  node.addEventListener("dragend", () => node.classList.remove("dragged"));
+  node.addEventListener("dragover", (e) => { if (!ours(e)) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; node.classList.add("drop-target"); });
+  node.addEventListener("dragleave", () => node.classList.remove("drop-target"));
+  node.addEventListener("drop", (e) => {
+    if (!ours(e)) return;
+    e.preventDefault(); e.stopPropagation();
+    node.classList.remove("drop-target");
+    moveColumn(Number(e.dataTransfer.getData(COL_DRAG)), i);
+  });
+}
+
 function renderColumns(idx) {
   const box = $("columns");
   box.replaceChildren();
@@ -862,14 +895,16 @@ function renderColumns(idx) {
     // moving or removing a column carries the statistics rows' typed values with it, and each
     // panel's own column there
     const owns = () => (state.spec.panels || []).filter((p) => Array.isArray(p.columns)).map((p) => p.columns);
-    const shift = (d) => { const j = i + d; if (j < 0 || j >= cols.length) return; move(cols, i, d); for (const st of valueRows()) move(st.values, i, d); for (const pc of owns()) move(pc, i, d); update(); };
-    box.append(el("div", { class: "item" + (rec ? "" : " off") },
+    const shift = (d) => moveColumn(i, i + d);
+    const item = el("div", { class: "item" + (rec ? "" : " off") },
       el("div", { class: "fields" }, head, el("span", { class: "hint", text: columnPart(c) ? `${name} · ${columnPart(c)}` : name }), vs.length > 1 ? sel : null, sigSel),
       el("div", { class: "tools" },
         el("button", { class: "btn icon", type: "button", "aria-label": "Move left", title: "Move left", text: "↑", disabled: i === 0, onclick: () => shift(-1) }),
         el("button", { class: "btn icon", type: "button", "aria-label": "Move right", title: "Move right", text: "↓", disabled: i === cols.length - 1, onclick: () => shift(1) }),
         el("button", { class: "btn icon", type: "button", "aria-label": `Remove column ${i + 1}`, title: "Remove this column", text: "×",
-          onclick: () => { cols.splice(i, 1); for (const st of valueRows()) st.values.splice(i, 1); for (const pc of owns()) pc.splice(i, 1); dropFromSpanners(i); update(); } }))));
+          onclick: () => { cols.splice(i, 1); for (const st of valueRows()) st.values.splice(i, 1); for (const pc of owns()) pc.splice(i, 1); dropFromSpanners(i); update(); } })));
+    columnDrag(item, i);
+    box.append(item);
   });
 }
 
@@ -1230,8 +1265,11 @@ function recordSummary(r) {
 
 // column headings in the preview open their record
 function linkHeaders() {
-  const ths = $("preview").querySelectorAll("thead tr:first-child th");
-  [...ths].slice(1).forEach((th, i) => {
+  // the first heading row with a cell per column (not the column groups)
+  const ths = $("preview").querySelectorAll("thead tr:not(.head-spanner) th");
+  const row = ths.length ? ths[0].parentElement : null;
+  [...ths].filter((th) => th.parentElement === row).slice(1).forEach((th, i) => {
+    columnDrag(th, i);
     const it = columnItem(i);
     if (!it) return;
     th.classList.add("linked");
@@ -1606,9 +1644,12 @@ document.addEventListener("paste", (e) => {
   loadFiles([{ name, text }]);
   toast(doc && doc.schema === "estrec-table/0.1" ? "Opened the pasted table spec" : "Opened the pasted JSON");
 });
-document.addEventListener("dragover", (e) => { e.preventDefault(); document.body.classList.add("dragging"); });
+// files dropped anywhere open; dragging a column (application/x-estrec-column) is handled where it lands
+const isFileDrag = (e) => !e.dataTransfer || [...(e.dataTransfer.types || [])].includes("Files");
+document.addEventListener("dragover", (e) => { if (!isFileDrag(e)) return; e.preventDefault(); document.body.classList.add("dragging"); });
 document.addEventListener("dragleave", (e) => { if (!e.relatedTarget) document.body.classList.remove("dragging"); });
 document.addEventListener("drop", async (e) => {
+  if (!isFileDrag(e)) return;
   e.preventDefault();
   document.body.classList.remove("dragging");
   const files = [];

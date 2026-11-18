@@ -545,3 +545,20 @@ def test_process_example_columns_match_python():
     assert py["head"][1] == {"kind": "label", "cells": ["Mediator", "Outcome", "x1 \u2192 y"]}
     assert py["head"][2] == {"kind": "response", "cells": ["x2", "y", "Effects"]}
     assert [(r["label"], r["cells"]) for r in js["t"]["rows"]] == [(r["label"], r["cells"]) for r in py["rows"]]
+
+
+def test_web_page_headings_skip_column_groups():
+    """The web page's record buttons go on the first heading row with a cell per column, not
+    on the column groups above it."""
+    if NODE is None:
+        pytest.skip("node not installed")
+    t = et.build_table(spanner_specs()[0], base_dir=EXAMPLES)
+    recs = [r for _, _, r in ef.iter_members(ef.read_collection(EXAMPLES / "paper.estrec-collection.json"))]
+    script = (
+        "const E=require(process.argv[1]+'/estrec-table.js');const x=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+        "process.stdout.write(JSON.stringify(E.renderWebPage(x.t,x.recs)))"
+    )
+    page = run_node(script, {"t": t, "recs": recs})
+    groups = re.search(r'<tr class="head-spanner">.*?</tr>', page).group(0)
+    numbers = re.search(r'<tr class="head-number">.*?</tr>', page).group(0)
+    assert 'class="col"' not in groups and numbers.count('class="col"') == 3

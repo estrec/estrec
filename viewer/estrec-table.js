@@ -1900,9 +1900,10 @@
     const byId = new Map(records.map((r) => [((r || {}).meta || {}).id, r]));
     const used = [...new Set(t.column_records || [])].map((id) => byId.get(id)).filter(Boolean);
     const json = JSON.stringify({ columns: t.column_records || [], records: used }).replace(/</g, "\\u003c");
-    const table = renderHTML(t).replace(/<thead>(<tr class="head-\w+">)<th><\/th>(.*?)<\/tr>/, (_, tr, ths) => {
+    // the first heading row with a cell per column (not the column groups) opens the records
+    const table = renderHTML(t).replace(/(<tr class="head-(?:number|response|label)">)<th><\/th>(.*?)<\/tr>/, (_, tr, ths) => {
       let i = 0;
-      return "<thead>" + tr + "<th></th>" + ths.replace(/<th( colspan="2")?>(.*?)<\/th>/g, (__, sp, h) => `<th${sp || ""}><button type="button" class="col" data-col="${i++}" aria-haspopup="dialog">${h}</button></th>`) + "</tr>";
+      return tr + "<th></th>" + ths.replace(/<th( colspan="2")?>(.*?)<\/th>/g, (__, sp, h) => `<th${sp || ""}><button type="button" class="col" data-col="${i++}" aria-haspopup="dialog">${h}</button></th>`) + "</tr>";
     });
     const title = escHTML(t.title || "Estimation table");
     return `<!doctype html>

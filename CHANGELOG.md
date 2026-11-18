@@ -19,6 +19,10 @@
   (`{test, value}`); per table or per column (`null`: the coefficient's). A term without
   it shows no stars and a warning; `{star_p}` shows the p-value used; the stars' note names
   the source. Python, the viewer (**Stars from**, per column too), R.
+- Viewer: drag a column (its item under Columns, or its heading in the preview) to move it;
+  its text-row values and panels' own columns move with it. Dragging a column no longer
+  looks like a file drop. Column headings link to records from the first row with a cell per
+  column (not the column groups), in the preview and the web page.
 - Viewer: the Table spec export is `exportSpec` in estrec-table.js; a test reopens every
   exported spec (open-spec round trip). Export now names sources for panels' columns too.
 

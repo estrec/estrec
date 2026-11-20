@@ -50,6 +50,11 @@ stopifnot(r$tests[[1]]$name == "f"); eq(r$tests[[1]]$statistic, fs[1])
 eq(r$tests[[1]]$p_value, pf(fs[1], fs[2], fs[3], lower.tail = FALSE))
 eq(unlist(r$structures$vcov[[1]]$data), vcov(m))
 
+# factor() in the formula: the variable inside it, as the Stata writer names i.x terms
+r <- to_estimation(lm(y ~ factor(h) + as.factor(f), d))
+stopifnot(r$parameters[[2]]$canonical$name == "h2", r$parameters[[2]]$canonical$factors[[1]]$variable == "h",
+          r$parameters[[7]]$canonical$factors[[1]]$variable == "f", r$parameters[[7]]$canonical$name == "fb")
+
 # lm: weights (a zero weight is left out of nobs), subset, a collinear term
 d$x3 <- 2 * d$x
 m <- lm(y ~ x + x2 + x3, d, weights = w, subset = h > 1)

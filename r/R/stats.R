@@ -205,7 +205,8 @@ to_estimation.glm <- function(fit, data = NULL, vcov = NULL, conf_level = 0.95,
   parts <- vapply(parts, function(p) {
     for (v in names(xl)[order(-nchar(names(xl)))])
       if (startsWith(p, v) && substring(p, nchar(v) + 1L) %in% xl[[v]])
-        return(paste0(v, "::", substring(p, nchar(v) + 1L)))
+        return(paste0(sub("^(?:as\\.)?factor\\((.+)\\)$", "\\1", v, perl = TRUE), "::",
+                      substring(p, nchar(v) + 1L)))
     p
   }, "")
   .est_canonical(paste(parts, collapse = ":"))

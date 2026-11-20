@@ -1,7 +1,8 @@
 # estrec (R)
 
 Writes fitted models as estrec records: one JSON file per model, holding what was
-estimated, what came out, and how and where it ran. Version 0.1 writes **fixest** fits:
+estimated, what came out, and how and where it ran. Version 0.1 writes base R **lm** and
+**glm** fits and **fixest** fits:
 `feols` (OLS and IV) and `feglm`/`fepois` (GLMs), with or without fixed effects, including
 multiple estimations (`c(y1, y2)`, `csw()`, `split`, `fsplit`, `subset`). MIT.
 
@@ -51,6 +52,32 @@ p-value, vcov and hypothesis that the result carries, and the call that made it.
 as_estimation_test.my_test <- function(x, ...)
   list(list(name = "wald", statistic = x$W, distribution = "chi2", df = x$k, p_value = x$p))
 ```
+
+## lm and glm
+
+```r
+m <- lm(y ~ x1 + x2 + factor(region), data, weights = w)
+write_estimation(m, "m.estrec.json")                       # summary()'s vcov and tests
+write_estimation(m, "m.estrec.json", vcov = list("HC3", ~firm, "iid"))   # needs sandwich
+
+g <- glm(cnt ~ x1 + offset(log(expo)), poisson, data)
+write_estimation(g, "g.estrec.json", vcov = ~firm)
+```
+
+`lm` records claim `inference/0.1`; `glm` records `inference/0.1` and `glm/0.1`. The default vcov
+is the model-based one, with `summary()`'s tests: t tests for `lm` and for GLMs whose dispersion is
+estimated, z tests (no `df_t`) for Poisson and binomial. `vcov` also takes `"HC0"` to `"HC5"`
+(`sandwich::vcovHC`) and cluster formulas (`sandwich::vcovCL`, type HC1: CRV1 with
+(N-1)/(N-K) and G/(G-1)); their tests follow `lmtest::coeftest()` (t on the residual df for `lm`,
+z for `glm`). Intervals are Wald intervals on the same distribution, so a glm's differ from
+`confint()`, which profiles the likelihood. Metrics are `summary()`'s and the fit's: R², adjusted
+R², sigma, RSS/TSS, log-likelihood, AIC/BIC and summary.lm's F test; for GLMs deviance, null
+deviance and its df, dispersion, and the IRLS convergence, iterations and boundary flag. Sample
+drops: `na.action` rows as `missing`, zero weights (kept by R but not counted in `nobs()`), and
+rows outside `subset` (needs the data, which glm keeps and lm's is found in the formula's
+environment). Aliased terms are `dropped: "collinear"`. A quasi family is its base distribution
+with `quasi: true`; binomial weights are recorded as `frequency`, other weights as `analytic`.
+Not written yet: matrix responses (`mlm`) and `MASS::glm.nb`.
 
 ## PROCESS
 
@@ -194,10 +221,10 @@ CRAN, `pkg:github/<owner>/<repo>@<commit>` (with `#<subdir>`) for packages insta
 
 ## Not yet
 
-- `fenegbin`/`femlm`, `lm`/`glm` and other classes through `insight`.
+- `fenegbin`/`femlm`, `mlm`, `glm.nb` and other classes through `insight`.
 - The `car`, `lmtest` and `marginaleffects` methods are written to those packages' documented
   output but not yet checked against them (they aren't installed where estrec was built).
-- Tests: `tests/test-fixest.R`, `tests/test-collection.R`, `tests/test-read.R` and `tests/test-table.R` (base R). They validate every
+- Tests: `tests/test-fixest.R`, `tests/test-stats.R`, `tests/test-collection.R`, `tests/test-read.R` and `tests/test-table.R` (base R). They validate every
   record and collection when the `estrec` CLI is on `PATH` or `ESTREC_VALIDATOR` names it;
   with `ESTREC_PYTHON` (a Python with `estrec`), the collection test also checks that
   estrec's canonical JSON equals the reference implementation's.

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- R: `lm` and `glm` fits (`to_estimation.lm`, `to_estimation.glm`). The model-based vcov with
+  `summary()`'s tests by default; `vcov =` adds `"HC0"`-`"HC5"` (`sandwich::vcovHC`) and cluster
+  formulas (`sandwich::vcovCL`, CRV1), tested as `lmtest::coeftest()` does. glm records claim
+  `glm/0.1` (distribution, link, quasi; deviance, null deviance, dispersion; IRLS convergence,
+  iterations, boundary); lm records carry summary.lm's F test. Sample drops from `na.action`,
+  zero weights and `subset`; aliased terms marked collinear; factor dummies (`regionb`) get
+  canonical names from the fit's `xlevels`. Base packages' purls are `pkg:generic/r-<pkg>@<R
+  version>` with `source: "R"`. `tests/test-stats.R` checks every number against R's own.
 - R: `render_table(output = "table.docx")` writes the same Word file as the Python reference's
   `render(t, "docx")` and the viewer's Save .docx: rules, column widths, term spacing, panels
   and column groups (in `head`'s order), and sparklines as Word drawings, below or beside the

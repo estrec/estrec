@@ -259,5 +259,5 @@ stopifnot(inherits(e, "try-error"), grepl("without its type label", e, fixed = T
 
 # Unsupported fits fail clearly
 stopifnot(inherits(try(to_estimation(fenegbin(cnt ~ x | id, d)), silent = TRUE), "try-error"),
-          inherits(try(to_estimation(lm(y ~ x, d)), silent = TRUE), "try-error"))
+          inherits(try(to_estimation(nls(y ~ a * x, d, start = list(a = 1))), silent = TRUE), "try-error"))
 cat("estrec tests passed", if (nzchar(validator)) "(records validated)" else "(validator not found)", "\n")

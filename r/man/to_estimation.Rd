@@ -2,6 +2,8 @@
 \alias{to_estimation}
 \alias{to_estimation.fixest}
 \alias{to_estimation.fixest_multi}
+\alias{to_estimation.lm}
+\alias{to_estimation.glm}
 \alias{to_estimation.list}
 \alias{to_estimation.default}
 \alias{is_estimation_record}
@@ -23,22 +25,38 @@ to_estimation(fit, ...)
   identifying = TRUE, digest = NULL, level = NULL, purpose = NULL, program = NULL,
   data_info = NULL, ...)
 
+\method{to_estimation}{lm}(fit, data = NULL, vcov = NULL, conf_level = 0.95,
+  tests = NULL, title = NULL, notes = NULL, tags = NULL, publication = NULL, call = TRUE,
+  identifying = TRUE, digest = NULL, level = NULL, purpose = NULL, program = NULL,
+  data_info = NULL, ...)
+
+\method{to_estimation}{glm}(fit, data = NULL, vcov = NULL, conf_level = 0.95,
+  tests = NULL, title = NULL, notes = NULL, tags = NULL, publication = NULL, call = TRUE,
+  identifying = TRUE, digest = NULL, level = NULL, purpose = NULL, program = NULL,
+  data_info = NULL, ...)
+
 is_estimation_record(x)
 }
 \arguments{
 \item{fit}{a fitted model: a \code{fixest} \code{feols} (OLS or IV), \code{feglm} or \code{fepois} fit, or a \code{fixest_multi};
-or a list of them.}
+an \code{lm} or \code{glm} fit (not a matrix response or \code{MASS::glm.nb}); or a list of them.}
 \item{data}{the data the model was fitted on, to split sample drops by reason (missing,
 non-finite, zero weights, singletons and, for GLMs, separated). By default it is recovered from the fit's call
 environment; without it, drops are recorded as \code{other}.}
 \item{vcov}{\code{NULL} for the fit's own vcov, or a list of \code{vcov} arguments for
 \code{summary.fixest} (e.g. \code{list("hetero", ~firm)}). Each is recorded; the first is
-the default and gives the parameters' standard errors.}
+the default and gives the parameters' standard errors. For \code{lm} and \code{glm}:
+\code{"iid"} (the model-based vcov, the default), \code{"HC0"} to \code{"HC5"} or
+\code{"hetero"} (HC1) through \code{sandwich::vcovHC}, or a formula of cluster variables
+through \code{sandwich::vcovCL} (type HC1, recorded as CRV1). The model-based vcov keeps
+\code{summary()}'s tests; a sandwich vcov uses \code{lmtest::coeftest()}'s (t on the
+residual df for \code{lm}, z for \code{glm}). Intervals are Wald intervals.}
 \item{conf_level}{confidence level of \code{conf_low}/\code{conf_high}.}
 \item{tests}{test results to add, one or a \code{list()} of them, as for \code{\link{add_test}}
 (\code{fixest::wald()}, \code{marginaleffects::hypotheses()}, ...). The record always has
 fixest's joint Wald test of the coefficients, and for IV the first-stage,
-weak-identification, endogeneity and overidentification tests.}
+weak-identification, endogeneity and overidentification tests. An \code{lm} record has
+\code{summary.lm}'s F test.}
 \item{title, notes, tags}{user labels for \code{meta}. Without a \code{title}, one is made
 from the formula at level 3 or more.}
 \item{publication}{optional \code{publication} section: where the result appears in a paper.}
@@ -75,4 +93,6 @@ if (requireNamespace("fixest", quietly = TRUE)) {
   recs <- to_estimation(list(base = fit, full = fixest::feols(mpg ~ wt + hp | cyl, mtcars)))
   names(recs)
 }
+rec <- to_estimation(glm(am ~ wt, binomial, mtcars))
+rec$meta$estimator$link
 }

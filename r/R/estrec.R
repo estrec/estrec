@@ -9,7 +9,7 @@ to_estimation <- function(fit, ...) UseMethod("to_estimation")
 
 to_estimation.default <- function(fit, ...) {
   stop("estrec has no writer for class ", paste(class(fit), collapse = "/"),
-       "; it writes fixest feols, feglm and fepois fits for now", call. = FALSE)
+       "; it writes lm and glm fits and fixest feols, feglm and fepois fits for now", call. = FALSE)
 }
 
 is_estimation_record <- function(x) {
@@ -129,6 +129,8 @@ write_estimation <- function(x, path, ...) {
 .est_origin <- function(p) {
   d <- utils::packageDescription(p)
   v <- d$Version
+  if (identical(d$Priority, "base"))  # stats, utils, ...: part of R itself
+    return(list(purl = sprintf("pkg:generic/r-%s@%s", p, v), source = "R"))
   if (identical(d$Repository, "CRAN"))
     return(list(purl = sprintf("pkg:cran/%s@%s", p, v), source = "CRAN"))
   if (identical(tolower(d$RemoteType %||% ""), "github") && !is.null(d$RemoteRepo)) {

@@ -6,8 +6,9 @@ Authors@R: person("Ted", "Matherly", role = c("aut", "cre"),
     email = "jemather@gmail.com")
 Description: Writes fitted models as records in the 'estrec' format, a JSON
     file for one statistical estimation run: what was estimated, what came out,
-    and how and where it ran. Version 0.1 writes 'fixest' fits: 'feols' (OLS and IV)
-    and 'feglm'/'fepois' (GLMs), including multiple estimations, 'split' and
+    and how and where it ran. Version 0.1 writes 'lm' and 'glm' fits (with
+    model-based, robust or clustered vcovs from 'sandwich') and 'fixest' fits: 'feols'
+    (OLS and IV) and 'feglm'/'fepois' (GLMs), including multiple estimations, 'split' and
     'subset'; adds hypothesis tests
     and linear combinations to records, and writes sets of records as collections
     (a paper's results, a session or a replication). Also records runs of
@@ -18,5 +19,5 @@ BugReports: https://github.com/estrec/estrec/issues
 Depends: R (>= 4.1)
 Imports: jsonlite, stats, utils
 Suggests: broom, fixest (>= 0.12), generics, marginaleffects, modelsummary, openssl,
-    tinytable
+    sandwich, tinytable
 Encoding: UTF-8
